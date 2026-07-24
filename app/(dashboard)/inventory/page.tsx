@@ -12,13 +12,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export default function FinansPage() {
+export default function StokYönetimiPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Finans</h2>
-          <p className="text-muted-foreground">Kasa ve finansal işlemler</p>
+          <h2 className="text-3xl font-bold tracking-tight">Stok Yönetimi</h2>
+          <p className="text-muted-foreground">Ürün ve stok takibi</p>
         </div>
         <Dialog>
           <DialogTrigger asChild>

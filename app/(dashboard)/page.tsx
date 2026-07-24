@@ -1,234 +1,105 @@
-import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { 
-  Wrench, Package, DollarSign, Users, 
-  TrendingUp, TrendingDown, Clock, CheckCircle 
-} from 'lucide-react'
+"use client";
 
-async function getDashboardData() {
-  const supabase = createClient()
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Wrench,
+  Package,
+  Users,
+  DollarSign,
+  TrendingUp,
+  AlertTriangle,
+} from "lucide-react";
 
-  const { data: metrics } = await supabase
-    .from('dashboard_metrics')
-    .select('*')
-    .single()
+const stats = [
+  { title: "Bugünkü Servis", value: "12", icon: Wrench, trend: "+2" },
+  { title: "Aktif Müşteri", value: "248", icon: Users, trend: "+5" },
+  { title: "Düşük Stok", value: "8", icon: Package, trend: "-3" },
+  { title: "Günlük Ciro", value: "₺4,250", icon: DollarSign, trend: "+12%" },
+];
 
-  const { data: todayServices } = await supabase
-    .from('service_orders')
-    .select('*, service_statuses(name, color)')
-    .gte('created_at', new Date().toISOString().split('T')[0])
-    .order('created_at', { ascending: false })
-    .limit(5)
+const recentServices = [
+  { id: "SR-2026-0001", customer: "Ahmet Yılmaz", device: "iPhone 14 Pro", status: "Tamir Ediliyor", statusColor: "secondary" },
+  { id: "SR-2026-0002", customer: "Mehmet Kaya", device: "Samsung S23", status: "Hazır", statusColor: "default" },
+  { id: "SR-2026-0003", customer: "Ayşe Demir", device: "Xiaomi 13", status: "Bekliyor", statusColor: "outline" },
+  { id: "SR-2026-0004", customer: "Fatma Şahin", device: "iPhone 13", status: "Teslim Edildi", statusColor: "default" },
+];
 
-  const { data: lowStock } = await supabase
-    .from('stock_items')
-    .select('*')
-    .lte('quantity', 10)
-    .gt('min_stock', 0)
-    .order('quantity', { ascending: true })
-    .limit(5)
+const lowStock = [
+  { name: "iPhone 14 Pro Ekran", stock: 2, min: 5 },
+  { name: "Samsung S23 Batarya", stock: 1, min: 3 },
+  { name: "Xiaomi 13 Arka Kapak", stock: 0, min: 5 },
+];
 
-  return { metrics, todayServices, lowStock }
-}
-
-export default async function DashboardPage() {
-  const { metrics, todayServices, lowStock } = await getDashboardData()
-
-  const stats = [
-    {
-      title: 'Bugunku Servis',
-      value: metrics?.today_services || 0,
-      icon: Wrench,
-      trend: '+12%',
-      trendUp: true,
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-500/10',
-    },
-    {
-      title: 'Bekleyen Is',
-      value: metrics?.pending_services || 0,
-      icon: Clock,
-      trend: '5 acil',
-      trendUp: false,
-      color: 'text-amber-500',
-      bgColor: 'bg-amber-500/10',
-    },
-    {
-      title: 'Bugunku Ciro',
-      value: `₺${(metrics?.today_revenue || 0).toLocaleString('tr-TR')}`,
-      icon: DollarSign,
-      trend: '+8%',
-      trendUp: true,
-      color: 'text-emerald-500',
-      bgColor: 'bg-emerald-500/10',
-    },
-    {
-      title: 'Toplam Musteri',
-      value: metrics?.total_customers || 0,
-      icon: Users,
-      trend: '+3 yeni',
-      trendUp: true,
-      color: 'text-violet-500',
-      bgColor: 'bg-violet-500/10',
-    },
-  ]
-
+export default function DashboardPage() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <div className="flex items-center gap-1 text-xs">
-                    {stat.trendUp ? (
-                      <TrendingUp className="w-3 h-3 text-emerald-500" />
-                    ) : (
-                      <TrendingDown className="w-3 h-3 text-amber-500" />
-                    )}
-                    <span className={stat.trendUp ? 'text-emerald-500' : 'text-amber-500'}>
-                      {stat.trend}
-                    </span>
-                  </div>
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Ana Sayfa</h2>
+        <p className="text-muted-foreground">İşletmenizin günlük özeti</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <Icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  {stat.trend} son 24 saat
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Son Servis Kayıtları</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentServices.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="font-medium">{s.customer}</p>
+                  <p className="text-sm text-muted-foreground">{s.device} — {s.id}</p>
                 </div>
-                <div className={`p-3 rounded-xl ${stat.bgColor}`}>
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                </div>
+                <Badge variant={s.statusColor as any}>{s.status}</Badge>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Bugunku Servisler</CardTitle>
-              <a href="/services" className="text-xs text-primary hover:underline">
-                Tumunu Gor
-              </a>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {todayServices && todayServices.length > 0 ? (
-                todayServices.map((service) => (
-                  <div 
-                    key={service.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Wrench className="w-4 h-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{service.service_number}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {service.device_brand} {service.device_model}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span 
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                        style={{ 
-                          backgroundColor: (service.service_statuses as any)?.color + '20',
-                          color: (service.service_statuses as any)?.color 
-                        }}
-                      >
-                        {(service.service_statuses as any)?.name}
-                      </span>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        ₺{service.total_amount?.toLocaleString('tr-TR')}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Bugun henuz servis kaydi yok</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Package className="w-4 h-4 text-destructive" />
-                Dusuk Stok Uyarlari
-              </CardTitle>
-              <a href="/stock" className="text-xs text-primary hover:underline">
-                Tumunu Gor
-              </a>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {lowStock && lowStock.length > 0 ? (
-                lowStock.map((item) => (
-                  <div 
-                    key={item.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-destructive/5 border border-destructive/10"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">{item.sku}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-destructive">
-                        {item.quantity} adet
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Min: {item.min_stock}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Dusuk stok uyarisi yok</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Hizli Islemler</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: 'Yeni Servis', href: '/services/new', icon: Wrench, color: 'bg-blue-500' },
-              { label: 'Yeni Satis', href: '/sales/new', icon: ShoppingCart, color: 'bg-emerald-500' },
-              { label: 'Yeni Musteri', href: '/customers/new', icon: Users, color: 'bg-violet-500' },
-              { label: 'Stok Girisi', href: '/stock/new', icon: Package, color: 'bg-amber-500' },
-            ].map((action) => (
-              <a
-                key={action.label}
-                href={action.href}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
-              >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white transition-transform group-hover:scale-110 ${action.color}`}>
-                  <action.icon className="w-5 h-5" />
-                </div>
-                <span className="text-sm font-medium">{action.label}</span>
-              </a>
             ))}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Düşük Stok Uyarıları
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {lowStock.map((item) => (
+              <div key={item.name} className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-muted-foreground">Min: {item.min} adet</p>
+                </div>
+                <Badge variant={item.stock === 0 ? "destructive" : "secondary"}>
+                  {item.stock} adet
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  )
+  );
 }
