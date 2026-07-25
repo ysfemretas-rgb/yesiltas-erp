@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Wrench, Package, ShoppingCart, Receipt, Handshake, BarChart3, Settings, LogOut, Sun, Moon, Truck } from 'lucide-react'
+import { LayoutDashboard, Users, Wrench, Package, ShoppingCart, Receipt, Briefcase, BarChart3, Settings, LogOut, Sun, Moon, Truck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
@@ -13,7 +13,7 @@ const menuItems = [
   { name: 'Satış', href: '/dashboard/sales', icon: ShoppingCart },
   { name: 'Tedarik', href: '/dashboard/purchases', icon: Truck },
   { name: 'Finans', href: '/dashboard/finance', icon: Receipt },
-  { name: 'Ortaklık', href: '/dashboard/partners', icon: Handshake },
+  { name: 'Ortaklık', href: '/dashboard/partners', icon: Briefcase },
   { name: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },
   { name: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
 ]
@@ -25,7 +25,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => { if (user) setUserEmail(user.email || '') })
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    if (typeof window !== 'undefined' && (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches))) {
       setDarkMode(true); document.documentElement.classList.add('dark')
     }
   }, [])

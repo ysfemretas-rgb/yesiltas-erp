@@ -1,12 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, Service } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { Search, Plus, QrCode, Phone } from 'lucide-react'
 import Link from 'next/link'
 import BarcodeGenerator from '@/components/barcode-generator'
 
 export default function ServicesPage() {
-  const [services, setServices] = useState<Service[]>([])
+  const [services, setServices] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [selectedBarcode, setSelectedBarcode] = useState<string | null>(null)
