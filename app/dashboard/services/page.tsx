@@ -1,78 +1,76 @@
-"use client";
-
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wrench, Plus } from "lucide-react";
-
-const statusColors: Record<string, string> = {
-  "Bekliyor": "outline", "İnceleniyor": "secondary", "Onay Bekliyor": "default",
-  "Tamir Ediliyor": "destructive", "Kalite Kontrol": "secondary", "Hazır": "default", "Teslim Edildi": "default",
-};
+'use client'
+import { useState, useEffect } from 'react'
+import { supabase, Service } from '@/lib/supabase'
+import { Search, Plus, QrCode, Phone } from 'lucide-react'
+import Link from 'next/link'
+import BarcodeGenerator from '@/components/barcode-generator'
 
 export default function ServicesPage() {
-  const [open, setOpen] = useState(false);
-  const [services, setServices] = useState([
-    { id: "SR-2026-0001", customer: "Ahmet Yılmaz", device: "iPhone 14 Pro", status: "Tamir Ediliyor", price: 3500, paid: 1000 },
-    { id: "SR-2026-0002", customer: "Mehmet Kaya", device: "Samsung S23", status: "Hazır", price: 1200, paid: 1200 },
-    { id: "SR-2026-0003", customer: "Ayşe Demir", device: "Xiaomi 13", status: "Bekliyor", price: 800, paid: 0 },
-  ]);
-  const [form, setForm] = useState({ customer_name: "", customer_phone: "", device_brand: "", device_model: "", device_imei: "", problem: "", estimated_price: "", advance_payment: "", warranty_months: "3" });
+  const [services, setServices] = useState<Service[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [selectedBarcode, setSelectedBarcode] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setServices([{ id: `SR-2026-${String(services.length + 1).padStart(4, "0")}`, customer: form.customer_name, device: `${form.device_brand} ${form.device_model}`, status: "Bekliyor", price: Number(form.estimated_price) || 0, paid: Number(form.advance_payment) || 0 }, ...services]);
-    setOpen(false);
-    setForm({ customer_name: "", customer_phone: "", device_brand: "", device_model: "", device_imei: "", problem: "", estimated_price: "", advance_payment: "", warranty_months: "3" });
-  };
+  useEffect(() => { fetchServices() }, [])
+
+  const fetchServices = async () => {
+    const { data } = await supabase.from('services').select('*, customers(full_name, phone)').order('created_at', { ascending: false })
+    setServices(data || [])
+    setLoading(false)
+  }
+
+  const updateStatus = async (id: string, status: string) => {
+    const updates: any = { status }
+    if (status === 'Tamamlandı') updates.completed_at = new Date().toISOString()
+    await supabase.from('services').update(updates).eq('id', id)
+    fetchServices()
+  }
+
+  const filtered = services.filter(s => s.service_no?.toLowerCase().includes(search.toLowerCase()) || s.device_type?.toLowerCase().includes(search.toLowerCase()) || s.customers?.full_name?.toLowerCase().includes(search.toLowerCase()))
+
+  const statusColors: Record<string, string> = { 'Bekliyor': 'bg-yellow-100 text-yellow-700', 'İşlemde': 'bg-blue-100 text-blue-700', 'Tamamlandı': 'bg-green-100 text-green-700', 'Teslim Edildi': 'bg-purple-100 text-purple-700', 'İptal': 'bg-red-100 text-red-700' }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div><h2 className="text-3xl font-bold tracking-tight">Teknik Servis</h2><p className="text-muted-foreground">Servis kayıtlarını yönetin</p></div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Yeni Servis</Button></DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Yeni Servis Kaydı</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 py-4">
-              <div className="space-y-2"><Label>Müşteri Adı</Label><Input value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required /></div>
-              <div className="space-y-2"><Label>Telefon</Label><Input value={form.customer_phone} onChange={(e) => setForm({...form, customer_phone: e.target.value})} placeholder="05XX XXX XX XX" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Marka</Label><Input value={form.device_brand} onChange={(e) => setForm({...form, device_brand: e.target.value})} placeholder="Apple" required /></div>
-                <div className="space-y-2"><Label>Model</Label><Input value={form.device_model} onChange={(e) => setForm({...form, device_model: e.target.value})} placeholder="iPhone 14 Pro" required /></div>
-              </div>
-              <div className="space-y-2"><Label>IMEI / Seri No</Label><Input value={form.device_imei} onChange={(e) => setForm({...form, device_imei: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Arıza Açıklaması</Label><Input value={form.problem} onChange={(e) => setForm({...form, problem: e.target.value})} placeholder="Ekran kırık..." /></div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2"><Label>Tahmini Fiyat (₺)</Label><Input type="number" value={form.estimated_price} onChange={(e) => setForm({...form, estimated_price: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Kapora (₺)</Label><Input type="number" value={form.advance_payment} onChange={(e) => setForm({...form, advance_payment: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Garanti (Ay)</Label><Input type="number" value={form.warranty_months} onChange={(e) => setForm({...form, warranty_months: e.target.value})} /></div>
-              </div>
-              <Button type="submit" className="w-full">Kaydet</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Teknik Servis</h1>
+        <Link href="/dashboard/services/new" className="btn-primary flex items-center gap-2"><Plus size={18} /> Yeni Servis</Link>
       </div>
-      <div className="grid gap-4">
-        {services.map((s) => (
-          <Card key={s.id}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10"><Wrench className="h-5 w-5 text-primary" /></div>
-                <div><p className="font-medium">{s.customer}</p><p className="text-sm text-muted-foreground">{s.device} — {s.id}</p></div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right"><p className="font-medium">₺{s.price.toLocaleString()}</p><p className="text-xs text-muted-foreground">Alınan: ₺{s.paid.toLocaleString()}</p></div>
-                <Badge variant={statusColors[s.status] as any || "outline"}>{s.status}</Badge>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+        <input className="input pl-10" placeholder="Servis no, cihaz veya müşteri ara..." value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      {selectedBarcode && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedBarcode(null)}>
+          <div className="bg-white p-6 rounded-xl" onClick={e => e.stopPropagation()}>
+            <BarcodeGenerator value={selectedBarcode} text={selectedBarcode} />
+            <button onClick={() => setSelectedBarcode(null)} className="mt-4 w-full btn-secondary">Kapat</button>
+          </div>
+        </div>
+      )}
+      <div className="card overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 dark:bg-gray-700/50"><tr><th className="table-header">Servis No</th><th className="table-header">Müşteri</th><th className="table-header">Cihaz</th><th className="table-header">Durum</th><th className="table-header">Tutar</th><th className="table-header">İşlemler</th></tr></thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {loading ? <tr><td colSpan={6} className="text-center py-8 text-gray-500">Yükleniyor...</td></tr> :
+             filtered.length === 0 ? <tr><td colSpan={6} className="text-center py-8 text-gray-500">Servis kaydı bulunamadı</td></tr> :
+             filtered.map((service) => (
+               <tr key={service.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                 <td className="table-cell font-mono font-medium">{service.service_no}</td>
+                 <td className="table-cell"><p className="font-medium">{service.customers?.full_name}</p><a href={`tel:${service.customers?.phone}`} className="text-xs text-green-600 flex items-center gap-1"><Phone size={12} /> {service.customers?.phone}</a></td>
+                 <td className="table-cell">{service.device_type} {service.device_model}</td>
+                 <td className="table-cell">
+                   <select value={service.status} onChange={(e) => updateStatus(service.id, e.target.value)} className={`text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer ${statusColors[service.status] || 'bg-gray-100'}`}>
+                     <option value="Bekliyor">Bekliyor</option><option value="İşlemde">İşlemde</option><option value="Tamamlandı">Tamamlandı</option><option value="Teslim Edildi">Teslim Edildi</option><option value="İptal">İptal</option>
+                   </select>
+                 </td>
+                 <td className="table-cell">₺{service.final_cost || service.estimated_cost || 0}</td>
+                 <td className="table-cell"><button onClick={() => setSelectedBarcode(service.service_no)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded" title="Barkod Göster"><QrCode size={16} /></button></td>
+               </tr>
+             ))}
+          </tbody>
+        </table>
       </div>
     </div>
-  );
+  )
 }

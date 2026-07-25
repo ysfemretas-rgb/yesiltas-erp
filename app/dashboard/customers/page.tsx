@@ -1,61 +1,83 @@
-"use client";
-
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Phone, Mail } from "lucide-react";
+'use client'
+import { useState, useEffect } from 'react'
+import { supabase, Customer } from '@/lib/supabase'
+import { Search, Plus, Phone, Trash2, Edit } from 'lucide-react'
 
 export default function CustomersPage() {
-  const [open, setOpen] = useState(false);
-  const [customers, setCustomers] = useState([
-    { id: 1, name: "Ahmet Yılmaz", phone: "0532 123 45 67", email: "ahmet@email.com", devices: 2 },
-    { id: 2, name: "Mehmet Kaya", phone: "0533 987 65 43", email: "", devices: 1 },
-    { id: 3, name: "Ayşe Demir", phone: "0535 456 78 90", email: "ayse@email.com", devices: 3 },
-  ]);
-  const [form, setForm] = useState({ name: "", phone: "", email: "" });
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', address: '', tc_no: '', notes: '' })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomers([...customers, { id: customers.length + 1, ...form, devices: 0 }]);
-    setOpen(false); setForm({ name: "", phone: "", email: "" });
-  };
+  useEffect(() => { fetchCustomers() }, [])
+
+  const fetchCustomers = async () => {
+    const { data } = await supabase.from('customers').select('*').order('created_at', { ascending: false })
+    setCustomers(data || [])
+    setLoading(false)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await supabase.from('customers').insert([formData])
+    setFormData({ full_name: '', phone: '', email: '', address: '', tc_no: '', notes: '' })
+    setShowForm(false)
+    fetchCustomers()
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Silmek istediğinize emin misiniz?')) return
+    await supabase.from('customers').delete().eq('id', id)
+    fetchCustomers()
+  }
+
+  const filtered = customers.filter(c => c.full_name?.toLowerCase().includes(search.toLowerCase()) || c.phone?.includes(search) || c.tc_no?.includes(search))
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div><h2 className="text-3xl font-bold tracking-tight">Müşteriler</h2><p className="text-muted-foreground">Müşteri kayıtlarını yönetin</p></div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Yeni Müşteri</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Yeni Müşteri</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 py-4">
-              <div className="space-y-2"><Label>Ad Soyad</Label><Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required /></div>
-              <div className="space-y-2"><Label>Telefon</Label><Input value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} placeholder="05XX XXX XX XX" required /></div>
-              <div className="space-y-2"><Label>E-posta (isteğe bağlı)</Label><Input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} /></div>
-              <Button type="submit" className="w-full">Kaydet</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Müşteriler</h1>
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2"><Plus size={18} /> Yeni Müşteri</button>
       </div>
-      <div className="grid gap-4">
-        {customers.map((c) => (
-          <Card key={c.id}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div>
-                <p className="font-medium text-lg">{c.name}</p>
-                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {c.phone}</span>
-                  {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {c.email}</span>}
-                </div>
-              </div>
-              <div className="text-right"><p className="text-2xl font-bold">{c.devices}</p><p className="text-xs text-muted-foreground">Cihaz</p></div>
-            </CardContent>
-          </Card>
-        ))}
+      {showForm && (
+        <div className="card">
+          <h3 className="text-lg font-semibold mb-4">Yeni Müşteri Ekle</h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input className="input" placeholder="Ad Soyad *" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} required />
+            <input className="input" placeholder="Telefon" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+            <input className="input" placeholder="E-posta" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+            <input className="input" placeholder="TC Kimlik No" value={formData.tc_no} onChange={e => setFormData({...formData, tc_no: e.target.value})} />
+            <input className="input md:col-span-2" placeholder="Adres" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+            <textarea className="input md:col-span-2" placeholder="Notlar" rows={3} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+            <div className="md:col-span-2 flex gap-2">
+              <button type="submit" className="btn-primary">Kaydet</button>
+              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">İptal</button>
+            </div>
+          </form>
+        </div>
+      )}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+        <input className="input pl-10" placeholder="Müşteri ara (isim, telefon, TC)..." value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      <div className="card overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 dark:bg-gray-700/50"><tr><th className="table-header">Ad Soyad</th><th className="table-header">Telefon</th><th className="table-header">E-posta</th><th className="table-header">İşlemler</th></tr></thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {loading ? <tr><td colSpan={4} className="text-center py-8 text-gray-500">Yükleniyor...</td></tr> :
+             filtered.length === 0 ? <tr><td colSpan={4} className="text-center py-8 text-gray-500">Müşteri bulunamadı</td></tr> :
+             filtered.map((customer) => (
+               <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                 <td className="table-cell font-medium">{customer.full_name}</td>
+                 <td className="table-cell"><a href={`tel:${customer.phone}`} className="flex items-center gap-1 text-green-600 hover:text-green-700"><Phone size={14} /> {customer.phone}</a></td>
+                 <td className="table-cell">{customer.email || '-'}</td>
+                 <td className="table-cell"><div className="flex items-center gap-2"><button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button><button onClick={() => handleDelete(customer.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button></div></td>
+               </tr>
+             ))}
+          </tbody>
+        </table>
       </div>
     </div>
-  );
+  )
 }
