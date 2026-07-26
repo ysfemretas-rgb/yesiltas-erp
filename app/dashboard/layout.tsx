@@ -164,7 +164,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }`}>
             <span className="text-lg">💵</span>
             <div>
-              <div className="font-semibold text-xs uppercase tracking-wider opacity-70">USD/TRY (Canlı)</div>
+              <div className="font-semibold text-xs uppercase tracking-wider opacity-70">USD/TRY (CANLI)</div>
               <div className="flex items-center gap-3 mt-0.5">
                 {loading ? (
                   <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>Yükleniyor...</span>
