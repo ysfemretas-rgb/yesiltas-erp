@@ -136,14 +136,10 @@ export default function CustomersPage() {
         return
       }
 
-      // Yeni müşteriyi listeye ekle (anlık gözükmesi için)
       setCustomers(prev => [data[0], ...prev])
-
       setToast({ message: `✅ ${data[0].name} başarıyla eklendi!`, type: 'success' })
       setShowModal(false)
       setForm({ name: '', phone: '', email: '', address: '' })
-
-      // Verileri yenile (borç/ödeme bilgileri için)
       await loadData()
     } catch (err: any) {
       console.error('Beklenmeyen hata:', err)
@@ -235,7 +231,6 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toast Bildirim */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg animate-fade-in max-w-md ${
           toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'
@@ -317,7 +312,6 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Yeni Müşteri Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -379,7 +373,6 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Ödeme Al Modal */}
       {showPaymentModal && selectedCustomer && (
         <div className="modal-overlay" onClick={() => setShowPaymentModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
