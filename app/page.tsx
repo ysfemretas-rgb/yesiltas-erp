@@ -22,7 +22,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError(error.message);
+      setError("E-posta veya sifre hatali!");
     } else {
       router.push("/dashboard");
     }
@@ -30,42 +30,41 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900/20">
+      <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">Yeşiltaş ERP</h1>
-          <p className="text-slate-500 mt-2">İnşaat Yönetim Sistemi</p>
+          <div className="w-16 h-16 bg-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center text-3xl">
+            🔧
+          </div>
+          <h1 className="text-3xl font-bold text-white">Yeşiltaş Teknoloji</h1>
+          <p className="text-slate-400 mt-2">Telefon & Tablet Servis Yonetimi</p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm">
             {error}
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              E-posta
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">E-posta</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 outline-none transition-all"
-              placeholder="ornek@yesiltas.com"
+              className="input-field"
+              placeholder="ornek@email.com"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Şifre
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Sifre</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 outline-none transition-all"
+              className="input-field"
               placeholder="••••••••"
               required
             />
@@ -73,9 +72,9 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-slate-800 text-white py-2.5 rounded-lg font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
+            {loading ? "Giris yapiliyor..." : "Giris Yap"}
           </button>
         </form>
       </div>

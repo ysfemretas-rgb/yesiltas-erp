@@ -8,21 +8,19 @@ import { useEffect, useState } from "react";
 
 const menuItems = [
   { href: "/dashboard", label: "Ana Sayfa", icon: "🏠" },
-  { href: "/dashboard/customers", label: "Müşteriler", icon: "👥" },
-  { href: "/dashboard/projects", label: "Projeler", icon: "📁" },
-  { href: "/dashboard/employees", label: "Çalışanlar", icon: "👷" },
-  { href: "/dashboard/finance", label: "Finans", icon: "💰" },
+  { href: "/dashboard/devices", label: "Cihazlar", icon: "📱" },
+  { href: "/dashboard/customers", label: "Musteriler", icon: "👥" },
+  { href: "/dashboard/sales", label: "Satis", icon: "💰" },
   { href: "/dashboard/inventory", label: "Stok", icon: "📦" },
+  { href: "/dashboard/finance", label: "Kasa", icon: "💳" },
+  { href: "/dashboard/suppliers", label: "Tedarikciler", icon: "🏭" },
 ];
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -36,39 +34,60 @@ export default function DashboardLayout({
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className="w-64 bg-slate-800 text-white flex flex-col">
+    <div className="flex h-screen bg-slate-900">
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        className="lg:hidden fixed top-4 left-4 z-50 bg-slate-800 p-2 rounded-lg border border-slate-700 text-slate-300"
+      >
+        {mobileMenuOpen ? "✕" : "☰"}
+      </button>
+
+      {/* Sidebar */}
+      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static z-40 w-64 h-full bg-slate-800 border-r border-slate-700 flex flex-col transition-transform`}>
         <div className="p-4 border-b border-slate-700">
-          <h1 className="text-xl font-bold">Yeşiltaş ERP</h1>
-          <p className="text-xs text-slate-400 mt-1">{userEmail}</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center text-xl">🔧</div>
+            <div>
+              <h1 className="text-lg font-bold text-white">Yeşiltaş</h1>
+              <p className="text-xs text-slate-400">Teknoloji</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mt-2 truncate">{userEmail}</p>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {menuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                pathname === item.href
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-300 hover:bg-slate-700 hover:text-white"
-              }`}
+              onClick={() => setMobileMenuOpen(false)}
+              className={`sidebar-link ${pathname === item.href ? "sidebar-link-active" : "sidebar-link-inactive"}`}
             >
-              <span>{item.icon}</span>
+              <span className="text-lg">{item.icon}</span>
               <span>{item.label}</span>
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-slate-700">
+
+        <div className="p-3 border-t border-slate-700">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            className="w-full sidebar-link sidebar-link-inactive"
           >
-            <span>🚪</span>
-            <span>Çıkış Yap</span>
+            <span className="text-lg">🚪</span>
+            <span>Cikis Yap</span>
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto p-6">{children}</main>
+
+      {/* Overlay for mobile */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>
     </div>
   );
 }
