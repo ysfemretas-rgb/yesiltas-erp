@@ -79,7 +79,6 @@ export default function DevicesPage() {
     notes: "",
   });
 
-  // Hızlı müşteri ekleme formu
   const [customerForm, setCustomerForm] = useState({
     name: "",
     phone: "",
@@ -191,6 +190,7 @@ export default function DevicesPage() {
     const updates: any = { status: newStatus };
     const now = new Date().toISOString();
 
+    // Tarih alanlarını güncelle
     if (newStatus === "tamirde" && !device.started_at) {
       updates.started_at = now;
     }
@@ -199,7 +199,12 @@ export default function DevicesPage() {
     }
     if (newStatus === "teslim_edildi" && !device.delivered_at) {
       updates.delivered_at = now;
-      updates.payment_status = device.payment_status === "beklemede" ? "tamamlandi" : device.payment_status;
+      // Teslim edildiyse ödeme durumunu kontrol et
+      // Eğer ödeme tamamlanmamışsa kısmi veya beklemede kalabilir
+      if (device.payment_status === "beklemede" && device.final_cost > 0) {
+        // Ödeme beklemedeyse ve ücret varsa, kullanıcıya sor
+        // Ama şimdilik mevcut ödeme durumunu koru, sadece teslim tarihi ekle
+      }
     }
 
     const { error } = await supabase.from("devices").update(updates).eq("id", device.id);
@@ -209,23 +214,33 @@ export default function DevicesPage() {
       return;
     }
 
-    if (newStatus === "teslim_edildi" && device.final_cost > 0) {
-      const { error: transError } = await supabase.from("transactions").insert([
-        {
-          type: "gelir",
-          category: "servis",
-          amount: device.final_cost,
-          description: `${device.brand} ${device.model} servis ücreti - ${device.customer_name} (IMEI: ${device.imei || "-"})`,
-          related_table: "devices",
-          related_id: device.id,
-          payment_method: "nakit",
-        },
-      ]);
+    // TESLİM EDİLDİ → OTOMATİK KASA (sadece ödeme tamamlanmışsa veya ücretsizse)
+    if (newStatus === "teslim_edildi") {
+      if (device.payment_status === "tamamlandi" && device.final_cost > 0) {
+        // Ödeme tamamlanmışsa kasaya ekle
+        const { error: transError } = await supabase.from("transactions").insert([
+          {
+            type: "gelir",
+            category: "servis",
+            amount: device.final_cost,
+            description: `${device.brand} ${device.model} servis ücreti - ${device.customer_name} (IMEI: ${device.imei || "-"})`,
+            related_table: "devices",
+            related_id: device.id,
+            payment_method: "nakit",
+          },
+        ]);
 
-      if (transError) {
-        showToast("Kasa kaydı oluşturulurken hata: " + transError.message, "error");
+        if (transError) {
+          showToast("Kasa kaydı oluşturulurken hata: " + transError.message, "error");
+        } else {
+          showToast(`Cihaz teslim edildi! Kasa'ya ${device.final_cost.toLocaleString("tr-TR")} TL gelir kaydedildi.`, "success");
+        }
+      } else if (device.payment_status === "ucretsiz") {
+        showToast("Cihaz ücretsiz olarak teslim edildi.", "success");
+      } else if (device.payment_status === "kismi") {
+        showToast(`Cihaz kısmi ödeme ile teslim edildi. Kalan: ${(device.final_cost - device.paid_amount).toLocaleString("tr-TR")} TL`, "info");
       } else {
-        showToast(`Cihaz teslim edildi! Kasa'ya ${device.final_cost.toLocaleString("tr-TR")} TL gelir kaydedildi.`, "success");
+        showToast("Cihaz teslim edildi. Ödeme henüz tamamlanmamış!", "info");
       }
     } else {
       showToast("Durum güncellendi!", "success");
@@ -295,6 +310,14 @@ export default function DevicesPage() {
     return new Date(dateStr).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
+  const getPaymentStatusDisplay = (device: Device) => {
+    const remaining = (device.final_cost || 0) - (device.paid_amount || 0);
+    if (device.payment_status === "ucretsiz") return { text: "Ücretsiz", color: "text-slate-400" };
+    if (device.payment_status === "tamamlandi") return { text: "Tamamlandı", color: "text-emerald-400" };
+    if (device.payment_status === "kismi") return { text: `Kısmi (Kalan: ${remaining.toLocaleString("tr-TR")} TL)`, color: "text-blue-400" };
+    return { text: "Beklemede", color: "text-amber-400" };
+  };
+
   const filtered = devices.filter((d) => {
     const matchSearch =
       d.brand.toLowerCase().includes(search.toLowerCase()) ||
@@ -351,12 +374,14 @@ export default function DevicesPage() {
                 <th>Alınma</th>
                 <th>Teslim</th>
                 <th>Ücret</th>
+                <th>Ödeme</th>
                 <th>İşlemler</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((item) => {
                 const statusInfo = statusOptions.find((s) => s.value === item.status);
+                const paymentDisplay = getPaymentStatusDisplay(item);
                 return (
                   <tr key={item.id}>
                     <td>
@@ -381,7 +406,14 @@ export default function DevicesPage() {
                     <td className="text-slate-400 text-xs">{formatDate(item.delivered_at)}</td>
                     <td>
                       <div className="text-white font-medium">{item.final_cost?.toLocaleString("tr-TR") || 0} TL</div>
-                      <div className="text-xs text-slate-500">{paymentStatusOptions.find((p) => p.value === item.payment_status)?.label}</div>
+                    </td>
+                    <td>
+                      <div className={`text-xs font-medium ${paymentDisplay.color}`}>{paymentDisplay.text}</div>
+                      {item.paid_amount > 0 && item.payment_status !== "tamamlandi" && (
+                        <div className="text-xs text-slate-500">
+                          Ödenen: {item.paid_amount.toLocaleString("tr-TR")} TL
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div className="flex gap-2">
@@ -406,7 +438,6 @@ export default function DevicesPage() {
               {editing ? "✏️ Cihaz Düzenle" : "➕ Yeni Cihaz"}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Müşteri Seçimi + Yeni Müşteri Butonu */}
               <div className="sm:col-span-2">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm text-slate-400">Müşteri</label>
@@ -498,43 +529,19 @@ export default function DevicesPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Ad Soyad *</label>
-                <input
-                  type="text"
-                  value={customerForm.name}
-                  onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
-                  className="input-field"
-                  placeholder="Müşteri adı"
-                />
+                <input type="text" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} className="input-field" placeholder="Müşteri adı" />
               </div>
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Telefon</label>
-                <input
-                  type="text"
-                  value={customerForm.phone}
-                  onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
-                  className="input-field"
-                  placeholder="0555 000 00 00"
-                />
+                <input type="text" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} className="input-field" placeholder="0555 000 00 00" />
               </div>
               <div>
                 <label className="block text-sm text-slate-400 mb-1">E-posta</label>
-                <input
-                  type="email"
-                  value={customerForm.email}
-                  onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
-                  className="input-field"
-                  placeholder="ornek@mail.com"
-                />
+                <input type="email" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} className="input-field" placeholder="ornek@mail.com" />
               </div>
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Adres</label>
-                <textarea
-                  value={customerForm.address}
-                  onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
-                  className="input-field"
-                  rows={2}
-                  placeholder="Adres"
-                />
+                <textarea value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} className="input-field" rows={2} placeholder="Adres" />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -605,6 +612,17 @@ export default function DevicesPage() {
                     <p className="text-slate-500">Ödenen</p>
                     <p className="text-white font-medium">{selectedDevice.paid_amount?.toLocaleString("tr-TR") || 0} TL</p>
                   </div>
+                </div>
+                <div className="mt-2">
+                  <p className="text-slate-500">Ödeme Durumu</p>
+                  <p className={`font-medium ${getPaymentStatusDisplay(selectedDevice).color}`}>
+                    {getPaymentStatusDisplay(selectedDevice).text}
+                  </p>
+                  {(selectedDevice.final_cost || 0) > (selectedDevice.paid_amount || 0) && selectedDevice.payment_status !== "ucretsiz" && (
+                    <p className="text-red-400 text-xs mt-1">
+                      Kalan: {((selectedDevice.final_cost || 0) - (selectedDevice.paid_amount || 0)).toLocaleString("tr-TR")} TL
+                    </p>
+                  )}
                 </div>
               </div>
               <div>

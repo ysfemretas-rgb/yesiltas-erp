@@ -22,6 +22,8 @@ interface Device {
   status: string;
   complaint: string;
   final_cost: number;
+  paid_amount: number;
+  payment_status: string;
   received_at: string;
 }
 
@@ -30,7 +32,10 @@ interface Sale {
   item_name: string;
   item_type: string;
   total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
   payment_method: string;
+  next_payment_date: string;
   created_at: string;
 }
 
@@ -43,6 +48,13 @@ interface Appointment {
   status: string;
 }
 
+interface DebtInfo {
+  totalDebt: number;
+  overdueDebt: number;
+  nextPaymentDate: string | null;
+  hasOverdue: boolean;
+}
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +64,7 @@ export default function CustomersPage() {
   const [customerDevices, setCustomerDevices] = useState<Device[]>([]);
   const [customerSales, setCustomerSales] = useState<Sale[]>([]);
   const [customerAppointments, setCustomerAppointments] = useState<Appointment[]>([]);
+  const [customerDebt, setCustomerDebt] = useState<DebtInfo>({ totalDebt: 0, overdueDebt: 0, nextPaymentDate: null, hasOverdue: false });
   const [historyLoading, setHistoryLoading] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [search, setSearch] = useState("");
@@ -91,9 +104,42 @@ export default function CustomersPage() {
       supabase.from("appointments").select("*").eq("customer_id", customer.id).order("appointment_date", { ascending: false }),
     ]);
 
-    setCustomerDevices(devicesRes.data || []);
-    setCustomerSales(salesRes.data || []);
+    const devices = devicesRes.data || [];
+    const sales = salesRes.data || [];
+
+    setCustomerDevices(devices);
+    setCustomerSales(sales);
     setCustomerAppointments(appointmentsRes.data || []);
+
+    // Borç hesaplama
+    const deviceDebts = devices
+      .filter((d) => d.payment_status !== "tamamlandi" && d.payment_status !== "ucretsiz")
+      .reduce((sum, d) => sum + ((d.final_cost || 0) - (d.paid_amount || 0)), 0);
+
+    const saleDebts = sales
+      .filter((s) => s.remaining_amount > 0)
+      .reduce((sum, s) => sum + (s.remaining_amount || 0), 0);
+
+    const totalDebt = deviceDebts + saleDebts;
+
+    // Tarihi geçen borçları hesapla
+    const today = new Date().toISOString().split("T")[0];
+    const overdueSales = sales.filter((s) => s.remaining_amount > 0 && s.next_payment_date && s.next_payment_date < today);
+    const overdueDebt = overdueSales.reduce((sum, s) => sum + (s.remaining_amount || 0), 0);
+
+    // En yakın ödeme tarihi
+    const futurePayments = sales
+      .filter((s) => s.remaining_amount > 0 && s.next_payment_date && s.next_payment_date >= today)
+      .map((s) => s.next_payment_date);
+    const nextPaymentDate = futurePayments.length > 0 ? futurePayments.sort()[0] : null;
+
+    setCustomerDebt({
+      totalDebt,
+      overdueDebt,
+      nextPaymentDate,
+      hasOverdue: overdueDebt > 0,
+    });
+
     setHistoryLoading(false);
     setShowHistoryModal(true);
   };
@@ -181,6 +227,26 @@ export default function CustomersPage() {
       iptal: "İptal",
     };
     return labels[status] || status;
+  };
+
+  const getPaymentStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      beklemede: "Beklemede",
+      kismi: "Kısmi Ödeme",
+      tamamlandi: "Tamamlandı",
+      ucretsiz: "Ücretsiz",
+    };
+    return labels[status] || status;
+  };
+
+  const getPaymentStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      beklemede: "text-amber-400",
+      kismi: "text-blue-400",
+      tamamlandi: "text-emerald-400",
+      ucretsiz: "text-slate-400",
+    };
+    return colors[status] || "text-slate-400";
   };
 
   const filtered = customers.filter((c) =>
@@ -311,6 +377,42 @@ export default function CustomersPage() {
             </h3>
             <p className="text-sm text-slate-400 mb-4">{selectedCustomer.phone} | {selectedCustomer.email}</p>
 
+            {/* Borç Özeti */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className={`card ${customerDebt.hasOverdue ? "bg-red-500/10 border-red-500/20" : "bg-slate-800/50"}`}>
+                <p className={`text-xs ${customerDebt.hasOverdue ? "text-red-400" : "text-slate-400"}`}>Toplam Borç</p>
+                <p className={`text-xl font-bold ${customerDebt.hasOverdue ? "text-red-300" : "text-white"}`}>
+                  {customerDebt.totalDebt.toLocaleString("tr-TR")} TL
+                </p>
+              </div>
+              <div className={`card ${customerDebt.hasOverdue ? "bg-red-500/10 border-red-500/20" : "bg-emerald-500/10 border-emerald-500/20"}`}>
+                <p className={`text-xs ${customerDebt.hasOverdue ? "text-red-400" : "text-emerald-400"}`}>
+                  {customerDebt.hasOverdue ? "⚠️ Tarihi Geçen" : "Durum"}
+                </p>
+                <p className={`text-xl font-bold ${customerDebt.hasOverdue ? "text-red-300" : "text-emerald-300"}`}>
+                  {customerDebt.hasOverdue
+                    ? `${customerDebt.overdueDebt.toLocaleString("tr-TR")} TL`
+                    : customerDebt.totalDebt > 0 ? "Borçlu" : "Borç Yok"
+                  }
+                </p>
+              </div>
+              <div className="card bg-blue-500/10 border-blue-500/20">
+                <p className="text-xs text-blue-400">Son Ödeme Tarihi</p>
+                <p className="text-xl font-bold text-blue-300">
+                  {customerDebt.nextPaymentDate
+                    ? new Date(customerDebt.nextPaymentDate).toLocaleDateString("tr-TR")
+                    : "-"
+                  }
+                </p>
+              </div>
+            </div>
+
+            {customerDebt.hasOverdue && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6 text-sm">
+                ⚠️ <strong>Dikkat!</strong> Bu müşterinin {customerDebt.overdueDebt.toLocaleString("tr-TR")} TL tutarında tarihi geçen ödemesi bulunmaktadır.
+              </div>
+            )}
+
             {historyLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="spinner text-emerald-400" />
@@ -332,6 +434,7 @@ export default function CustomersPage() {
                             <th>Cihaz</th>
                             <th>Şikayet</th>
                             <th>Durum</th>
+                            <th>Ödeme</th>
                             <th>Ücret</th>
                             <th>Tarih</th>
                           </tr>
@@ -342,6 +445,7 @@ export default function CustomersPage() {
                               <td className="font-medium text-white">{d.brand} {d.model}</td>
                               <td className="text-slate-400 text-xs max-w-xs truncate">{d.complaint}</td>
                               <td className={getStatusColor(d.status)}>{getStatusLabel(d.status)}</td>
+                              <td className={getPaymentStatusColor(d.payment_status)}>{getPaymentStatusLabel(d.payment_status)}</td>
                               <td className="text-emerald-400">{(d.final_cost || 0).toLocaleString("tr-TR")} TL</td>
                               <td className="text-slate-400 text-xs">{new Date(d.received_at).toLocaleDateString("tr-TR")}</td>
                             </tr>
@@ -367,20 +471,35 @@ export default function CustomersPage() {
                             <th>Ürün</th>
                             <th>Tip</th>
                             <th>Tutar</th>
-                            <th>Ödeme</th>
+                            <th>Ödenen</th>
+                            <th>Kalan</th>
+                            <th>Son Ödeme</th>
                             <th>Tarih</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {customerSales.map((s) => (
-                            <tr key={s.id}>
-                              <td className="font-medium text-white">{s.item_name}</td>
-                              <td className="text-slate-400 text-xs">{s.item_type}</td>
-                              <td className="text-emerald-400 font-medium">{s.total_amount.toLocaleString("tr-TR")} TL</td>
-                              <td className="text-slate-400 text-xs">{s.payment_method}</td>
-                              <td className="text-slate-400 text-xs">{new Date(s.created_at).toLocaleDateString("tr-TR")}</td>
-                            </tr>
-                          ))}
+                          {customerSales.map((s) => {
+                            const isOverdue = s.remaining_amount > 0 && s.next_payment_date && s.next_payment_date < new Date().toISOString().split("T")[0];
+                            return (
+                              <tr key={s.id}>
+                                <td className="font-medium text-white">{s.item_name}</td>
+                                <td className="text-slate-400 text-xs">{s.item_type}</td>
+                                <td className="text-emerald-400 font-medium">{s.total_amount.toLocaleString("tr-TR")} TL</td>
+                                <td className="text-emerald-400">{s.paid_amount?.toLocaleString("tr-TR") || 0} TL</td>
+                                <td className={`font-medium ${isOverdue ? "text-red-400" : "text-amber-400"}`}>
+                                  {s.remaining_amount?.toLocaleString("tr-TR") || 0} TL
+                                  {isOverdue && " ⚠️"}
+                                </td>
+                                <td className={`text-xs ${isOverdue ? "text-red-400 font-medium" : "text-slate-400"}`}>
+                                  {s.next_payment_date
+                                    ? new Date(s.next_payment_date).toLocaleDateString("tr-TR")
+                                    : "-"
+                                  }
+                                </td>
+                                <td className="text-slate-400 text-xs">{new Date(s.created_at).toLocaleDateString("tr-TR")}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
