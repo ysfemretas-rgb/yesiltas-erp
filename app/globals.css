@@ -2,21 +2,258 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body { @apply antialiased bg-slate-900 text-slate-100; }
+:root {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-border: #334155;
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #3b82f6;
 }
 
-@layer components {
-  .btn-primary { @apply bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-500 transition-colors font-medium; }
-  .btn-secondary { @apply bg-slate-700 text-slate-100 px-4 py-2 rounded-lg hover:bg-slate-600 transition-colors font-medium; }
-  .btn-danger { @apply bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-500 transition-colors font-medium; }
-  .input-field { @apply w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-slate-100 placeholder-slate-500; }
-  .card { @apply bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-6; }
-  .card-hover { @apply bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-6 hover:border-emerald-500/50 transition-all cursor-pointer; }
-  .table-header { @apply px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider; }
-  .table-cell { @apply px-4 py-3 text-sm text-slate-300 border-b border-slate-700/50; }
-  .badge { @apply px-2.5 py-1 rounded-full text-xs font-medium; }
-  .sidebar-link { @apply flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm; }
-  .sidebar-link-active { @apply bg-emerald-600/20 text-emerald-400 border border-emerald-600/30; }
-  .sidebar-link-inactive { @apply text-slate-400 hover:bg-slate-800 hover:text-slate-200; }
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.card {
+  background-color: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.input-field {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+  width: 100%;
+  transition: all 0.2s;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.input-field::placeholder {
+  color: #64748b;
+}
+
+.btn-primary {
+  background-color: #10b981;
+  color: white;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-primary:hover {
+  background-color: #059669;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #334155;
+  color: #f1f5f9;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  border: 1px solid #475569;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: #475569;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+}
+
+.btn-success {
+  background-color: #10b981;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-success:hover {
+  background-color: #059669;
+}
+
+.btn-warning {
+  background-color: #f59e0b;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-warning:hover {
+  background-color: #d97706;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  border-bottom: 1px solid #334155;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  color: #e2e8f0;
+  border-bottom: 1px solid #1e293b;
+  white-space: nowrap;
+}
+
+.data-table tr:hover td {
+  background-color: #1e293b;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-bekliyor { background-color: #f59e0b/20; color: #fbbf24; border: 1px solid #f59e0b/30; }
+.badge-tamirde { background-color: #3b82f6/20; color: #60a5fa; border: 1px solid #3b82f6/30; }
+.badge-hazir { background-color: #10b981/20; color: #34d399; border: 1px solid #10b981/30; }
+.badge-teslim { background-color: #8b5cf6/20; color: #a78bfa; border: 1px solid #8b5cf6/30; }
+.badge-iptal { background-color: #ef4444/20; color: #f87171; border: 1px solid #ef4444/30; }
+
+.status-bekliyor { color: #fbbf24; }
+.status-tamirde { color: #60a5fa; }
+.status-hazir { color: #34d399; }
+.status-teslim_edildi { color: #a78bfa; }
+.status-iptal { color: #f87171; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.modal-content {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@media (max-width: 768px) {
+  .card { padding: 1rem; }
+  .modal-content { margin: 0.5rem; padding: 1rem; }
 }

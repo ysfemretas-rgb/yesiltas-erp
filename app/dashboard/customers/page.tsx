@@ -4,71 +4,220 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/toast";
 
-interface Customer { id: string; name: string; phone: string; email: string; address: string; created_at: string; }
+interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  tc_no: string;
+  notes: string;
+  created_at: string;
+}
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [search, setSearch] = useState("");
   const { showToast, ToastContainer } = useToast();
-  const [formData, setFormData] = useState({ name: "", phone: "", email: "", address: "" });
 
-  useEffect(() => { fetchCustomers(); }, []);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    tc_no: "",
+    notes: "",
+  });
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const fetchCustomers = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false });
-    if (error) showToast("Musteriler yuklenirken hata: " + error.message, "error");
-    else setCustomers(data || []);
+    const { data, error } = await supabase.from("customers").select("*").order("name");
+    if (error) {
+      showToast("Müşteriler yüklenirken hata: " + error.message, "error");
+    } else {
+      setCustomers(data || []);
+    }
     setLoading(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingCustomer) {
-      const { error } = await supabase.from("customers").update(formData).eq("id", editingCustomer.id);
-      if (error) showToast("Guncelleme basarisiz: " + error.message, "error");
-      else { showToast("Musteri guncellendi", "success"); resetForm(); setShowForm(false); fetchCustomers(); }
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      showToast("Müşteri adı zorunlu!", "error");
+      return;
+    }
+
+    const payload = {
+      name: form.name,
+      phone: form.phone,
+      email: form.email,
+      address: form.address,
+      tc_no: form.tc_no,
+      notes: form.notes,
+    };
+
+    let error;
+    if (editing) {
+      const { error: e } = await supabase.from("customers").update(payload).eq("id", editing.id);
+      error = e;
     } else {
-      const { error } = await supabase.from("customers").insert([formData]);
-      if (error) showToast("Ekleme basarisiz: " + error.message, "error");
-      else { showToast("Musteri eklendi", "success"); resetForm(); setShowForm(false); fetchCustomers(); }
+      const { error: e } = await supabase.from("customers").insert([payload]);
+      error = e;
+    }
+
+    if (error) {
+      showToast("Kaydedilirken hata: " + error.message, "error");
+    } else {
+      showToast(editing ? "Güncellendi!" : "Müşteri eklendi!", "success");
+      setShowModal(false);
+      setEditing(null);
+      resetForm();
+      fetchCustomers();
     }
   };
 
-  const resetForm = () => { setFormData({ name: "", phone: "", email: "", address: "" }); setEditingCustomer(null); };
-  const handleEdit = (c: Customer) => { setEditingCustomer(c); setFormData({ name: c.name, phone: c.phone, email: c.email, address: c.address }); setShowForm(true); };
-  const handleDelete = async (id: string) => { if (!confirm("Bu musteriyi silmek istediginize emin misiniz?")) return; const { error } = await supabase.from("customers").delete().eq("id", id); if (error) showToast("Silme basarisiz: " + error.message, "error"); else { showToast("Musteri silindi", "success"); fetchCustomers(); } };
-  const filtered = customers.filter(c => (c.name + c.phone + c.email).toLowerCase().includes(searchTerm.toLowerCase()));
+  const handleDelete = async (id: string) => {
+    if (!confirm("Silmek istediğinize emin misiniz?")) return;
+    const { error } = await supabase.from("customers").delete().eq("id", id);
+    if (error) {
+      showToast("Silinirken hata: " + error.message, "error");
+    } else {
+      showToast("Silindi!", "success");
+      fetchCustomers();
+    }
+  };
+
+  const resetForm = () => {
+    setForm({ name: "", phone: "", email: "", address: "", tc_no: "", notes: "" });
+  };
+
+  const openEdit = (item: Customer) => {
+    setEditing(item);
+    setForm({
+      name: item.name,
+      phone: item.phone || "",
+      email: item.email || "",
+      address: item.address || "",
+      tc_no: item.tc_no || "",
+      notes: item.notes || "",
+    });
+    setShowModal(true);
+  };
+
+  const filtered = customers.filter((c) =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone?.includes(search) ||
+    c.email?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div>
       <ToastContainer />
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <h2 className="text-2xl font-bold text-white">Musteriler</h2>
-        <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn-primary">{showForm ? "Iptal" : "+ Yeni Musteri"}</button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h2 className="section-title">👥 Müşteriler</h2>
+        <button onClick={() => { setEditing(null); resetForm(); setShowModal(true); }} className="btn-primary">
+          ➕ Yeni Müşteri
+        </button>
       </div>
-      <input type="text" placeholder="Ara (ad, telefon, e-posta)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field mb-6" />
-      {showForm && (
-        <div className="card mb-6">
-          <h3 className="text-lg font-semibold text-white mb-4">{editingCustomer ? "Musteri Duzenle" : "Yeni Musteri"}</h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-300 mb-1">Ad Soyad *</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="input-field" placeholder="Ahmet Yilmaz" required /></div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1">Telefon *</label><input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="input-field" placeholder="05XX XXX XX XX" required /></div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1">E-posta</label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="input-field" placeholder="ornek@email.com" /></div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1">Adres</label><input type="text" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="input-field" placeholder="Istanbul, Kadikoy" /></div>
-            <div className="md:col-span-2 flex gap-3"><button type="submit" className="btn-primary">{editingCustomer ? "Guncelle" : "Kaydet"}</button><button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="btn-secondary">Iptal</button></div>
-          </form>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <input
+          type="text"
+          placeholder="Müşteri ara..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="input-field sm:w-72"
+        />
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="spinner text-emerald-400" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">👥</div>
+          <p>Henüz müşteri kaydı yok</p>
+        </div>
+      ) : (
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Ad Soyad</th>
+                <th>Telefon</th>
+                <th>E-posta</th>
+                <th>Adres</th>
+                <th>TC No</th>
+                <th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => (
+                <tr key={item.id}>
+                  <td className="font-medium text-white">{item.name}</td>
+                  <td className="text-slate-400">{item.phone || "-"}</td>
+                  <td className="text-slate-400">{item.email || "-"}</td>
+                  <td className="text-slate-400 max-w-xs truncate">{item.address || "-"}</td>
+                  <td className="text-slate-400">{item.tc_no || "-"}</td>
+                  <td>
+                    <div className="flex gap-2">
+                      <button onClick={() => openEdit(item)} className="btn-success">Düzenle</button>
+                      <button onClick={() => handleDelete(item.id)} className="btn-danger">Sil</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-      {loading ? <div className="text-center py-12 text-slate-500">Yukleniyor...</div> : filtered.length === 0 ? <div className="card text-center py-12 text-slate-500"><div className="text-4xl mb-3">👥</div><p>Henüz musteri bulunmuyor.</p></div> : (
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead><tr className="border-b border-slate-700"><th className="table-header">Ad Soyad</th><th className="table-header">Telefon</th><th className="table-header">E-posta</th><th className="table-header">Adres</th><th className="table-header">Islemler</th></tr></thead>
-            <tbody>{filtered.map((c) => (<tr key={c.id} className="hover:bg-slate-700/30"><td className="table-cell font-medium text-white">{c.name}</td><td className="table-cell">{c.phone}</td><td className="table-cell">{c.email}</td><td className="table-cell">{c.address}</td><td className="table-cell"><div className="flex gap-2"><button onClick={() => handleEdit(c)} className="text-blue-400 hover:text-blue-300 text-sm font-medium">Duzenle</button><button onClick={() => handleDelete(c.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">Sil</button></div></td></tr>))}</tbody>
-          </table>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-white mb-4">
+              {editing ? "✏️ Müşteri Düzenle" : "➕ Yeni Müşteri"}
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Ad Soyad *</label>
+                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Telefon</label>
+                  <input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">E-posta</label>
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Adres</label>
+                <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="input-field" rows={2} />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">TC Kimlik No</label>
+                <input type="text" value={form.tc_no} onChange={(e) => setForm({ ...form, tc_no: e.target.value })} className="input-field" maxLength={11} />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Notlar</label>
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={2} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowModal(false)} className="btn-secondary">İptal</button>
+              <button onClick={handleSave} className="btn-primary">{editing ? "Güncelle" : "Kaydet"}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

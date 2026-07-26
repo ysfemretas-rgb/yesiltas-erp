@@ -1,38 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react";
 
-interface ToastProps {
+interface Toast {
+  id: string;
   message: string;
-  type?: "success" | "error" | "info";
-  onClose: () => void;
-  duration?: number;
-}
-
-export default function Toast({ message, type = "info", onClose, duration = 3000 }: ToastProps) {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    setVisible(true);
-    const timer = setTimeout(() => { setVisible(false); setTimeout(onClose, 300); }, duration);
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
-  const bgColor = { success: "bg-emerald-600", error: "bg-red-600", info: "bg-slate-700" }[type];
-  return (
-    <div className={`fixed top-4 right-4 z-50 ${bgColor} text-white px-6 py-3 rounded-lg shadow-xl transition-all duration-300 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}>
-      {message}
-    </div>
-  );
+  type: "success" | "error" | "info";
 }
 
 export function useToast() {
-  const [toasts, setToasts] = useState<{ id: number; message: string; type: "success" | "error" | "info" }[]>([]);
-  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
-    const id = Date.now();
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "success") => {
+    const id = Math.random().toString(36).substring(7);
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => { setToasts((prev) => prev.filter((t) => t.id !== id)); }, 3300);
-  };
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
+
   const ToastContainer = () => (
-    <>{toasts.map((toast) => (<Toast key={toast.id} message={toast.message} type={toast.type} onClose={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))} />))}</>
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-in slide-in-from-right ${
+            toast.type === "success"
+              ? "bg-emerald-500/90 text-white"
+              : toast.type === "error"
+              ? "bg-red-500/90 text-white"
+              : "bg-blue-500/90 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      ))}
+    </div>
   );
+
   return { showToast, ToastContainer };
 }
