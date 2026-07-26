@@ -63,7 +63,6 @@ export default function InventoryPage() {
     ])
     if (itemsRes.data) setItems(itemsRes.data)
     if (suppliersRes.data) setSuppliers(suppliersRes.data)
-    // Load dollar rate
     try {
       const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
       const data = await res.json()
@@ -116,7 +115,11 @@ export default function InventoryPage() {
     loadData()
   }
 
-  const categories = [...new Set(items.map(i => i.category))]
+  // Fix: Use forEach instead of Set spread
+  const categories: string[] = []
+  items.forEach((i: InventoryItem) => {
+    if (!categories.includes(i.category)) categories.push(i.category)
+  })
 
   if (loading) {
     return (
@@ -143,7 +146,7 @@ export default function InventoryPage() {
         <input type="text" className="input flex-1" placeholder="Urun ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <select className="select w-40" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
           <option value="">Tum Kategoriler</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 

@@ -1,9 +1,25 @@
 
 -- ============================================
--- YEŞİLTAŞ TEKNOLOJİ ERP - TÜM TABLOLAR (TAM PAKET)
+-- YEŞİLTAŞ TEKNOLOJİ ERP - TÜM TABLOLARI TEMİZLE VE SIFIRDAN OLUŞTUR
 -- ============================================
 
--- Drop existing tables (careful in production!)
+-- Tüm tabloları ve ilişkileri temizle
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    -- Tüm foreign key constraint'leri kaldır
+    FOR r IN (
+        SELECT tc.constraint_name, tc.table_name
+        FROM information_schema.table_constraints tc
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_schema = 'public'
+    ) LOOP
+        EXECUTE 'ALTER TABLE "' || r.table_name || '" DROP CONSTRAINT IF EXISTS "' || r.constraint_name || '"';
+    END LOOP;
+END $$;
+
+-- Tüm tabloları sil
 DROP TABLE IF EXISTS consumable_usage CASCADE;
 DROP TABLE IF EXISTS consumables CASCADE;
 DROP TABLE IF EXISTS appointments CASCADE;
@@ -22,7 +38,7 @@ DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS suppliers CASCADE;
 
 -- ============================================
--- 1. SETTINGS (Sistem Ayarları)
+-- 1. SETTINGS
 -- ============================================
 CREATE TABLE settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,7 +57,7 @@ INSERT INTO settings (company_name, company_address, company_phone, company_emai
 VALUES ('Yeşiltaş Teknoloji', 'İstanbul, Türkiye', '0212 123 45 67', 'info@yesiltasteknoloji.com', '', 'TRY', 20);
 
 -- ============================================
--- 2. CUSTOMERS (Müşteriler)
+-- 2. CUSTOMERS
 -- ============================================
 CREATE TABLE customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -54,7 +70,7 @@ CREATE TABLE customers (
 );
 
 -- ============================================
--- 3. SUPPLIERS (Tedarikçiler)
+-- 3. SUPPLIERS
 -- ============================================
 CREATE TABLE suppliers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -67,7 +83,7 @@ CREATE TABLE suppliers (
 );
 
 -- ============================================
--- 4. INVENTORY (Stok)
+-- 4. INVENTORY
 -- ============================================
 CREATE TABLE inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,7 +102,7 @@ CREATE TABLE inventory (
 );
 
 -- ============================================
--- 5. DEVICES (Teknik Servis Cihazları)
+-- 5. DEVICES
 -- ============================================
 CREATE TABLE devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -111,7 +127,7 @@ CREATE TABLE devices (
 );
 
 -- ============================================
--- 6. SALES (Satışlar)
+-- 6. SALES
 -- ============================================
 CREATE TABLE sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,7 +146,7 @@ CREATE TABLE sales (
 );
 
 -- ============================================
--- 7. TRANSACTIONS (Kasa - Gelir/Gider)
+-- 7. TRANSACTIONS
 -- ============================================
 CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -144,7 +160,7 @@ CREATE TABLE transactions (
 );
 
 -- ============================================
--- 8. CONSUMABLES (Sarf Malzemeleri)
+-- 8. CONSUMABLES
 -- ============================================
 CREATE TABLE consumables (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -159,7 +175,7 @@ CREATE TABLE consumables (
 );
 
 -- ============================================
--- 9. CONSUMABLE_USAGE (Sarf Malzeme Kullanımı)
+-- 9. CONSUMABLE_USAGE
 -- ============================================
 CREATE TABLE consumable_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -171,7 +187,7 @@ CREATE TABLE consumable_usage (
 );
 
 -- ============================================
--- 10. APPOINTMENTS (Randevular)
+-- 10. APPOINTMENTS
 -- ============================================
 CREATE TABLE appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -187,7 +203,7 @@ CREATE TABLE appointments (
 );
 
 -- ============================================
--- 11. DEVICE_HISTORY (Cihaz Servis Geçmişi)
+-- 11. DEVICE_HISTORY
 -- ============================================
 CREATE TABLE device_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -204,7 +220,7 @@ CREATE TABLE device_history (
 );
 
 -- ============================================
--- 12. STAFF (Personel)
+-- 12. STAFF
 -- ============================================
 CREATE TABLE staff (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -217,7 +233,7 @@ CREATE TABLE staff (
 );
 
 -- ============================================
--- 13. STAFF_PERFORMANCE (Personel Performans)
+-- 13. STAFF_PERFORMANCE
 -- ============================================
 CREATE TABLE staff_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -231,7 +247,7 @@ CREATE TABLE staff_performance (
 );
 
 -- ============================================
--- 14. WARRANTIES (Garanti Takibi)
+-- 14. WARRANTIES
 -- ============================================
 CREATE TABLE warranties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -249,7 +265,7 @@ CREATE TABLE warranties (
 );
 
 -- ============================================
--- 15. DEBTS (Borç Takibi)
+-- 15. DEBTS
 -- ============================================
 CREATE TABLE debts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -265,7 +281,7 @@ CREATE TABLE debts (
 );
 
 -- ============================================
--- 16. CUSTOMER_PAYMENTS (Müşteri Ödemeleri)
+-- 16. CUSTOMER_PAYMENTS
 -- ============================================
 CREATE TABLE customer_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -278,7 +294,7 @@ CREATE TABLE customer_payments (
 );
 
 -- ============================================
--- RLS DISABLE (Tüm tablolar)
+-- RLS DISABLE
 -- ============================================
 ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
