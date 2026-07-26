@@ -22,36 +22,63 @@ export default function Sidebar() {
   const pathname = usePathname()
   const [darkMode, setDarkMode] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const [logoError, setLogoError] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => { if (user) setUserEmail(user.email || '') })
-    if (typeof window !== 'undefined' && (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches))) {
-      setDarkMode(true); document.documentElement.classList.add('dark')
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setUserEmail(user.email || '')
+    }
+    getUser()
+    if (typeof window !== 'undefined') {
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        setDarkMode(true)
+        document.documentElement.classList.add('dark')
+      }
     }
   }, [])
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
-    if (darkMode) { document.documentElement.classList.remove('dark'); localStorage.theme = 'light' }
-    else { document.documentElement.classList.add('dark'); localStorage.theme = 'dark' }
+    if (typeof window === 'undefined') return
+    if (darkMode) {
+      document.documentElement.classList.remove('dark')
+      localStorage.theme = 'light'
+    } else {
+      document.documentElement.classList.add('dark')
+      localStorage.theme = 'dark'
+    }
   }
 
-  const handleLogout = async () => { await supabase.auth.signOut(); window.location.href = '/login' }
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
 
   return (
     <aside className="w-64 h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col fixed left-0 top-0 z-50">
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Yeşiltaş" className="w-10 h-10 object-contain" />
-          <div><h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Yeşiltaş</h1><p className="text-xs text-green-600 font-medium">ERP Sistemi</p></div>
+          {!logoError ? (
+            <img src="/logo.png" alt="Yeşiltaş" className="w-10 h-10 object-contain" onError={() => setLogoError(true)} />
+          ) : (
+            <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">Y</div>
+          )}
+          <div>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Yeşiltaş</h1>
+            <p className="text-xs text-green-600 font-medium">ERP Sistemi</p>
+          </div>
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         {menuItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
           return (
-            <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+            <Link key={item.href} href={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}>
               <Icon size={18} />{item.name}
             </Link>
           )
