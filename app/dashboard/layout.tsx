@@ -2,160 +2,120 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { usePathname } from 'next/navigation'
+import { useLiveRate } from '@/hooks/useLiveRate'
 
 const menuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { href: '/dashboard/sales', label: 'Satış (POS)', icon: '💰' },
-  { href: '/dashboard/devices', label: 'Teknik Servis', icon: '🔧' },
-  { href: '/dashboard/sold-devices', label: 'Satılan Cihazlar', icon: '📱' },
-  { href: '/dashboard/customers', label: 'Müşteriler', icon: '👥' },
-  { href: '/dashboard/appointments', label: 'Randevular', icon: '📅' },
-  { href: '/dashboard/inventory', label: 'Stok', icon: '📦' },
-  { href: '/dashboard/consumables', label: 'Sarf Malzeme', icon: '🔩' },
-  { href: '/dashboard/finance', label: 'Kasa', icon: '💳' },
-  { href: '/dashboard/warranties', label: 'Garantiler', icon: '🛡️' },
-  { href: '/dashboard/staff', label: 'Personel', icon: '👨‍🔧' },
-  { href: '/dashboard/reports', label: 'Raporlar', icon: '📈' },
-  { href: '/dashboard/suppliers', label: 'Tedarikçiler', icon: '🏭' },
-  { href: '/dashboard/settings', label: 'Ayarlar', icon: '⚙️' },
+  { href: '/dashboard', label: '📊 Dashboard' },
+  { href: '/dashboard/sales', label: '💰 Satış (POS)' },
+  { href: '/dashboard/devices', label: '🔧 Teknik Servis' },
+  { href: '/dashboard/sold-devices', label: '📱 Satılan Cihazlar' },
+  { href: '/dashboard/customers', label: '👥 Müşteriler' },
+  { href: '/dashboard/appointments', label: '📅 Randevular' },
+  { href: '/dashboard/inventory', label: '📦 Stok' },
+  { href: '/dashboard/consumables', label: '🔩 Sarf Malzeme' },
+  { href: '/dashboard/finance', label: '💳 Kasa' },
+  { href: '/dashboard/warranties', label: '🛡️ Garantiler' },
+  { href: '/dashboard/staff', label: '👨‍🔧 Personel' },
+  { href: '/dashboard/reports', label: '📈 Raporlar' },
+  { href: '/dashboard/suppliers', label: '🏭 Tedarikçiler' },
+  { href: '/dashboard/settings', label: '⚙️ Ayarlar' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [logoUrl, setLogoUrl] = useState('')
-  const [companyName, setCompanyName] = useState('Yeşiltaş Teknoloji')
-  const [darkMode, setDarkMode] = useState(true)
   const pathname = usePathname()
-  const router = useRouter()
+  const [theme, setTheme] = useState('dark')
+  const { rate, loading, lastUpdated, refresh } = useLiveRate()
 
   useEffect(() => {
-    loadSettings()
-    const savedTheme = localStorage.getItem('theme')
-    if (savedTheme === 'light') setDarkMode(false)
+    const saved = localStorage.getItem('theme') || 'dark'
+    setTheme(saved)
+    document.documentElement.setAttribute('data-theme', saved)
   }, [])
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-      document.documentElement.classList.remove('light')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      document.documentElement.classList.add('light')
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
-  }, [darkMode])
-
-  const loadSettings = async () => {
-    const { data } = await supabase.from('settings').select('logo_url, company_name').single()
-    if (data) {
-      if (data.logo_url) setLogoUrl(data.logo_url)
-      if (data.company_name) setCompanyName(data.company_name)
-    }
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(newTheme)
+    localStorage.setItem('theme', newTheme)
+    document.documentElement.setAttribute('data-theme', newTheme)
   }
 
   const handleLogout = async () => {
+    const { supabase } = await import('@/lib/supabase')
     await supabase.auth.signOut()
-    router.push('/')
+    window.location.href = '/'
   }
 
   return (
-    <div className={`flex h-screen ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar - NO dollar rate here */}
-      <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 
-        ${darkMode ? 'bg-[#1e293b] border-r border-[#334155]' : 'bg-white border-r border-gray-200'}
-        transform transition-transform duration-300 lg:transform-none
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        flex flex-col
-      `}>
-        {/* Logo */}
-        <div className={`p-4 border-b ${darkMode ? 'border-[#334155]' : 'border-gray-200'} flex-shrink-0`}>
-          <Link href="/dashboard" className="flex items-center gap-3">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
-            ) : (
-              <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-                YT
-              </div>
-            )}
-            <div>
-              <h1 className={`font-bold text-sm leading-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>{companyName}</h1>
-              <p className="text-emerald-500 text-xs">Teknoloji ERP</p>
-            </div>
-          </Link>
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="p-4 border-b border-slate-700">
+          <h2 className="text-lg font-bold text-emerald-400">Yeşiltaş ERP</h2>
         </div>
 
-        {/* Menu */}
-        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
+        <nav className="p-2 space-y-1">
           {menuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                 pathname === item.href
-                  ? 'bg-emerald-500/15 text-emerald-500'
-                  : darkMode
-                    ? 'text-slate-400 hover:bg-[#334155] hover:text-white'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-emerald-600/20 text-emerald-400 font-medium'
+                  : 'text-slate-300 hover:bg-slate-700/50'
               }`}
             >
-              <span className="text-lg">{item.icon}</span>
-              <span>{item.label}</span>
+              {item.label}
             </Link>
           ))}
         </nav>
 
-        {/* Bottom */}
-        <div className={`p-3 border-t ${darkMode ? 'border-[#334155]' : 'border-gray-200'} flex-shrink-0 space-y-2`}>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              darkMode
-                ? 'text-slate-400 hover:bg-[#334155] hover:text-white'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            }`}
-          >
-            <span className="text-lg">{darkMode ? '☀️' : '🌙'}</span>
-            <span>{darkMode ? 'Açık Mod' : 'Koyu Mod'}</span>
-          </button>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
-          >
-            <span className="text-lg">🚪</span>
-            <span>Çıkış Yap</span>
-          </button>
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm"
+              title={theme === 'dark' ? 'Açık Mod' : 'Koyu Mod'}
+            >
+              {theme === 'dark' ? '☀️ Açık' : '🌙 Koyu'}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 text-sm"
+            >
+              Çıkış
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
-        <header className={`lg:hidden p-4 flex items-center gap-3 border-b ${darkMode ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-gray-200'}`}>
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className={`p-2 rounded-lg ${darkMode ? 'bg-[#334155] text-white' : 'bg-gray-100 text-gray-900'}`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <h1 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{companyName}</h1>
-        </header>
-
-        <div className="p-4 lg:p-6">
-          {children}
+      <main className="main-content">
+        {/* Sağ üst: Canlı Dolar Kuru */}
+        <div className="flex justify-end mb-4">
+          <div className="live-rate-card">
+            <div>
+              <div className="live-rate-label">💵 USD/TRY (Canlı)</div>
+              <div className="live-rate-value">
+                {loading ? (
+                  <span className="text-sm">Yükleniyor...</span>
+                ) : rate ? (
+                  <span>₺{rate.toFixed(4)}</span>
+                ) : (
+                  <span className="text-sm text-red-400">Hata</span>
+                )}
+              </div>
+              {lastUpdated && (
+                <div className="live-rate-label flex items-center gap-2">
+                  <span>Son Güncelleme: {lastUpdated.toLocaleTimeString('tr-TR')}</span>
+                  <button onClick={refresh} className="text-emerald-400 hover:text-emerald-300" title="Yenile">🔄</button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {children}
       </main>
     </div>
   )
