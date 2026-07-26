@@ -4,14 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/toast";
 
-interface Supplier {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  created_at: string;
-}
+interface Supplier { id: string; name: string; phone: string; email: string; address: string; created_at: string; }
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -19,7 +12,6 @@ export default function SuppliersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const { showToast, ToastContainer } = useToast();
-
   const [formData, setFormData] = useState({ name: "", phone: "", email: "", address: "" });
 
   useEffect(() => { fetchSuppliers(); }, []);
@@ -56,7 +48,6 @@ export default function SuppliersPage() {
         <h2 className="text-2xl font-bold text-white">Tedarikciler</h2>
         <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn-primary">{showForm ? "Iptal" : "+ Yeni Tedarikci"}</button>
       </div>
-
       {showForm && (
         <div className="card mb-6">
           <h3 className="text-lg font-semibold text-white mb-4">{editingSupplier ? "Tedarikci Duzenle" : "Yeni Tedarikci"}</h3>
@@ -69,7 +60,6 @@ export default function SuppliersPage() {
           </form>
         </div>
       )}
-
       {loading ? <div className="text-center py-12 text-slate-500">Yukleniyor...</div> :
        suppliers.length === 0 ? <div className="card text-center py-12 text-slate-500"><div className="text-4xl mb-3">🏭</div><p>Henüz tedarikci bulunmuyor.</p></div> :
        <div className="card overflow-x-auto">

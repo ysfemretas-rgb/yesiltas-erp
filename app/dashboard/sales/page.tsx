@@ -14,7 +14,7 @@ export default function SalesPage() {
   const { showToast, ToastContainer } = useToast();
 
   const [formData, setFormData] = useState({
-    customer_id: "",
+    customer_id: "" as string | null,
     device_name: "",
     imei: "",
     sale_type: "cihaz",
@@ -40,9 +40,15 @@ export default function SalesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // DUZELTME: Bos customer_id null yap, yoksa UUID hatasi verir
+    const customerId = formData.customer_id === "" ? null : formData.customer_id;
     const payload = {
-      ...formData,
+      customer_id: customerId,
+      device_name: formData.device_name,
+      imei: formData.imei,
+      sale_type: formData.sale_type,
       amount: parseFloat(formData.amount) || 0,
+      payment_method: formData.payment_method,
       installment_count: parseInt(formData.installment_count) || 1,
     };
     const { error } = await supabase.from("sales").insert([payload]);
@@ -89,7 +95,7 @@ export default function SalesPage() {
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Musteri</label>
-              <select value={formData.customer_id} onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} className="input-field">
+              <select value={formData.customer_id || ""} onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} className="input-field">
                 <option value="">Musteri secin (opsiyonel)</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>

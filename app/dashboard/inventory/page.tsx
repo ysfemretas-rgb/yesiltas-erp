@@ -5,16 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/toast";
 
 interface Item {
-  id: string;
-  name: string;
-  category: string;
-  brand: string;
-  quantity: number;
-  unit: string;
-  purchase_price: number;
-  sale_price: number;
-  min_stock: number;
-  created_at: string;
+  id: string; name: string; category: string; brand: string; quantity: number;
+  unit: string; purchase_price: number; sale_price: number; min_stock: number; created_at: string;
 }
 
 const categories = ["Ekran", "Batarya", "Sarj Soketi", "Kasa", "Kamera", "Aksesuar", "Diger"];
@@ -27,7 +19,6 @@ export default function InventoryPage() {
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { showToast, ToastContainer } = useToast();
-
   const [formData, setFormData] = useState({ name: "", category: "Ekran", brand: "Apple", quantity: "", unit: "adet", purchase_price: "", sale_price: "", min_stock: "5" });
 
   useEffect(() => { fetchItems(); }, []);
@@ -69,22 +60,18 @@ export default function InventoryPage() {
         <h2 className="text-2xl font-bold text-white">Stok</h2>
         <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn-primary">{showForm ? "Iptal" : "+ Yeni Urun"}</button>
       </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="card bg-amber-500/10 border-amber-500/30"><p className="text-sm text-amber-400">Toplam Stok Degeri</p><p className="text-2xl font-bold text-amber-300">{totalValue.toLocaleString("tr-TR")} TL</p></div>
         <div className="card bg-blue-500/10 border-blue-500/30"><p className="text-sm text-blue-400">Urun Cesidi</p><p className="text-2xl font-bold text-blue-300">{items.length}</p></div>
         <div className="card bg-red-500/10 border-red-500/30"><p className="text-sm text-red-400">Kritik Stok</p><p className="text-2xl font-bold text-red-300">{lowStock.length}</p></div>
       </div>
-
       {lowStock.length > 0 && (
         <div className="card border-red-500/30 bg-red-500/5 mb-6">
           <h3 className="text-sm font-semibold text-red-400 mb-2">⚠️ Kritik Stok Uyari</h3>
           <div className="flex flex-wrap gap-2">{lowStock.map(i => <span key={i.id} className="badge bg-red-500/20 text-red-300 border border-red-500/30">{i.name} ({i.quantity} {i.unit})</span>)}</div>
         </div>
       )}
-
       <input type="text" placeholder="Ara (urun adi, marka, kategori)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field mb-6" />
-
       {showForm && (
         <div className="card mb-6">
           <h3 className="text-lg font-semibold text-white mb-4">{editingItem ? "Urun Duzenle" : "Yeni Urun"}</h3>
@@ -100,7 +87,6 @@ export default function InventoryPage() {
           </form>
         </div>
       )}
-
       {loading ? <div className="text-center py-12 text-slate-500">Yukleniyor...</div> :
        filtered.length === 0 ? <div className="card text-center py-12 text-slate-500"><div className="text-4xl mb-3">📦</div><p>Henüz urun bulunmuyor.</p></div> :
        <div className="card overflow-x-auto">

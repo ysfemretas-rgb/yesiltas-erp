@@ -4,14 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/toast";
 
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  created_at: string;
-}
+interface Customer { id: string; name: string; phone: string; email: string; address: string; created_at: string; }
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -20,7 +13,6 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { showToast, ToastContainer } = useToast();
-
   const [formData, setFormData] = useState({ name: "", phone: "", email: "", address: "" });
 
   useEffect(() => { fetchCustomers(); }, []);
@@ -47,16 +39,8 @@ export default function CustomersPage() {
   };
 
   const resetForm = () => { setFormData({ name: "", phone: "", email: "", address: "" }); setEditingCustomer(null); };
-
   const handleEdit = (c: Customer) => { setEditingCustomer(c); setFormData({ name: c.name, phone: c.phone, email: c.email, address: c.address }); setShowForm(true); };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bu musteriyi silmek istediginize emin misiniz?")) return;
-    const { error } = await supabase.from("customers").delete().eq("id", id);
-    if (error) showToast("Silme basarisiz: " + error.message, "error");
-    else { showToast("Musteri silindi", "success"); fetchCustomers(); }
-  };
-
+  const handleDelete = async (id: string) => { if (!confirm("Bu musteriyi silmek istediginize emin misiniz?")) return; const { error } = await supabase.from("customers").delete().eq("id", id); if (error) showToast("Silme basarisiz: " + error.message, "error"); else { showToast("Musteri silindi", "success"); fetchCustomers(); } };
   const filtered = customers.filter(c => (c.name + c.phone + c.email).toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
@@ -66,9 +50,7 @@ export default function CustomersPage() {
         <h2 className="text-2xl font-bold text-white">Musteriler</h2>
         <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn-primary">{showForm ? "Iptal" : "+ Yeni Musteri"}</button>
       </div>
-
       <input type="text" placeholder="Ara (ad, telefon, e-posta)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field mb-6" />
-
       {showForm && (
         <div className="card mb-6">
           <h3 className="text-lg font-semibold text-white mb-4">{editingCustomer ? "Musteri Duzenle" : "Yeni Musteri"}</h3>
@@ -81,15 +63,14 @@ export default function CustomersPage() {
           </form>
         </div>
       )}
-
-      {loading ? <div className="text-center py-12 text-slate-500">Yukleniyor...</div> :
-       filtered.length === 0 ? <div className="card text-center py-12 text-slate-500"><div className="text-4xl mb-3">👥</div><p>Henüz musteri bulunmuyor.</p></div> :
-       <div className="card overflow-x-auto">
-         <table className="w-full min-w-[600px]">
-           <thead><tr className="border-b border-slate-700"><th className="table-header">Ad Soyad</th><th className="table-header">Telefon</th><th className="table-header">E-posta</th><th className="table-header">Adres</th><th className="table-header">Islemler</th></tr></thead>
-           <tbody>{filtered.map((c) => (<tr key={c.id} className="hover:bg-slate-700/30"><td className="table-cell font-medium text-white">{c.name}</td><td className="table-cell">{c.phone}</td><td className="table-cell">{c.email}</td><td className="table-cell">{c.address}</td><td className="table-cell"><div className="flex gap-2"><button onClick={() => handleEdit(c)} className="text-blue-400 hover:text-blue-300 text-sm font-medium">Duzenle</button><button onClick={() => handleDelete(c.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">Sil</button></div></td></tr>))}</tbody>
-         </table>
-       </div>}
+      {loading ? <div className="text-center py-12 text-slate-500">Yukleniyor...</div> : filtered.length === 0 ? <div className="card text-center py-12 text-slate-500"><div className="text-4xl mb-3">👥</div><p>Henüz musteri bulunmuyor.</p></div> : (
+        <div className="card overflow-x-auto">
+          <table className="w-full min-w-[600px]">
+            <thead><tr className="border-b border-slate-700"><th className="table-header">Ad Soyad</th><th className="table-header">Telefon</th><th className="table-header">E-posta</th><th className="table-header">Adres</th><th className="table-header">Islemler</th></tr></thead>
+            <tbody>{filtered.map((c) => (<tr key={c.id} className="hover:bg-slate-700/30"><td className="table-cell font-medium text-white">{c.name}</td><td className="table-cell">{c.phone}</td><td className="table-cell">{c.email}</td><td className="table-cell">{c.address}</td><td className="table-cell"><div className="flex gap-2"><button onClick={() => handleEdit(c)} className="text-blue-400 hover:text-blue-300 text-sm font-medium">Duzenle</button><button onClick={() => handleDelete(c.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">Sil</button></div></td></tr>))}</tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
