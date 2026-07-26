@@ -140,7 +140,6 @@ export default function CustomersPage() {
   const getAllTransactions = (customerId: string) => {
     const trans: any[] = []
 
-    // Borçlar
     getCustomerDebts(customerId).forEach(d => {
       trans.push({
         type: 'Borç',
@@ -152,7 +151,6 @@ export default function CustomersPage() {
       })
     })
 
-    // Ödemeler
     getCustomerPayments(customerId).forEach(p => {
       trans.push({
         type: 'Ödeme',
@@ -164,7 +162,6 @@ export default function CustomersPage() {
       })
     })
 
-    // Cihazlar (Teknik Servis)
     getCustomerDevices(customerId).forEach(d => {
       trans.push({
         type: 'Teknik Servis',
@@ -175,7 +172,6 @@ export default function CustomersPage() {
       })
     })
 
-    // Satışlar
     getCustomerSales(customerId).forEach(s => {
       trans.push({
         type: 'Satış',
@@ -186,7 +182,6 @@ export default function CustomersPage() {
       })
     })
 
-    // Tarihe göre sırala (en yeni üstte)
     return trans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }
 
@@ -563,79 +558,93 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* ✅ MÜŞTERİ DETAY MODAL - İşlem Geçmişi */}
+      {/* ✅ MÜŞTERİ DETAY MODAL - Geniş, kaydırmasız */}
       {showDetailModal && selectedCustomer && (
         <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
-          <div className="modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
+          <div 
+            className="rounded-xl shadow-2xl w-full max-w-6xl mx-4"
+            style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-start p-5 border-b" style={{ borderColor: '#334155' }}>
               <div>
-                <h2 className="text-lg font-semibold text-white">{selectedCustomer.name}</h2>
-                <p className="text-sm text-slate-400">{selectedCustomer.phone} {selectedCustomer.email ? `| ${selectedCustomer.email}` : ''}</p>
+                <h2 className="text-xl font-bold text-white">{selectedCustomer.name}</h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  📞 {selectedCustomer.phone}
+                  {selectedCustomer.email && ` | ✉️ ${selectedCustomer.email}`}
+                  {selectedCustomer.address && ` | 📍 ${selectedCustomer.address}`}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Müşteri since: {new Date(selectedCustomer.created_at).toLocaleDateString('tr-TR')}
+                </p>
               </div>
-              <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+              <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
             </div>
 
-            <div className="modal-body">
+            {/* Body */}
+            <div className="p-5">
               {/* Özet Kartları */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
-                <div className="p-3 rounded-lg bg-slate-700/50 text-center">
-                  <div className="text-lg font-bold text-red-400">₺{getTotalDebt(selectedCustomer.id).toLocaleString('tr-TR')}</div>
-                  <div className="text-xs text-slate-400">Toplam Borç</div>
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
+                  <div className="text-2xl font-bold text-red-400">₺{getTotalDebt(selectedCustomer.id).toLocaleString('tr-TR')}</div>
+                  <div className="text-xs text-slate-400 mt-1">Toplam Borç</div>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-700/50 text-center">
-                  <div className="text-lg font-bold text-emerald-400">₺{getTotalPaid(selectedCustomer.id).toLocaleString('tr-TR')}</div>
-                  <div className="text-xs text-slate-400">Toplam Ödeme</div>
+                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
+                  <div className="text-2xl font-bold text-emerald-400">₺{getTotalPaid(selectedCustomer.id).toLocaleString('tr-TR')}</div>
+                  <div className="text-xs text-slate-400 mt-1">Toplam Ödeme</div>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-700/50 text-center">
-                  <div className="text-lg font-bold text-yellow-400">₺{(getTotalDebt(selectedCustomer.id) - getTotalPaid(selectedCustomer.id)).toLocaleString('tr-TR')}</div>
-                  <div className="text-xs text-slate-400">Kalan Borç</div>
+                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
+                  <div className="text-2xl font-bold text-yellow-400">₺{(getTotalDebt(selectedCustomer.id) - getTotalPaid(selectedCustomer.id)).toLocaleString('tr-TR')}</div>
+                  <div className="text-xs text-slate-400 mt-1">Kalan Borç</div>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-700/50 text-center">
-                  <div className="text-lg font-bold text-blue-400">{getAllTransactions(selectedCustomer.id).length}</div>
-                  <div className="text-xs text-slate-400">Toplam İşlem</div>
+                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
+                  <div className="text-2xl font-bold text-blue-400">{getAllTransactions(selectedCustomer.id).length}</div>
+                  <div className="text-xs text-slate-400 mt-1">Toplam İşlem</div>
                 </div>
               </div>
 
-              {/* İşlem Geçmişi Tablosu */}
-              <h3 className="text-md font-semibold text-white mb-3">📋 İşlem Geçmişi</h3>
-              <div className="table-container max-h-96 overflow-y-auto">
-                <table className="table">
+              {/* İşlem Geçmişi Tablosu - Kaydırmasız, geniş sütunlar */}
+              <h3 className="text-lg font-semibold text-white mb-3">📋 İşlem Geçmişi</h3>
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
+                <table className="w-full text-sm">
                   <thead>
-                    <tr>
-                      <th>Tarih</th>
-                      <th>Saat</th>
-                      <th>İşlem Türü</th>
-                      <th>Detay</th>
-                      <th>Tutar</th>
-                      <th>Durum</th>
+                    <tr style={{ backgroundColor: '#1e293b' }}>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Tarih</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Saat</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">İşlem Türü</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Detay</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Tutar</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Durum / Not</th>
                     </tr>
                   </thead>
                   <tbody>
                     {getAllTransactions(selectedCustomer.id).map((t, i) => (
-                      <tr key={i}>
-                        <td className="text-slate-300">{new Date(t.date).toLocaleDateString('tr-TR')}</td>
-                        <td className="text-slate-400 text-xs">{new Date(t.date).toLocaleTimeString('tr-TR')}</td>
-                        <td>
-                          <span className={`badge ${
-                            t.type === 'Ödeme' ? 'badge-green' :
-                            t.type === 'Borç' ? 'badge-red' :
-                            t.type === 'Satış' ? 'badge-blue' :
-                            t.type === 'Teknik Servis' ? 'badge-yellow' :
-                            'badge-gray'
+                      <tr key={i} style={{ borderTop: '1px solid #334155' }}>
+                        <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{new Date(t.date).toLocaleDateString('tr-TR')}</td>
+                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{new Date(t.date).toLocaleTimeString('tr-TR')}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold ${
+                            t.type === 'Ödeme' ? 'bg-emerald-500/20 text-emerald-400' :
+                            t.type === 'Borç' ? 'bg-red-500/20 text-red-400' :
+                            t.type === 'Satış' ? 'bg-blue-500/20 text-blue-400' :
+                            t.type === 'Teknik Servis' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-slate-500/20 text-slate-400'
                           }`}>
                             {t.type}
                           </span>
                         </td>
-                        <td className="text-slate-300 max-w-xs truncate" title={t.detail}>{t.detail}</td>
-                        <td className={`font-bold ${
+                        <td className="px-4 py-3 text-slate-300" style={{ maxWidth: '300px', wordWrap: 'break-word' }}>{t.detail}</td>
+                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${
                           t.type === 'Ödeme' ? 'text-emerald-400' :
                           t.type === 'Borç' ? 'text-red-400' :
                           'text-white'
                         }`}>
                           ₺{t.amount?.toLocaleString('tr-TR')}
                         </td>
-                        <td className="text-slate-400 text-xs">
-                          {t.status || (t.type === 'Ödeme' ? t.method : '-')}
+                        <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
+                          {t.status && <span className="text-slate-300">{t.status}</span>}
+                          {t.method && <span className="text-slate-300">{t.method}</span>}
                           {t.remaining !== undefined && t.remaining > 0 && (
                             <span className="text-yellow-400 ml-1">(Kalan: ₺{t.remaining.toLocaleString('tr-TR')})</span>
                           )}
