@@ -65,14 +65,6 @@ export default function CustomersPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Önce session kontrolü
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setToast({ message: 'Oturum bulunamadı! Lütfen tekrar giriş yapın.', type: 'error' })
-        setLoading(false)
-        return
-      }
-
       const [custRes, debtRes, payRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('debts').select('*'),
@@ -81,7 +73,6 @@ export default function CustomersPage() {
 
       if (custRes.error) {
         console.error('Müşteri yükleme hatası:', custRes.error)
-        setToast({ message: `Veri yükleme hatası: ${custRes.error.message}`, type: 'error' })
       }
       if (debtRes.error) console.error('Borç yükleme hatası:', debtRes.error)
       if (payRes.error) console.error('Ödeme yükleme hatası:', payRes.error)
@@ -91,7 +82,6 @@ export default function CustomersPage() {
       if (payRes.data) setPayments(payRes.data)
     } catch (err: any) {
       console.error('Veri yükleme hatası:', err)
-      setToast({ message: `Beklenmeyen hata: ${err.message}`, type: 'error' })
     }
     setLoading(false)
   }
@@ -127,14 +117,6 @@ export default function CustomersPage() {
 
     setLoading(true)
     try {
-      // Session kontrolü
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setToast({ message: 'Oturum bulunamadı! Lütfen tekrar giriş yapın.', type: 'error' })
-        setLoading(false)
-        return
-      }
-
       const insertData = {
         name: form.name.trim(),
         phone: form.phone.trim(),
@@ -142,10 +124,14 @@ export default function CustomersPage() {
         address: form.address.trim() || null
       }
 
+      console.log('Gönderilen veri:', insertData)
+
       const { data, error } = await supabase
         .from('customers')
         .insert([insertData])
         .select()
+
+      console.log('Supabase yanıtı:', { data, error })
 
       if (error) {
         console.error('Müşteri ekleme hatası:', error)
@@ -155,7 +141,7 @@ export default function CustomersPage() {
       }
 
       if (!data || data.length === 0) {
-        setToast({ message: 'HATA: Müşteri kaydedildi ama veri dönmedi!', type: 'error' })
+        setToast({ message: 'HATA: Sunucudan veri dönmedi!', type: 'error' })
         setLoading(false)
         return
       }
@@ -343,15 +329,20 @@ export default function CustomersPage() {
               <h2 className="text-lg font-semibold text-white">Yeni Müşteri</h2>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} autoComplete="off">
               <div className="modal-body">
                 <div className="form-group">
                   <label>Ad Soyad *</label>
                   <input
                     className="input"
+                    name="musteri-ad"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                     value={form.name}
                     onChange={(e) => setForm({...form, name: e.target.value})}
-                    placeholder="Yusuf Emre TAŞ"
+                    placeholder="Müşteri adı soyadı"
                     required
                   />
                 </div>
@@ -359,9 +350,15 @@ export default function CustomersPage() {
                   <label>Telefon *</label>
                   <input
                     className="input"
+                    name="musteri-tel"
+                    type="tel"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                     value={form.phone}
                     onChange={(e) => setForm({...form, phone: e.target.value})}
-                    placeholder="05541247062"
+                    placeholder="05XX XXX XX XX"
                     required
                   />
                 </div>
@@ -369,7 +366,12 @@ export default function CustomersPage() {
                   <label>E-posta</label>
                   <input
                     className="input"
+                    name="musteri-mail"
                     type="email"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                     value={form.email}
                     onChange={(e) => setForm({...form, email: e.target.value})}
                     placeholder="ornek@email.com"
@@ -379,7 +381,12 @@ export default function CustomersPage() {
                   <label>Adres</label>
                   <textarea
                     className="input"
+                    name="musteri-adres"
                     rows={3}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                     value={form.address}
                     onChange={(e) => setForm({...form, address: e.target.value})}
                     placeholder="Adres bilgisi..."
