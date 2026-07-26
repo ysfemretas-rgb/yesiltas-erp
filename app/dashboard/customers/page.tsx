@@ -65,17 +65,33 @@ export default function CustomersPage() {
   const loadData = async () => {
     setLoading(true)
     try {
+      // Önce session kontrolü
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setToast({ message: 'Oturum bulunamadı! Lütfen tekrar giriş yapın.', type: 'error' })
+        setLoading(false)
+        return
+      }
+
       const [custRes, debtRes, payRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('debts').select('*'),
         supabase.from('customer_payments').select('*').order('created_at', { ascending: false })
       ])
 
+      if (custRes.error) {
+        console.error('Müşteri yükleme hatası:', custRes.error)
+        setToast({ message: `Veri yükleme hatası: ${custRes.error.message}`, type: 'error' })
+      }
+      if (debtRes.error) console.error('Borç yükleme hatası:', debtRes.error)
+      if (payRes.error) console.error('Ödeme yükleme hatası:', payRes.error)
+
       if (custRes.data) setCustomers(custRes.data)
       if (debtRes.data) setDebts(debtRes.data)
       if (payRes.data) setPayments(payRes.data)
     } catch (err: any) {
       console.error('Veri yükleme hatası:', err)
+      setToast({ message: `Beklenmeyen hata: ${err.message}`, type: 'error' })
     }
     setLoading(false)
   }
@@ -111,6 +127,14 @@ export default function CustomersPage() {
 
     setLoading(true)
     try {
+      // Session kontrolü
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setToast({ message: 'Oturum bulunamadı! Lütfen tekrar giriş yapın.', type: 'error' })
+        setLoading(false)
+        return
+      }
+
       const insertData = {
         name: form.name.trim(),
         phone: form.phone.trim(),
