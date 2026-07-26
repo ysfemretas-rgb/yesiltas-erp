@@ -40,11 +40,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 lg:transform-none ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 flex flex-col transform transition-transform duration-300 lg:transform-none ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="p-4 border-b border-slate-800">
+        {/* Logo - Sabit üstte */}
+        <div className="p-4 border-b border-slate-800 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center text-xl font-bold text-white">
               YT
@@ -56,7 +57,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <nav className="p-3 space-y-1 overflow-y-auto" style={{ maxHeight: "calc(100vh - 140px)" }}>
+        {/* Menü - Scrollable orta kısım */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1 min-h-0">
           {menuItems.map((item) => (
             <Link
               key={item.href}
@@ -74,7 +76,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-800">
+        {/* Çıkış Yap - Sabit altta */}
+        <div className="p-3 border-t border-slate-800 flex-shrink-0 bg-slate-900">
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"
