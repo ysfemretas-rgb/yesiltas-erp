@@ -1,23 +1,66 @@
-'use client'
+"use client";
 
-import { useState, useCallback } from 'react'
-import { CheckCircle, XCircle, X } from 'lucide-react'
+import { useEffect, useState } from "react";
+
+interface ToastProps {
+  message: string;
+  type?: "success" | "error" | "info";
+  onClose: () => void;
+  duration?: number;
+}
+
+export default function Toast({ message, type = "info", onClose, duration = 3000 }: ToastProps) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(true);
+    const timer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(onClose, 300);
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [duration, onClose]);
+
+  const bgColor = {
+    success: "bg-green-500",
+    error: "bg-red-500",
+    info: "bg-slate-800",
+  }[type];
+
+  return (
+    <div
+      className={`fixed top-4 right-4 z-50 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-300 ${
+        visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+      }`}
+    >
+      {message}
+    </div>
+  );
+}
 
 export function useToast() {
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: "success" | "error" | "info" }[]>([]);
 
-  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }, [])
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3300);
+  };
 
-  const ToastComponent = toast ? (
-    <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white animate-bounce ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-      {toast.type === 'success' ? <CheckCircle size={18}/> : <XCircle size={18}/>}
-      <span className="text-sm font-medium">{toast.message}</span>
-      <button onClick={() => setToast(null)} className="ml-2"><X size={14}/></button>
-    </div>
-  ) : null
+  const ToastContainer = () => (
+    <>
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+        />
+      ))}
+    </>
+  );
 
-  return { showToast, ToastComponent }
+  return { showToast, ToastContainer };
 }
