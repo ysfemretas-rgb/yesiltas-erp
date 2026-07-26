@@ -328,11 +328,11 @@ SELECT c.id, 'Samsung', 'Galaxy S23', '356789012345678', 'Şarj olmuyor', 'Bekle
 FROM customers c WHERE c.name = 'Mehmet Kaya';
 
 INSERT INTO sales (customer_id, item_name, item_type, quantity, unit_price, total_price, payment_method, warranty_months, warranty_end_date) 
-SELECT c.id, 'iPhone 15 Pro', 'Cihaz', 1, 55000, 55000, 'Kredi Kartı', 24, CURRENT_DATE + interval '24 months'
+SELECT c.id, 'iPhone 15 Pro', 'Cihaz', 1, 55000, 55000, 'Kredi Kartı', 24, (CURRENT_DATE + interval '24 months')::DATE
 FROM customers c WHERE c.name = 'Ahmet Yılmaz';
 
 INSERT INTO sales (customer_id, item_name, item_type, quantity, unit_price, total_price, payment_method, remaining_amount, warranty_months, warranty_end_date) 
-SELECT c.id, 'Samsung Galaxy A54', 'Cihaz', 1, 18000, 18000, 'Taksit', 12000, 12, CURRENT_DATE + interval '12 months'
+SELECT c.id, 'Samsung Galaxy A54', 'Cihaz', 1, 18000, 18000, 'Taksit', 12000, 12, (CURRENT_DATE + interval '12 months')::DATE
 FROM customers c WHERE c.name = 'Mehmet Kaya';
 
 INSERT INTO transactions (type, category, amount, description) VALUES
@@ -350,11 +350,11 @@ SELECT c.id, c.name, c.phone, 'Ekran Değişimi', CURRENT_DATE + interval '2 day
 FROM customers c WHERE c.name = 'Ayşe Demir';
 
 INSERT INTO debts (customer_id, source_type, source_id, total_amount, paid_amount, remaining_amount, due_date, status)
-SELECT c.id, 'sale', s.id, 18000, 6000, 12000, CURRENT_DATE + interval '30 days', 'Kısmi Ödendi'
+SELECT c.id, 'sale', s.id, 18000, 6000, 12000, (CURRENT_DATE + interval '30 days')::DATE, 'Kısmi Ödendi'
 FROM customers c, sales s WHERE c.name = 'Mehmet Kaya' AND s.item_name = 'Samsung Galaxy A54';
 
 INSERT INTO warranties (sale_id, customer_id, customer_name, item_name, imei, warranty_months, warranty_end_date)
-SELECT s.id, c.id, c.name, s.item_name, '353456789012345', 24, CURRENT_DATE + interval '24 months'
+SELECT s.id, c.id, c.name, s.item_name, '353456789012345', 24, (CURRENT_DATE + interval '24 months')::DATE
 FROM sales s, customers c WHERE s.item_name = 'iPhone 15 Pro' AND c.name = 'Ahmet Yılmaz';
 
 INSERT INTO device_history (imei, customer_name, brand, model, complaint, diagnosis, final_cost, status)

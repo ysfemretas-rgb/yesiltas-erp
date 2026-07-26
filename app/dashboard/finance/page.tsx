@@ -45,10 +45,10 @@ export default function FinancePage() {
     if (data) {
       setTransactions(data)
       setFiltered(data)
-      const income = data.filter(t => t.type === 'gelir').reduce((s, t) => s + (t.amount || 0), 0)
-      const expense = data.filter(t => t.type === 'gider').reduce((s, t) => s + (t.amount || 0), 0)
-      const todayIncome = data.filter(t => t.type === 'gelir' && t.created_at >= today + 'T00:00:00').reduce((s, t) => s + (t.amount || 0), 0)
-      const todayExpense = data.filter(t => t.type === 'gider' && t.created_at >= today + 'T00:00:00').reduce((s, t) => s + (t.amount || 0), 0)
+      const income = data.filter((t: Transaction) => t.type === 'gelir').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
+      const expense = data.filter((t: Transaction) => t.type === 'gider').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
+      const todayIncome = data.filter((t: Transaction) => t.type === 'gelir' && t.created_at >= today + 'T00:00:00').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
+      const todayExpense = data.filter((t: Transaction) => t.type === 'gider' && t.created_at >= today + 'T00:00:00').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
       setBalance({ income, expense, net: income - expense, todayIncome, todayExpense })
     }
     setLoading(false)
@@ -75,7 +75,11 @@ export default function FinancePage() {
     loadData()
   }
 
-  const categories = [...new Set(transactions.map(t => t.category))]
+  // Fix: Use Array.from instead of spread on Set
+  const categories: string[] = []
+  transactions.forEach((t: Transaction) => {
+    if (!categories.includes(t.category)) categories.push(t.category)
+  })
 
   if (loading) {
     return (
@@ -127,7 +131,7 @@ export default function FinancePage() {
         </select>
         <select className="select w-40" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
           <option value="">Tum Kategoriler</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
@@ -144,7 +148,7 @@ export default function FinancePage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => (
+            {filtered.map((t: Transaction) => (
               <tr key={t.id}>
                 <td><span className={`badge ${t.type === 'gelir' ? 'badge-green' : 'badge-red'}`}>{t.type === 'gelir' ? 'Gelir' : 'Gider'}</span></td>
                 <td className="text-slate-300">{t.category}</td>
