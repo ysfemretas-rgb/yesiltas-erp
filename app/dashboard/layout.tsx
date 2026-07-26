@@ -27,17 +27,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [logoUrl, setLogoUrl] = useState('')
   const [companyName, setCompanyName] = useState('Yeşiltaş Teknoloji')
   const [darkMode, setDarkMode] = useState(true)
-  const [dollarRate, setDollarRate] = useState<{ alis: number; satis: number } | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
   useEffect(() => {
     loadSettings()
-    loadDollarRate()
     const savedTheme = localStorage.getItem('theme')
     if (savedTheme === 'light') setDarkMode(false)
-    const interval = setInterval(loadDollarRate, 60000) // Her 1 dakika güncelle
-    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -60,26 +56,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }
 
-  const loadDollarRate = async () => {
-    try {
-      // Anlık kur - farklı API'ler deneyelim
-      const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
-      const data = await res.json()
-      const tryRate = data.rates.TRY
-      setDollarRate({ alis: tryRate * 0.998, satis: tryRate * 1.002 })
-    } catch {
-      // Yedek API
-      try {
-        const res2 = await fetch('https://api.currencyapi.com/v3/latest?apikey=cur_live_demo&base_currency=USD&currencies=TRY')
-        const data2 = await res2.json()
-        const rate = data2.data?.TRY?.value || 34.5
-        setDollarRate({ alis: rate * 0.998, satis: rate * 1.002 })
-      } catch {
-        setDollarRate({ alis: 34.5, satis: 34.8 })
-      }
-    }
-  }
-
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/')
@@ -87,7 +63,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={`flex h-screen ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -95,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - NO dollar rate here */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50 w-64 
         ${darkMode ? 'bg-[#1e293b] border-r border-[#334155]' : 'bg-white border-r border-gray-200'}
@@ -120,22 +95,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
         </div>
 
-        {/* Dollar Rate */}
-        {dollarRate && (
-          <div className={`mx-3 mt-3 p-2 rounded-lg text-xs ${darkMode ? 'bg-[#0f172a] border border-[#334155]' : 'bg-gray-50 border border-gray-200'}`}>
-            <div className={`flex items-center justify-between mb-1 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-              <span>💵 USD/TRY</span>
-              <span className="text-[10px] opacity-60">canlı</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-emerald-500">Alış: {dollarRate.alis.toFixed(4)}</span>
-              <span className="text-red-400">Satış: {dollarRate.satis.toFixed(4)}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Menu - scrollable */}
-        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1 mt-2">
+        {/* Menu */}
+        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
           {menuItems.map((item) => (
             <Link
               key={item.href}
@@ -155,9 +116,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        {/* Bottom actions */}
+        {/* Bottom */}
         <div className={`p-3 border-t ${darkMode ? 'border-[#334155]' : 'border-gray-200'} flex-shrink-0 space-y-2`}>
-          {/* Theme Toggle */}
           <button
             onClick={() => setDarkMode(!darkMode)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
@@ -169,8 +129,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-lg">{darkMode ? '☀️' : '🌙'}</span>
             <span>{darkMode ? 'Açık Mod' : 'Koyu Mod'}</span>
           </button>
-
-          {/* Logout */}
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
@@ -183,7 +141,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content */}
       <main className={`flex-1 overflow-y-auto ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
-        {/* Mobile Header */}
         <header className={`lg:hidden p-4 flex items-center gap-3 border-b ${darkMode ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-gray-200'}`}>
           <button
             onClick={() => setSidebarOpen(true)}
