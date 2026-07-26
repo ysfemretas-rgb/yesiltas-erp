@@ -6,35 +6,78 @@ import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const menuItems = [
-  { href: '/dashboard', label: '📊 Dashboard', icon: '📊' },
-  { href: '/dashboard/settings', label: '⚙️ Ayarlar', icon: '⚙️' },
-  { href: '/dashboard/customers', label: '👥 Müşteriler', icon: '👥' },
-  { href: '/dashboard/devices', label: '🔧 Teknik Servis', icon: '🔧' },
-  { href: '/dashboard/sold-devices', label: '📱 Satılan Cihazlar', icon: '📱' },
-  { href: '/dashboard/sales', label: '💰 Satış (POS)', icon: '💰' },
-  { href: '/dashboard/inventory', label: '📦 Stok', icon: '📦' },
-  { href: '/dashboard/consumables', label: '🔩 Sarf Malzeme', icon: '🔩' },
-  { href: '/dashboard/finance', label: '💳 Kasa', icon: '💳' },
-  { href: '/dashboard/appointments', label: '📅 Randevular', icon: '📅' },
-  { href: '/dashboard/warranties', label: '🛡️ Garantiler', icon: '🛡️' },
-  { href: '/dashboard/staff', label: '👨‍🔧 Personel', icon: '👨‍🔧' },
-  { href: '/dashboard/reports', label: '📈 Raporlar', icon: '📈' },
-  { href: '/dashboard/suppliers', label: '🏭 Tedarikçiler', icon: '🏭' },
+  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { href: '/dashboard/sales', label: 'Satış (POS)', icon: '💰' },
+  { href: '/dashboard/devices', label: 'Teknik Servis', icon: '🔧' },
+  { href: '/dashboard/sold-devices', label: 'Satılan Cihazlar', icon: '📱' },
+  { href: '/dashboard/customers', label: 'Müşteriler', icon: '👥' },
+  { href: '/dashboard/appointments', label: 'Randevular', icon: '📅' },
+  { href: '/dashboard/inventory', label: 'Stok', icon: '📦' },
+  { href: '/dashboard/consumables', label: 'Sarf Malzeme', icon: '🔩' },
+  { href: '/dashboard/finance', label: 'Kasa', icon: '💳' },
+  { href: '/dashboard/warranties', label: 'Garantiler', icon: '🛡️' },
+  { href: '/dashboard/staff', label: 'Personel', icon: '👨‍🔧' },
+  { href: '/dashboard/reports', label: 'Raporlar', icon: '📈' },
+  { href: '/dashboard/suppliers', label: 'Tedarikçiler', icon: '🏭' },
+  { href: '/dashboard/settings', label: 'Ayarlar', icon: '⚙️' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
+  const [companyName, setCompanyName] = useState('Yeşiltaş Teknoloji')
+  const [darkMode, setDarkMode] = useState(true)
+  const [dollarRate, setDollarRate] = useState<{ alis: number; satis: number } | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
   useEffect(() => {
     loadSettings()
+    loadDollarRate()
+    const savedTheme = localStorage.getItem('theme')
+    if (savedTheme === 'light') setDarkMode(false)
+    const interval = setInterval(loadDollarRate, 60000) // Her 1 dakika güncelle
+    return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+      document.documentElement.classList.remove('light')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      document.documentElement.classList.add('light')
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [darkMode])
+
   const loadSettings = async () => {
-    const { data } = await supabase.from('settings').select('logo_url').single()
-    if (data?.logo_url) setLogoUrl(data.logo_url)
+    const { data } = await supabase.from('settings').select('logo_url, company_name').single()
+    if (data) {
+      if (data.logo_url) setLogoUrl(data.logo_url)
+      if (data.company_name) setCompanyName(data.company_name)
+    }
+  }
+
+  const loadDollarRate = async () => {
+    try {
+      // Anlık kur - farklı API'ler deneyelim
+      const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
+      const data = await res.json()
+      const tryRate = data.rates.TRY
+      setDollarRate({ alis: tryRate * 0.998, satis: tryRate * 1.002 })
+    } catch {
+      // Yedek API
+      try {
+        const res2 = await fetch('https://api.currencyapi.com/v3/latest?apikey=cur_live_demo&base_currency=USD&currencies=TRY')
+        const data2 = await res2.json()
+        const rate = data2.data?.TRY?.value || 34.5
+        setDollarRate({ alis: rate * 0.998, satis: rate * 1.002 })
+      } catch {
+        setDollarRate({ alis: 34.5, satis: 34.8 })
+      }
+    }
   }
 
   const handleLogout = async () => {
@@ -43,7 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-[#0f172a]">
+    <div className={`flex h-screen ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div 
@@ -54,13 +97,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[#1e293b] border-r border-[#334155]
+        fixed lg:static inset-y-0 left-0 z-50 w-64 
+        ${darkMode ? 'bg-[#1e293b] border-r border-[#334155]' : 'bg-white border-r border-gray-200'}
         transform transition-transform duration-300 lg:transform-none
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         flex flex-col
       `}>
         {/* Logo */}
-        <div className="p-4 border-b border-[#334155] flex-shrink-0">
+        <div className={`p-4 border-b ${darkMode ? 'border-[#334155]' : 'border-gray-200'} flex-shrink-0`}>
           <Link href="/dashboard" className="flex items-center gap-3">
             {logoUrl ? (
               <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
@@ -70,52 +114,86 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             )}
             <div>
-              <h1 className="text-white font-bold text-sm leading-tight">Yeşiltaş</h1>
-              <p className="text-emerald-400 text-xs">Teknoloji ERP</p>
+              <h1 className={`font-bold text-sm leading-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>{companyName}</h1>
+              <p className="text-emerald-500 text-xs">Teknoloji ERP</p>
             </div>
           </Link>
         </div>
 
+        {/* Dollar Rate */}
+        {dollarRate && (
+          <div className={`mx-3 mt-3 p-2 rounded-lg text-xs ${darkMode ? 'bg-[#0f172a] border border-[#334155]' : 'bg-gray-50 border border-gray-200'}`}>
+            <div className={`flex items-center justify-between mb-1 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+              <span>💵 USD/TRY</span>
+              <span className="text-[10px] opacity-60">canlı</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-emerald-500">Alış: {dollarRate.alis.toFixed(4)}</span>
+              <span className="text-red-400">Satış: {dollarRate.satis.toFixed(4)}</span>
+            </div>
+          </div>
+        )}
+
         {/* Menu - scrollable */}
-        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1 mt-2">
           {menuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
-              className={`sidebar-link ${pathname === item.href ? 'active' : ''}`}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                pathname === item.href
+                  ? 'bg-emerald-500/15 text-emerald-500'
+                  : darkMode
+                    ? 'text-slate-400 hover:bg-[#334155] hover:text-white'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
             >
               <span className="text-lg">{item.icon}</span>
-              <span className="text-sm font-medium">{item.label.replace(/^. /, '')}</span>
+              <span>{item.label}</span>
             </Link>
           ))}
         </nav>
 
-        {/* Logout - fixed at bottom */}
-        <div className="p-3 border-t border-[#334155] flex-shrink-0">
+        {/* Bottom actions */}
+        <div className={`p-3 border-t ${darkMode ? 'border-[#334155]' : 'border-gray-200'} flex-shrink-0 space-y-2`}>
+          {/* Theme Toggle */}
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              darkMode
+                ? 'text-slate-400 hover:bg-[#334155] hover:text-white'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <span className="text-lg">{darkMode ? '☀️' : '🌙'}</span>
+            <span>{darkMode ? 'Açık Mod' : 'Koyu Mod'}</span>
+          </button>
+
+          {/* Logout */}
           <button
             onClick={handleLogout}
-            className="w-full sidebar-link text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
           >
             <span className="text-lg">🚪</span>
-            <span className="text-sm font-medium">Çıkış Yap</span>
+            <span>Çıkış Yap</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 overflow-y-auto ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
         {/* Mobile Header */}
-        <header className="lg:hidden bg-[#1e293b] border-b border-[#334155] p-4 flex items-center gap-3">
+        <header className={`lg:hidden p-4 flex items-center gap-3 border-b ${darkMode ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-gray-200'}`}>
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg bg-[#334155] text-white"
+            className={`p-2 rounded-lg ${darkMode ? 'bg-[#334155] text-white' : 'bg-gray-100 text-gray-900'}`}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <h1 className="text-white font-semibold">Yeşiltaş ERP</h1>
+          <h1 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{companyName}</h1>
         </header>
 
         <div className="p-4 lg:p-6">

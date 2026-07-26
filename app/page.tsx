@@ -10,12 +10,25 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
   const [companyName, setCompanyName] = useState('Yeşiltaş Teknoloji')
+  const [darkMode, setDarkMode] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
     loadSettings()
     checkSession()
+    const savedTheme = localStorage.getItem('theme')
+    if (savedTheme === 'light') setDarkMode(false)
   }, [])
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+      document.documentElement.classList.remove('light')
+    } else {
+      document.documentElement.classList.add('light')
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
 
   const loadSettings = async () => {
     const { data } = await supabase.from('settings').select('logo_url, company_name').single()
@@ -43,8 +56,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4">
+    <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-[#0f172a]' : 'bg-gray-100'}`}>
       <div className="w-full max-w-md">
+        {/* Theme Toggle */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`p-2 rounded-lg ${darkMode ? 'bg-[#1e293b] text-white' : 'bg-white text-gray-900'} border ${darkMode ? 'border-[#334155]' : 'border-gray-200'}`}
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
+
         {/* Logo */}
         <div className="text-center mb-8">
           {logoUrl ? (
@@ -54,8 +77,8 @@ export default function LoginPage() {
               YT
             </div>
           )}
-          <h1 className="text-2xl font-bold text-white">{companyName}</h1>
-          <p className="text-slate-400 mt-1">ERP Sistemine Giriş</p>
+          <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{companyName}</h1>
+          <p className={`mt-1 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>ERP Sistemine Giriş</p>
         </div>
 
         <div className="card">
@@ -92,7 +115,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-slate-500 text-sm mt-6">
+        <p className={`text-center text-sm mt-6 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
           © 2026 {companyName}. Tüm hakları saklıdır.
         </p>
       </div>

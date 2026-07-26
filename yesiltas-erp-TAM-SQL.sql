@@ -3,12 +3,11 @@
 -- YEŞİLTAŞ TEKNOLOJİ ERP - TÜM TABLOLARI TEMİZLE VE SIFIRDAN OLUŞTUR
 -- ============================================
 
--- Tüm tabloları ve ilişkileri temizle
+-- 1. Önce tüm foreign key'leri kaldır
 DO $$
 DECLARE
     r RECORD;
 BEGIN
-    -- Tüm foreign key constraint'leri kaldır
     FOR r IN (
         SELECT tc.constraint_name, tc.table_name
         FROM information_schema.table_constraints tc
@@ -19,7 +18,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- Tüm tabloları sil
+-- 2. Tüm tabloları sil
 DROP TABLE IF EXISTS consumable_usage CASCADE;
 DROP TABLE IF EXISTS consumables CASCADE;
 DROP TABLE IF EXISTS appointments CASCADE;
@@ -38,7 +37,7 @@ DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS suppliers CASCADE;
 
 -- ============================================
--- 1. SETTINGS
+-- SETTINGS
 -- ============================================
 CREATE TABLE settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,7 +56,7 @@ INSERT INTO settings (company_name, company_address, company_phone, company_emai
 VALUES ('Yeşiltaş Teknoloji', 'İstanbul, Türkiye', '0212 123 45 67', 'info@yesiltasteknoloji.com', '', 'TRY', 20);
 
 -- ============================================
--- 2. CUSTOMERS
+-- CUSTOMERS
 -- ============================================
 CREATE TABLE customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -70,7 +69,7 @@ CREATE TABLE customers (
 );
 
 -- ============================================
--- 3. SUPPLIERS
+-- SUPPLIERS
 -- ============================================
 CREATE TABLE suppliers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -83,7 +82,7 @@ CREATE TABLE suppliers (
 );
 
 -- ============================================
--- 4. INVENTORY
+-- INVENTORY
 -- ============================================
 CREATE TABLE inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -102,7 +101,7 @@ CREATE TABLE inventory (
 );
 
 -- ============================================
--- 5. DEVICES
+-- DEVICES
 -- ============================================
 CREATE TABLE devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -127,7 +126,7 @@ CREATE TABLE devices (
 );
 
 -- ============================================
--- 6. SALES
+-- SALES
 -- ============================================
 CREATE TABLE sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,7 +145,7 @@ CREATE TABLE sales (
 );
 
 -- ============================================
--- 7. TRANSACTIONS
+-- TRANSACTIONS
 -- ============================================
 CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -160,7 +159,7 @@ CREATE TABLE transactions (
 );
 
 -- ============================================
--- 8. CONSUMABLES
+-- CONSUMABLES
 -- ============================================
 CREATE TABLE consumables (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -175,7 +174,7 @@ CREATE TABLE consumables (
 );
 
 -- ============================================
--- 9. CONSUMABLE_USAGE
+-- CONSUMABLE_USAGE
 -- ============================================
 CREATE TABLE consumable_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -187,7 +186,7 @@ CREATE TABLE consumable_usage (
 );
 
 -- ============================================
--- 10. APPOINTMENTS
+-- APPOINTMENTS
 -- ============================================
 CREATE TABLE appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -203,7 +202,7 @@ CREATE TABLE appointments (
 );
 
 -- ============================================
--- 11. DEVICE_HISTORY
+-- DEVICE_HISTORY
 -- ============================================
 CREATE TABLE device_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -220,7 +219,7 @@ CREATE TABLE device_history (
 );
 
 -- ============================================
--- 12. STAFF
+-- STAFF
 -- ============================================
 CREATE TABLE staff (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -233,7 +232,7 @@ CREATE TABLE staff (
 );
 
 -- ============================================
--- 13. STAFF_PERFORMANCE
+-- STAFF_PERFORMANCE
 -- ============================================
 CREATE TABLE staff_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -247,7 +246,7 @@ CREATE TABLE staff_performance (
 );
 
 -- ============================================
--- 14. WARRANTIES
+-- WARRANTIES - DÜZELTİLMİŞ
 -- ============================================
 CREATE TABLE warranties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -257,7 +256,7 @@ CREATE TABLE warranties (
   item_name TEXT,
   imei TEXT,
   warranty_start DATE DEFAULT CURRENT_DATE,
-  warranty_end DATE,
+  warranty_end_date DATE,
   warranty_months INTEGER DEFAULT 12,
   status TEXT DEFAULT 'Aktif' CHECK (status IN ('Aktif','Sona Erdi','İade Edildi')),
   notes TEXT,
@@ -265,7 +264,7 @@ CREATE TABLE warranties (
 );
 
 -- ============================================
--- 15. DEBTS
+-- DEBTS
 -- ============================================
 CREATE TABLE debts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -281,7 +280,7 @@ CREATE TABLE debts (
 );
 
 -- ============================================
--- 16. CUSTOMER_PAYMENTS
+-- CUSTOMER_PAYMENTS
 -- ============================================
 CREATE TABLE customer_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -369,6 +368,7 @@ INSERT INTO debts (customer_id, source_type, source_id, total_amount, paid_amoun
 SELECT c.id, 'sale', s.id, 18000, 6000, 12000, (CURRENT_DATE + interval '30 days')::DATE, 'Kısmi Ödendi'
 FROM customers c, sales s WHERE c.name = 'Mehmet Kaya' AND s.item_name = 'Samsung Galaxy A54';
 
+-- warranties tablosu warranty_end_date sütunu ile oluşturuldu, şimdi veri ekle
 INSERT INTO warranties (sale_id, customer_id, customer_name, item_name, imei, warranty_months, warranty_end_date)
 SELECT s.id, c.id, c.name, s.item_name, '353456789012345', 24, (CURRENT_DATE + interval '24 months')::DATE
 FROM sales s, customers c WHERE s.item_name = 'iPhone 15 Pro' AND c.name = 'Ahmet Yılmaz';
