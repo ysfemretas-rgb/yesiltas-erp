@@ -155,38 +155,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <h1 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{companyName}</h1>
         </header>
 
-        {/* ✅ TEK CANLI DÖVİZ KURU - Sağ Üstte (Alış + Satış + Yenile + Zaman) */}
+        {/* ✅ CANLI DÖVİZ KURU - Dark arka plan, kalın yazılar, büyük yenile butonu */}
         <div className="flex justify-end px-4 lg:px-6 pt-4">
-          <div className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
-            darkMode 
-              ? 'bg-[#1e293b] border border-[#334155] text-white' 
-              : 'bg-white border border-gray-200 text-gray-900'
-          }`}>
-            <span className="text-lg">💵</span>
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#1e293b] border border-[#334155] shadow-lg">
+            <span className="text-2xl">💵</span>
             <div>
-              <div className="font-semibold text-xs uppercase tracking-wider opacity-70">USD/TRY (CANLI)</div>
-              <div className="flex items-center gap-3 mt-0.5">
+              <div className="font-bold text-sm uppercase tracking-wider text-slate-400">USD/TRY (CANLI)</div>
+              <div className="flex items-center gap-4 mt-1">
                 {loading ? (
-                  <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>Yükleniyor...</span>
+                  <span className="text-sm text-slate-400 font-semibold">Yükleniyor...</span>
                 ) : rate.buying && rate.selling ? (
                   <>
-                    <span className="text-emerald-500 font-bold">Alış: ₺{rate.buying.toFixed(4)}</span>
-                    <span className={`${darkMode ? 'text-slate-500' : 'text-gray-300'}`}>|</span>
-                    <span className="text-red-400 font-bold">Satış: ₺{rate.selling.toFixed(4)}</span>
+                    <span className="text-emerald-400 font-bold text-lg">Alış: ₺{rate.buying.toFixed(4)}</span>
+                    <span className="text-slate-600 font-bold">|</span>
+                    <span className="text-red-400 font-bold text-lg">Satış: ₺{rate.selling.toFixed(4)}</span>
                   </>
                 ) : (
-                  <span className="text-red-400 text-xs">Hata</span>
+                  <span className="text-red-400 text-sm font-bold">Hata</span>
                 )}
                 <button 
                   onClick={refresh} 
-                  className="text-emerald-500 hover:text-emerald-400 text-xs ml-1"
+                  className="text-emerald-400 hover:text-emerald-300 text-xl ml-2 transition-transform hover:rotate-180"
                   title="Yenile"
                 >
                   🔄
                 </button>
               </div>
               {rate.lastUpdated && (
-                <div className={`text-xs mt-0.5 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                <div className="text-xs text-slate-500 font-medium mt-1">
                   Son Güncelleme: {rate.lastUpdated.toLocaleTimeString('tr-TR')}
                 </div>
               )}
