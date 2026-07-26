@@ -55,6 +55,7 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [editing, setEditing] = useState<Device | null>(null);
   const [search, setSearch] = useState("");
@@ -78,6 +79,14 @@ export default function DevicesPage() {
     notes: "",
   });
 
+  // Hızlı müşteri ekleme formu
+  const [customerForm, setCustomerForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+  });
+
   useEffect(() => {
     fetchDevices();
     fetchCustomers();
@@ -97,6 +106,35 @@ export default function DevicesPage() {
   const fetchCustomers = async () => {
     const { data } = await supabase.from("customers").select("id, name, phone").order("name");
     setCustomers(data || []);
+  };
+
+  const handleSaveCustomer = async () => {
+    if (!customerForm.name.trim()) {
+      showToast("Müşteri adı zorunlu!", "error");
+      return;
+    }
+
+    const { data, error } = await supabase.from("customers").insert([
+      {
+        name: customerForm.name,
+        phone: customerForm.phone,
+        email: customerForm.email,
+        address: customerForm.address,
+      },
+    ]).select();
+
+    if (error) {
+      showToast("Müşteri kaydedilirken hata: " + error.message, "error");
+      return;
+    }
+
+    if (data && data[0]) {
+      showToast("Müşteri kaydedildi!", "success");
+      setForm({ ...form, customer_id: data[0].id });
+      setCustomers([...customers, { id: data[0].id, name: data[0].name, phone: data[0].phone }]);
+      setShowCustomerModal(false);
+      setCustomerForm({ name: "", phone: "", email: "", address: "" });
+    }
   };
 
   const handleSave = async () => {
@@ -125,7 +163,6 @@ export default function DevicesPage() {
       notes: form.notes,
     };
 
-    // Yeni cihaz ekleme - received_at otomatik
     if (!editing) {
       payload.received_at = new Date().toISOString();
     }
@@ -154,7 +191,6 @@ export default function DevicesPage() {
     const updates: any = { status: newStatus };
     const now = new Date().toISOString();
 
-    // Durum değişikliklerinde tarihleri otomatik ayarla
     if (newStatus === "tamirde" && !device.started_at) {
       updates.started_at = now;
     }
@@ -173,7 +209,6 @@ export default function DevicesPage() {
       return;
     }
 
-    // TESLİM EDİLDİ → OTOMATİK KASAYA GELİR KAYDI
     if (newStatus === "teslim_edildi" && device.final_cost > 0) {
       const { error: transError } = await supabase.from("transactions").insert([
         {
@@ -280,7 +315,6 @@ export default function DevicesPage() {
         </button>
       </div>
 
-      {/* Filtreler */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <input
           type="text"
@@ -295,7 +329,6 @@ export default function DevicesPage() {
         </select>
       </div>
 
-      {/* Tablo */}
       {loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="spinner text-emerald-400" />
@@ -365,7 +398,7 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {/* Ekleme/Düzenleme Modal */}
+      {/* Cihaz Ekleme/Düzenleme Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
@@ -373,14 +406,24 @@ export default function DevicesPage() {
               {editing ? "✏️ Cihaz Düzenle" : "➕ Yeni Cihaz"}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">Müşteri</label>
+              {/* Müşteri Seçimi + Yeni Müşteri Butonu */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm text-slate-400">Müşteri</label>
+                  <button
+                    onClick={() => setShowCustomerModal(true)}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 underline"
+                  >
+                    ➕ Yeni Müşteri Ekle
+                  </button>
+                </div>
                 <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} className="input-field">
                   <option value="">Müşteri Seçin</option>
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              <div className="grid grid-cols-2 gap-3 sm:col-span-2">
                 <div>
                   <label className="block text-sm text-slate-400 mb-1">Marka *</label>
                   <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="input-field" />
@@ -442,6 +485,61 @@ export default function DevicesPage() {
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowModal(false)} className="btn-secondary">İptal</button>
               <button onClick={handleSave} className="btn-primary">{editing ? "Güncelle" : "Kaydet"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hızlı Müşteri Ekleme Modal */}
+      {showCustomerModal && (
+        <div className="modal-overlay" onClick={() => setShowCustomerModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-white mb-4">➕ Yeni Müşteri Ekle</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Ad Soyad *</label>
+                <input
+                  type="text"
+                  value={customerForm.name}
+                  onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
+                  className="input-field"
+                  placeholder="Müşteri adı"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Telefon</label>
+                <input
+                  type="text"
+                  value={customerForm.phone}
+                  onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                  className="input-field"
+                  placeholder="0555 000 00 00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">E-posta</label>
+                <input
+                  type="email"
+                  value={customerForm.email}
+                  onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                  className="input-field"
+                  placeholder="ornek@mail.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Adres</label>
+                <textarea
+                  value={customerForm.address}
+                  onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
+                  className="input-field"
+                  rows={2}
+                  placeholder="Adres"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowCustomerModal(false)} className="btn-secondary">İptal</button>
+              <button onClick={handleSaveCustomer} className="btn-primary">Müşteriyi Kaydet</button>
             </div>
           </div>
         </div>
