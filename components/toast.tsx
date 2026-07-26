@@ -1,37 +1,22 @@
 'use client'
-import { useState, useEffect } from 'react'
+
+import { useState, useCallback } from 'react'
 import { CheckCircle, XCircle, X } from 'lucide-react'
 
-interface ToastProps {
-  message: string
-  type?: 'success' | 'error'
-  onClose: () => void
-}
-
-export default function Toast({ message, type = 'success', onClose }: ToastProps) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-
-  return (
-    <div className={`fixed top-4 right-4 z-[100] flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white ${
-      type === 'success' ? 'bg-green-600' : 'bg-red-600'
-    }`}>
-      {type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
-      <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="hover:opacity-80"><X size={16} /></button>
-    </div>
-  )
-}
-
 export function useToast() {
-  const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null)
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-  }
-  const hideToast = () => setToast(null)
-  return { toast, showToast, hideToast, ToastComponent: toast ? (
-    <Toast message={toast.message} type={toast.type} onClose={hideToast} />
-  ) : null }
-}
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error', visible: boolean } | null>(null)
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type, visible: true })
+    setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  const ToastComponent = toast?.visible ? (
+    <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'} animate-bounce`}>
+      {toast.type === 'success' ? <CheckCircle size={18}/> : <XCircle size={18}/>}
+      <span className="text-sm font-medium">{toast.message}</span>
+      <button onClick={() => setToast(null)} className="ml-2"><X size={14}/></button>
+    </div>
+  ) : null
+
+  return { showToast, ToastComponent }
