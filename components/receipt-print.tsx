@@ -14,7 +14,6 @@ interface ReceiptData {
 
 export default function ReceiptPrint({ data }: { data: ReceiptData }) {
   const receiptRef = useRef<HTMLDivElement>(null)
-
   const handlePrint = () => {
     const content = receiptRef.current
     if (!content) return
@@ -24,14 +23,12 @@ export default function ReceiptPrint({ data }: { data: ReceiptData }) {
     printWindow.document.close()
     printWindow.print()
   }
-
   const handleWhatsApp = () => {
     if (!data.customerPhone) return
     const phone = data.customerPhone.replace(/\D/g, '')
     const message = encodeURIComponent(`*${data.companyName || 'Yeşiltaş Teknoloji'}*\n\n*${data.title}*\nTarih: ${data.date}\n${data.customerName ? `Müşteri: ${data.customerName}\n` : ''}\n${data.items.map(i => `${i.label}: ${i.value}`).join('\n')}${data.total ? `\n\n*Toplam: ${data.total}*` : ''}\n\nTeşekkürler!`)
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
   }
-
   return (
     <div>
       <div ref={receiptRef} className="hidden">
