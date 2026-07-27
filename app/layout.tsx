@@ -4,11 +4,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Yeşiltaş Teknoloji ERP',
   description: 'Teknik Servis ve Satış Yönetim Sistemi',
-export const metadata: Metadata = {
-  title: 'Yeşiltaş Teknoloji ERP',
-  description: 'Teknik Servis ve Satış Yönetim Sistemi',
   manifest: '/manifest.json',
-}
 }
 
 export default function RootLayout({
