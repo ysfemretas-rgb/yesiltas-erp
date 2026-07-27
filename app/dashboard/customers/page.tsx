@@ -2,665 +2,370 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-
-interface Customer {
-  id: string
-  name: string
-  phone: string
-  email: string | null
-  address: string | null
-  created_at: string
-}
-
-interface Debt {
-  id: string
-  customer_id: string
-  total_amount: number
-  paid_amount: number
-  remaining_amount: number
-  status: string
-  due_date: string | null
-  created_at: string
-  source_type: string
-}
-
-interface Payment {
-  id: string
-  customer_id: string
-  amount: number
-  payment_method: string
-  notes: string | null
-  created_at: string
-}
-
-interface Device {
-  id: string
-  customer_id: string
-  customer_name: string
-  brand: string
-  model: string
-  imei: string
-  complaint: string
-  final_cost: number
-  status: string
-  created_at: string
-  delivery_date: string | null
-}
-
-interface Sale {
-  id: string
-  customer_id: string
-  customer_name: string
-  total_price: number
-  payment_method: string
-  notes: string | null
-  created_at: string
-}
+import Toast from '@/components/Toast'
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [debts, setDebts] = useState<Debt[]>([])
-  const [payments, setPayments] = useState<Payment[]>([])
-  const [devices, setDevices] = useState<Device[]>([])
-  const [sales, setSales] = useState<Sale[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [showDetailModal, setShowDetailModal] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-
-  const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    address: ''
-  })
-
-  const [paymentForm, setPaymentForm] = useState({
-    amount: '',
-    payment_method: 'Nakit',
-    notes: ''
-  })
-
-  const filteredCustomers = customers.filter(c => 
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
-  )
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [customerDetails, setCustomerDetails] = useState<any>(null)
+  const [detailsLoading, setDetailsLoading] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     setLoading(true)
-    try {
-      const [custRes, debtRes, payRes, devRes, saleRes] = await Promise.all([
-        supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('debts').select('*'),
-        supabase.from('customer_payments').select('*').order('created_at', { ascending: false }),
-        supabase.from('devices').select('*').order('created_at', { ascending: false }),
-        supabase.from('sales').select('*').order('created_at', { ascending: false })
-      ])
-
-      if (custRes.data) setCustomers(custRes.data)
-      if (debtRes.data) setDebts(debtRes.data)
-      if (payRes.data) setPayments(payRes.data)
-      if (devRes.data) setDevices(devRes.data)
-      if (saleRes.data) setSales(saleRes.data)
-    } catch (err: any) {
-      console.error('Veri yükleme hatası:', err)
-    }
+    const { data } = await supabase.from('customers').select('*').order('name')
+    if (data) setCustomers(data)
     setLoading(false)
-  }
-
-  const getCustomerDebts = (customerId: string) => {
-    return debts.filter(d => d.customer_id === customerId)
-  }
-
-  const getCustomerPayments = (customerId: string) => {
-    return payments.filter(p => p.customer_id === customerId)
-  }
-
-  const getCustomerDevices = (customerId: string) => {
-    return devices.filter(d => d.customer_id === customerId)
-  }
-
-  const getCustomerSales = (customerId: string) => {
-    return sales.filter(s => s.customer_id === customerId)
-  }
-
-  const getTotalDebt = (customerId: string) => {
-    return getCustomerDebts(customerId).reduce((sum, d) => sum + (d.remaining_amount || 0), 0)
-  }
-
-  const getTotalPaid = (customerId: string) => {
-    return getCustomerPayments(customerId).reduce((sum, p) => sum + (p.amount || 0), 0)
-  }
-
-  const getAllTransactions = (customerId: string) => {
-    const trans: any[] = []
-
-    getCustomerDebts(customerId).forEach(d => {
-      trans.push({
-        type: 'Borç',
-        date: d.created_at,
-        amount: d.total_amount,
-        remaining: d.remaining_amount,
-        status: d.status,
-        detail: d.source_type || 'Genel'
-      })
-    })
-
-    getCustomerPayments(customerId).forEach(p => {
-      trans.push({
-        type: 'Ödeme',
-        date: p.created_at,
-        amount: p.amount,
-        method: p.payment_method,
-        notes: p.notes,
-        detail: p.notes || 'Müşteri Ödemesi'
-      })
-    })
-
-    getCustomerDevices(customerId).forEach(d => {
-      trans.push({
-        type: 'Teknik Servis',
-        date: d.created_at,
-        amount: d.final_cost,
-        status: d.status,
-        detail: `${d.brand} ${d.model} - ${d.complaint}`
-      })
-    })
-
-    getCustomerSales(customerId).forEach(s => {
-      trans.push({
-        type: 'Satış',
-        date: s.created_at,
-        amount: s.total_price,
-        method: s.payment_method,
-        detail: s.notes || 'Ürün Satışı'
-      })
-    })
-
-    return trans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!form.name.trim()) {
-      setToast({ message: 'Ad Soyad alanı zorunludur!', type: 'error' })
-      return
-    }
-
-    if (!form.phone.trim()) {
-      setToast({ message: 'Telefon alanı zorunludur!', type: 'error' })
-      return
-    }
-
-    setLoading(true)
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session) {
+        setToast({ message: 'HATA: Oturum bulunamadı! Lütfen tekrar giriş yapın.', type: 'error' })
+        return
+      }
+
       const insertData = {
         name: form.name.trim(),
-        phone: form.phone.trim(),
+        phone: form.phone.trim() || null,
         email: form.email.trim() || null,
-        address: form.address.trim() || null
+        address: form.address.trim() || null,
+        notes: form.notes.trim() || null
       }
 
-      const { data, error } = await supabase
-        .from('customers')
-        .insert([insertData])
-        .select()
+      console.log('Gönderilen veri:', insertData)
+      const { data, error } = await supabase.from('customers').insert([insertData]).select()
 
       if (error) {
+        console.error('Supabase hatası:', error)
         setToast({ message: `HATA: ${error.message} (Kod: ${error.code})`, type: 'error' })
-        setLoading(false)
-        return
+      } else {
+        console.log('Başarıyla eklendi:', data)
+        setToast({ message: 'Müşteri eklendi!', type: 'success' })
+        setShowModal(false)
+        setForm({ name: '', phone: '', email: '', address: '', notes: '' })
+        if (data && data[0]) {
+          setCustomers(prev => [data[0], ...prev])
+        }
+        loadData()
       }
-
-      if (!data || data.length === 0) {
-        setToast({ message: 'HATA: Sunucudan veri dönmedi!', type: 'error' })
-        setLoading(false)
-        return
-      }
-
-      setCustomers(prev => [data[0], ...prev])
-      setToast({ message: `✅ ${data[0].name} başarıyla eklendi!`, type: 'success' })
-      setShowModal(false)
-      setForm({ name: '', phone: '', email: '', address: '' })
-      await loadData()
     } catch (err: any) {
-      setToast({ message: `BEKLENMEYEN HATA: ${err.message}`, type: 'error' })
+      console.error('Beklenmedik hata:', err)
+      setToast({ message: `HATA: ${err.message || 'Bilinmeyen hata'}`, type: 'error' })
     }
-    setLoading(false)
   }
 
-  const handlePayment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedCustomer) return
-
-    const amount = parseFloat(paymentForm.amount)
-    if (!amount || amount <= 0) {
-      setToast({ message: 'Geçerli bir tutar girin!', type: 'error' })
-      return
-    }
-
-    setLoading(true)
-    try {
-      const { error: payError } = await supabase.from('customer_payments').insert([{
-        customer_id: selectedCustomer.id,
-        amount: amount,
-        payment_method: paymentForm.payment_method,
-        notes: paymentForm.notes || null
-      }])
-
-      if (payError) {
-        setToast({ message: `Ödeme kaydedilemedi: ${payError.message}`, type: 'error' })
-        setLoading(false)
-        return
-      }
-
-      await supabase.from('transactions').insert([{
-        type: 'Gelir',
-        category: 'Müşteri Ödemesi',
-        amount: amount,
-        description: `${selectedCustomer.name} - Müşteri Ödemesi`,
-        payment_method: paymentForm.payment_method
-      }])
-
-      const customerDebts = getCustomerDebts(selectedCustomer.id)
-        .filter(d => d.remaining_amount > 0)
-        .sort((a, b) => new Date(a.due_date || '').getTime() - new Date(b.due_date || '').getTime())
-
-      let remainingPayment = amount
-      for (const debt of customerDebts) {
-        if (remainingPayment <= 0) break
-        const payAmount = Math.min(remainingPayment, debt.remaining_amount)
-
-        await supabase.from('debts').update({
-          paid_amount: (debt.paid_amount || 0) + payAmount,
-          remaining_amount: debt.remaining_amount - payAmount,
-          status: debt.remaining_amount - payAmount <= 0 ? 'Ödendi' : 'Kısmi'
-        }).eq('id', debt.id)
-
-        remainingPayment -= payAmount
-      }
-
-      setToast({ message: `₺${amount.toLocaleString('tr-TR')} ödeme alındı!`, type: 'success' })
-      setShowPaymentModal(false)
-      setPaymentForm({ amount: '', payment_method: 'Nakit', notes: '' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `Hata: ${err.message}`, type: 'error' })
-    }
-    setLoading(false)
-  }
-
+  // ===== SİLME FONKSİYONU - BAĞLI KAYITLARI ÖNCE SİL =====
   const handleDelete = async (id: string) => {
-    if (!confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) return
+    if (!confirm('Silmek istediğinize emin misiniz? Bu müşteriye ait tüm kayıtlar (borçlar, ödemeler, cihazlar, satışlar) da silinecektir.')) return
 
-    const { error } = await supabase.from('customers').delete().eq('id', id)
-    if (error) {
-      setToast({ message: `Silme hatası: ${error.message}`, type: 'error' })
-    } else {
-      setToast({ message: 'Müşteri silindi!', type: 'success' })
-      setCustomers(prev => prev.filter(c => c.id !== id))
+    try {
+      setLoading(true)
+
+      // 1. Önce bağlı kayıtları sil (sırası önemli - foreign key constraint)
+
+      // device_history (devices tablosuna bağlı)
+      const { error: dhError } = await supabase.from('device_history').delete().eq('customer_id', id)
+      if (dhError) console.log('device_history silme:', dhError.message)
+
+      // devices
+      const { error: devError } = await supabase.from('devices').delete().eq('customer_id', id)
+      if (devError) console.log('devices silme:', devError.message)
+
+      // sales
+      const { error: salesError } = await supabase.from('sales').delete().eq('customer_id', id)
+      if (salesError) console.log('sales silme:', salesError.message)
+
+      // customer_payments
+      const { error: payError } = await supabase.from('customer_payments').delete().eq('customer_id', id)
+      if (payError) console.log('customer_payments silme:', payError.message)
+
+      // debts
+      const { error: debtError } = await supabase.from('debts').delete().eq('customer_id', id)
+      if (debtError) console.log('debts silme:', debtError.message)
+
+      // warranties
+      const { error: warError } = await supabase.from('warranties').delete().eq('customer_id', id)
+      if (warError) console.log('warranties silme:', warError.message)
+
+      // appointments
+      const { error: appError } = await supabase.from('appointments').delete().eq('customer_id', id)
+      if (appError) console.log('appointments silme:', appError.message)
+
+      // 2. Son olarak müşteriyi sil
+      const { error: custError } = await supabase.from('customers').delete().eq('id', id)
+
+      if (custError) {
+        console.error('Müşteri silme hatası:', custError)
+        setToast({ message: `HATA: ${custError.message} (Kod: ${custError.code})`, type: 'error' })
+      } else {
+        setToast({ message: 'Müşteri ve tüm bağlı kayıtlar silindi!', type: 'success' })
+        setCustomers(prev => prev.filter(c => c.id !== id))
+        if (selectedCustomer?.id === id) {
+          setSelectedCustomer(null)
+          setCustomerDetails(null)
+        }
+      }
+    } catch (err: any) {
+      console.error('Silme hatası:', err)
+      setToast({ message: `HATA: ${err.message || 'Silme işlemi başarısız'}`, type: 'error' })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const openDetail = (customer: Customer) => {
+  const loadCustomerDetails = async (customer: any) => {
     setSelectedCustomer(customer)
-    setShowDetailModal(true)
+    setDetailsLoading(true)
+
+    try {
+      const [debtsRes, paymentsRes, devicesRes, salesRes] = await Promise.all([
+        supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
+        supabase.from('customer_payments').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
+        supabase.from('devices').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
+        supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
+      ])
+
+      const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.amount || 0), 0)
+      const totalPaid = (paymentsRes.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
+
+      const allTransactions = [
+        ...(debtsRes.data || []).map((d: any) => ({...d, type: 'Borç', typeColor: 'text-red-400'})),
+        ...(paymentsRes.data || []).map((p: any) => ({...p, type: 'Ödeme', typeColor: 'text-emerald-400'})),
+        ...(devicesRes.data || []).map((d: any) => ({...d, type: 'Teknik Servis', typeColor: 'text-blue-400', amount: d.price || 0})),
+        ...(salesRes.data || []).map((s: any) => ({...s, type: 'Satış', typeColor: 'text-purple-400'}))
+      ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      setCustomerDetails({
+        debts: debtsRes.data || [],
+        payments: paymentsRes.data || [],
+        devices: devicesRes.data || [],
+        sales: salesRes.data || [],
+        totalDebt,
+        totalPaid,
+        remaining: totalDebt - totalPaid,
+        transactions: allTransactions
+      })
+    } catch (err) {
+      console.error('Detay yükleme hatası:', err)
+      setToast({ message: 'Detaylar yüklenirken hata oluştu', type: 'error' })
+    } finally {
+      setDetailsLoading(false)
+    }
   }
 
-  if (loading && customers.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner" />
-      </div>
-    )
-  }
+  const filtered = customers.filter(c =>
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone?.includes(search)
+  )
+
+  if (loading && customers.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
     <div className="space-y-4">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg animate-fade-in max-w-md ${
-          toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'
-        } text-white`}>
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{toast.type === 'success' ? '✅' : '❌'}</span>
-            <span className="font-medium">{toast.message}</span>
-            <button onClick={() => setToast(null)} className="ml-3 text-white/70 hover:text-white text-lg">×</button>
-          </div>
-        </div>
-      )}
-
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Müşteriler</h1>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Müşteriler</h1>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">+ Yeni Müşteri</button>
       </div>
-
-      <input
-        type="text"
-        className="input max-w-md"
-        placeholder="İsim veya telefon ara..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-
+      <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
       <div className="table-container">
         <table className="table">
-          <thead>
-            <tr>
-              <th>Ad Soyad</th>
-              <th>Telefon</th>
-              <th>Toplam Borç</th>
-              <th>Toplam Ödeme</th>
-              <th>Kalan</th>
-              <th>İşlemler</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Ad</th><th>Telefon</th><th>E-posta</th><th>Adres</th><th>İşlemler</th></tr></thead>
           <tbody>
-            {filteredCustomers.map((customer) => {
-              const totalDebt = getTotalDebt(customer.id)
-              const totalPaid = getTotalPaid(customer.id)
-              const remaining = totalDebt - totalPaid
-
-              return (
-                <tr key={customer.id}>
-                  <td 
-                    className="font-medium text-white cursor-pointer hover:text-emerald-400 transition-colors"
-                    onClick={() => openDetail(customer)}
-                    title="Detayları gör"
-                  >
-                    {customer.name}
-                  </td>
-                  <td className="text-slate-300">{customer.phone}</td>
-                  <td className="text-red-400">₺{totalDebt.toLocaleString('tr-TR')}</td>
-                  <td className="text-emerald-400">₺{totalPaid.toLocaleString('tr-TR')}</td>
-                  <td className={remaining > 0 ? 'text-yellow-400 font-bold' : 'text-emerald-400'}>
-                    ₺{remaining.toLocaleString('tr-TR')}
-                  </td>
-                  <td>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setSelectedCustomer(customer); setShowPaymentModal(true) }}
-                        className="btn btn-primary btn-sm"
-                      >
-                        💰 Ödeme Al
-                      </button>
-                      <button
-                        onClick={() => handleDelete(customer.id)}
-                        className="btn btn-danger btn-sm"
-                      >
-                        Sil
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
+            {filtered.map((c) => (
+              <tr key={c.id}>
+                <td 
+                  className="font-medium cursor-pointer hover:underline" 
+                  style={{ color: 'var(--text-primary)' }}
+                  onClick={() => loadCustomerDetails(c)}
+                >{c.name}</td>
+                <td style={{ color: 'var(--text-secondary)' }}>{c.phone || '-'}</td>
+                <td style={{ color: 'var(--text-secondary)' }}>{c.email || '-'}</td>
+                <td style={{ color: 'var(--text-muted)' }}>{c.address || '-'}</td>
+                <td>
+                  <button onClick={() => handleDelete(c.id)} className="btn btn-danger btn-sm">Sil</button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
+      {filtered.length === 0 && <div className="empty-state"><p>Müşteri bulunamadı</p></div>}
 
-      {filteredCustomers.length === 0 && (
-        <div className="empty-state">
-          <p>Henüz müşteri kaydı yok</p>
-        </div>
-      )}
-
-      {/* Yeni Müşteri Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">Yeni Müşteri</h2>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Müşteri</h2>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <form onSubmit={handleSubmit} autoComplete="off">
-              <div className="modal-body">
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body space-y-4">
                 <div className="form-group">
-                  <label>Ad Soyad *</label>
-                  <input
-                    className="input"
-                    name="musteri-ad"
+                  <label>Ad *</label>
+                  <input 
+                    className="input" 
+                    value={form.name} 
+                    onChange={(e) => setForm({...form, name: e.target.value})} 
+                    required 
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    value={form.name}
-                    onChange={(e) => setForm({...form, name: e.target.value})}
-                    placeholder="Müşteri adı soyadı"
-                    required
+                    name="musteri-ad"
                   />
                 </div>
                 <div className="form-group">
-                  <label>Telefon *</label>
-                  <input
-                    className="input"
-                    name="musteri-tel"
-                    type="tel"
+                  <label>Telefon</label>
+                  <input 
+                    className="input" 
+                    value={form.phone} 
+                    onChange={(e) => setForm({...form, phone: e.target.value})}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    value={form.phone}
-                    onChange={(e) => setForm({...form, phone: e.target.value})}
-                    placeholder="05XX XXX XX XX"
-                    required
+                    name="musteri-tel"
                   />
                 </div>
                 <div className="form-group">
                   <label>E-posta</label>
-                  <input
-                    className="input"
-                    name="musteri-mail"
-                    type="email"
+                  <input 
+                    className="input" 
+                    type="email" 
+                    value={form.email} 
+                    onChange={(e) => setForm({...form, email: e.target.value})}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    value={form.email}
-                    onChange={(e) => setForm({...form, email: e.target.value})}
-                    placeholder="ornek@email.com"
+                    name="musteri-mail"
                   />
                 </div>
                 <div className="form-group">
                   <label>Adres</label>
-                  <textarea
-                    className="input"
-                    name="musteri-adres"
-                    rows={3}
+                  <textarea 
+                    className="input" 
+                    rows={2} 
+                    value={form.address} 
+                    onChange={(e) => setForm({...form, address: e.target.value})}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    value={form.address}
-                    onChange={(e) => setForm({...form, address: e.target.value})}
-                    placeholder="Adres bilgisi..."
+                    name="musteri-adres"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Notlar</label>
+                  <textarea 
+                    className="input" 
+                    rows={2} 
+                    value={form.notes} 
+                    onChange={(e) => setForm({...form, notes: e.target.value})}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    name="musteri-not"
                   />
                 </div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? <div className="spinner w-4 h-4 border-2" /> : 'Kaydet'}
-                </button>
+                <button type="submit" className="btn btn-primary">Kaydet</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Ödeme Al Modal */}
-      {showPaymentModal && selectedCustomer && (
-        <div className="modal-overlay" onClick={() => setShowPaymentModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+      {/* Müşteri Detay Modal */}
+      {selectedCustomer && (
+        <div className="modal-overlay" onClick={() => { setSelectedCustomer(null); setCustomerDetails(null) }}>
+          <div className="modal max-w-6xl w-full" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'hidden' }}>
             <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">
-                Ödeme Al - {selectedCustomer.name}
-              </h2>
-              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
-            </div>
-            <form onSubmit={handlePayment}>
-              <div className="modal-body">
-                <div className="p-3 rounded-lg bg-slate-700/50 mb-4">
-                  <p className="text-sm text-slate-400">
-                    Kalan Borç: <span className="text-yellow-400 font-bold">₺{getTotalDebt(selectedCustomer.id).toLocaleString('tr-TR')}</span>
-                  </p>
-                </div>
-                <div className="form-group">
-                  <label>Tutar (TL) *</label>
-                  <input
-                    className="input"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={paymentForm.amount}
-                    onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
-                    placeholder="1000"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Ödeme Yöntemi</label>
-                  <select
-                    className="select"
-                    value={paymentForm.payment_method}
-                    onChange={(e) => setPaymentForm({...paymentForm, payment_method: e.target.value})}
-                  >
-                    <option>Nakit</option>
-                    <option>Kredi Kartı</option>
-                    <option>Havale/EFT</option>
-                    <option>Çek</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Notlar</label>
-                  <textarea
-                    className="input"
-                    rows={2}
-                    value={paymentForm.notes}
-                    onChange={(e) => setPaymentForm({...paymentForm, notes: e.target.value})}
-                    placeholder="Ödeme notu..."
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? <div className="spinner w-4 h-4 border-2" /> : 'Ödeme Al'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ MÜŞTERİ DETAY MODAL - Geniş, kaydırmasız */}
-      {showDetailModal && selectedCustomer && (
-        <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
-          <div 
-            className="rounded-xl shadow-2xl w-full max-w-6xl mx-4"
-            style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex justify-between items-start p-5 border-b" style={{ borderColor: '#334155' }}>
               <div>
-                <h2 className="text-xl font-bold text-white">{selectedCustomer.name}</h2>
-                <p className="text-sm text-slate-400 mt-1">
-                  📞 {selectedCustomer.phone}
-                  {selectedCustomer.email && ` | ✉️ ${selectedCustomer.email}`}
-                  {selectedCustomer.address && ` | 📍 ${selectedCustomer.address}`}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Müşteri since: {new Date(selectedCustomer.created_at).toLocaleDateString('tr-TR')}
-                </p>
+                <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{selectedCustomer.name}</h2>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{selectedCustomer.phone} {selectedCustomer.email ? `| ${selectedCustomer.email}` : ''}</p>
               </div>
-              <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+              <button onClick={() => { setSelectedCustomer(null); setCustomerDetails(null) }} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
 
-            {/* Body */}
-            <div className="p-5">
-              {/* Özet Kartları */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
-                  <div className="text-2xl font-bold text-red-400">₺{getTotalDebt(selectedCustomer.id).toLocaleString('tr-TR')}</div>
-                  <div className="text-xs text-slate-400 mt-1">Toplam Borç</div>
+            {detailsLoading ? (
+              <div className="p-8 flex justify-center"><div className="spinner" /></div>
+            ) : customerDetails ? (
+              <div className="modal-body space-y-4" style={{ overflow: 'hidden' }}>
+                {/* Özet Kartları */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <div className="text-2xl font-bold text-red-400">₺{customerDetails.totalDebt.toLocaleString('tr-TR')}</div>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Borç</div>
+                  </div>
+                  <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <div className="text-2xl font-bold text-emerald-400">₺{customerDetails.totalPaid.toLocaleString('tr-TR')}</div>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Ödeme</div>
+                  </div>
+                  <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <div className={`text-2xl font-bold ${customerDetails.remaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>₺{customerDetails.remaining.toLocaleString('tr-TR')}</div>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Kalan Borç</div>
+                  </div>
+                  <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <div className="text-2xl font-bold text-blue-400">{customerDetails.transactions.length}</div>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam İşlem</div>
+                  </div>
                 </div>
-                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
-                  <div className="text-2xl font-bold text-emerald-400">₺{getTotalPaid(selectedCustomer.id).toLocaleString('tr-TR')}</div>
-                  <div className="text-xs text-slate-400 mt-1">Toplam Ödeme</div>
-                </div>
-                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
-                  <div className="text-2xl font-bold text-yellow-400">₺{(getTotalDebt(selectedCustomer.id) - getTotalPaid(selectedCustomer.id)).toLocaleString('tr-TR')}</div>
-                  <div className="text-xs text-slate-400 mt-1">Kalan Borç</div>
-                </div>
-                <div className="p-4 rounded-xl text-center" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
-                  <div className="text-2xl font-bold text-blue-400">{getAllTransactions(selectedCustomer.id).length}</div>
-                  <div className="text-xs text-slate-400 mt-1">Toplam İşlem</div>
-                </div>
-              </div>
 
-              {/* İşlem Geçmişi Tablosu - Kaydırmasız, geniş sütunlar */}
-              <h3 className="text-lg font-semibold text-white mb-3">📋 İşlem Geçmişi</h3>
-              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ backgroundColor: '#1e293b' }}>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Tarih</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Saat</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">İşlem Türü</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Detay</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Tutar</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Durum / Not</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {getAllTransactions(selectedCustomer.id).map((t, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid #334155' }}>
-                        <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{new Date(t.date).toLocaleDateString('tr-TR')}</td>
-                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{new Date(t.date).toLocaleTimeString('tr-TR')}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold ${
-                            t.type === 'Ödeme' ? 'bg-emerald-500/20 text-emerald-400' :
-                            t.type === 'Borç' ? 'bg-red-500/20 text-red-400' :
-                            t.type === 'Satış' ? 'bg-blue-500/20 text-blue-400' :
-                            t.type === 'Teknik Servis' ? 'bg-yellow-500/20 text-yellow-400' :
-                            'bg-slate-500/20 text-slate-400'
-                          }`}>
-                            {t.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-300" style={{ maxWidth: '300px', wordWrap: 'break-word' }}>{t.detail}</td>
-                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${
-                          t.type === 'Ödeme' ? 'text-emerald-400' :
-                          t.type === 'Borç' ? 'text-red-400' :
-                          'text-white'
-                        }`}>
-                          ₺{t.amount?.toLocaleString('tr-TR')}
-                        </td>
-                        <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
-                          {t.status && <span className="text-slate-300">{t.status}</span>}
-                          {t.method && <span className="text-slate-300">{t.method}</span>}
-                          {t.remaining !== undefined && t.remaining > 0 && (
-                            <span className="text-yellow-400 ml-1">(Kalan: ₺{t.remaining.toLocaleString('tr-TR')})</span>
-                          )}
-                        </td>
+                {/* İşlem Geçmişi Tablosu */}
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>İşlem Geçmişi</h3>
+                <div className="table-container" style={{ overflow: 'visible' }}>
+                  <table className="table" style={{ tableLayout: 'auto', width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ whiteSpace: 'nowrap' }}>Tarih</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Saat</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>İşlem Türü</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Detay</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Tutar</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Durum</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {getAllTransactions(selectedCustomer.id).length === 0 && (
-                <div className="text-center py-8 text-slate-500">
-                  <p>Bu müşteri için henüz işlem kaydı yok</p>
+                    </thead>
+                    <tbody>
+                      {customerDetails.transactions.map((t: any, i: number) => (
+                        <tr key={i}>
+                          <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
+                          <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleTimeString('tr-TR')}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}><span className={`font-semibold ${t.typeColor}`}>{t.type}</span></td>
+                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>
+                            {t.description || t.issue || t.device_name || t.product_name || t.notes || '-'}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }} className={t.type === 'Ödeme' ? 'text-emerald-400' : t.type === 'Borç' ? 'text-red-400' : 'text-blue-400'}>
+                            ₺{(t.amount || 0).toLocaleString('tr-TR')}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <span className={`badge ${t.status === 'Tamamlandı' || t.status === 'Ödendi' ? 'badge-green' : t.status === 'Beklemede' ? 'badge-yellow' : 'badge-blue'}`}>
+                              {t.status || 'Tamamlandı'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
+                {customerDetails.transactions.length === 0 && (
+                  <div className="empty-state"><p>Henüz işlem kaydı yok</p></div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       )}
