@@ -1,0 +1,75 @@
+# Yeşiltaş ERP - PWA (Telefon Uygulaması) Kurulumu
+
+## 1. Paket Kurulumu
+
+Terminali açın ve proje klasöründe şunu çalıştırın:
+
+```bash
+npm install next-pwa
+```
+
+## 2. Dosyaları Kopyalayın
+
+Bu ZIP'teki dosyaları projenize şu şekilde kopyalayın:
+
+```
+public/manifest.json          → public/manifest.json
+public/icons/                 → public/icons/ (icon dosyalarını buraya)
+next.config.js               → next.config.js (MEVCUT DOSYANIN ÜZERİNE)
+```
+
+## 3. Layout Düzenlemesi
+
+app/layout.tsx dosyanızın başına şunları ekleyin:
+
+```tsx
+import type { Metadata, Viewport } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Yeşiltaş Teknoloji ERP',
+  description: 'Yeşiltaş Teknoloji ERP Yönetim Sistemi',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Yeşiltaş ERP',
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#0f172a',
+  viewportFit: 'cover',
+}
+```
+
+## 4. Build ve Deploy
+
+```bash
+npm run build
+```
+
+Sonra GitHub Desktop'tan commit + push yapın. Vercel otomatik deploy edecek.
+
+## 5. Telefona Kurulum
+
+### Android (Chrome):
+1. Sitenizi telefondan açın
+2. Chrome menüsü (⋮) → "Ana ekrana ekle" veya "Uygulama yükle"
+3. "Ekle" butonuna basın
+
+### iPhone (Safari):
+1. Sitenizi telefondan açın
+2. Paylaş butonu (⎋) → "Ana Ekrana Ekle"
+3. "Ekle" butonuna basın
+
+### Artık telefonunuzda Yeşiltaş ERP uygulaması gibi çalışacak!
+
+## NOT: Icon Dosyaları
+
+Icon dosyalarını (192x192, 512x512 PNG) oluşturmanız gerekiyor.
+İsterseniz logonuzu bana gönderin, icon seti oluşturayım.
+Ya da şu siteyi kullanabilirsiniz: https://favicon.io/
