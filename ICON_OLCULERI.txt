@@ -1,0 +1,28 @@
+
+PWA (Progressive Web App) için gerekli icon ölçüleri:
+
+┌─────────────┬─────────────────────────────────────────────┐
+│ Boyut       │ Kullanım Alanı                              │
+├─────────────┼─────────────────────────────────────────────┤
+│ 72x72       │ Android low-density (ldpi)                  │
+│ 96x96       │ Android medium-density (mdpi)               │
+│ 128x128     │ Chrome Web Store                            │
+│ 144x144     │ Microsoft Surface                           │
+│ 152x152     │ iPad                                        │
+│ 192x192     │ Android high-density (hdpi) - ZORUNLU       │
+│ 384x384     │ Android extra-high-density                  │
+│ 512x512     │ Splash screen, Play Store - ZORUNLU         │
+└─────────────┴─────────────────────────────────────────────┘
+
+📌 EN ÖNEMLİ OLANLAR:
+   • 192x192 - Android telefon ana ekran iconu
+   • 512x512 - Splash screen (açılış ekranı)
+
+📐 LOGO ÖNERİSİ:
+   • KARE format (1:1)
+   • ŞEFFAF arka plan (PNG)
+   • Merkezde logo, etrafta boşluk (padding)
+   • En az 512x512 çözünürlük
+
+📱 APPLE TOUCH ICON (isteğe bağlı):
+   • 180x180 - iPhone ana ekran iconu
