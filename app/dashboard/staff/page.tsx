@@ -2,233 +2,236 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-
-interface StaffMember {
-  id: string
-  name: string
-  role: string
-  phone: string
-  email: string
-  is_active: boolean
-  created_at: string
-}
-
-interface Performance {
-  id: string
-  staff_name: string
-  device_count: number
-  total_revenue: number
-  period_month: string
-  period_year: number
-}
+import Toast from '@/components/Toast'
 
 export default function StaffPage() {
-  const [staff, setStaff] = useState<StaffMember[]>([])
-  const [performance, setPerformance] = useState<Performance[]>([])
-  const [showModal, setShowModal] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [staff, setStaff] = useState<any[]>([])
+  const [performance, setPerformance] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<'list' | 'performance'>('list')
-
-  const [form, setForm] = useState({ name: '', role: 'Teknisyen', phone: '', email: '' })
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [showPerfModal, setShowPerfModal] = useState(false)
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+  const [form, setForm] = useState({ name: '', phone: '', role: 'Teknisyen', salary: '' })
+  const [perfForm, setPerfForm] = useState({ staff_id: '', period: '', devices_repaired: '', total_revenue: '' })
 
   useEffect(() => { loadData() }, [])
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
   const loadData = async () => {
     setLoading(true)
-    const [staffRes, perfRes] = await Promise.all([
-      supabase.from('staff').select('*').order('created_at', { ascending: false }),
-      supabase.from('staff_performance').select('*').order('created_at', { ascending: false })
+    const [{ data: staffData }, { data: perfData }] = await Promise.all([
+      supabase.from('staff').select('*').order('name'),
+      supabase.from('staff_performance').select('*, staff:staff_id(name)').order('period', { ascending: false })
     ])
-    if (staffRes.data) setStaff(staffRes.data)
-    if (perfRes.data) setPerformance(perfRes.data)
+    if (staffData) setStaff(staffData)
+    if (perfData) setPerformance(perfData)
     setLoading(false)
-  }
-
-  const openModal = (member?: StaffMember) => {
-    if (member) {
-      setForm({ name: member.name, role: member.role, phone: member.phone || '', email: member.email || '' })
-      setEditingId(member.id)
-    } else {
-      setForm({ name: '', role: 'Teknisyen', phone: '', email: '' })
-      setEditingId(null)
-    }
-    setShowModal(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (editingId) {
-      await supabase.from('staff').update(form).eq('id', editingId)
-      showToast('Personel guncellendi')
-    } else {
-      await supabase.from('staff').insert([form])
-      showToast('Personel eklendi')
-    }
-    setShowModal(false)
-    loadData()
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Silmek istediginize emin misiniz?')) return
-    await supabase.from('staff').delete().eq('id', id)
-    showToast('Silindi')
-    loadData()
-  }
-
-  const calculatePerformance = async (staffId: string, staffName: string) => {
-    const now = new Date()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const year = now.getFullYear()
-    const { data: devices } = await supabase.from('devices').select('final_cost').eq('technician', staffName).eq('status', 'Teslim Edildi')
-    const deviceCount = devices?.length || 0
-    const totalRevenue = devices?.reduce((s, d) => s + (d.final_cost || 0), 0) || 0
-
-    await supabase.from('staff_performance').insert([{
-      staff_id: staffId,
-      staff_name: staffName,
-      device_count: deviceCount,
-      total_revenue: totalRevenue,
-      period_month: month,
-      period_year: year
+    const { error } = await supabase.from('staff').insert([{
+      name: form.name.trim(),
+      phone: form.phone.trim() || null,
+      role: form.role,
+      salary: parseFloat(form.salary) || 0
     }])
-    showToast('Performans hesaplandi')
-    loadData()
+    if (error) {
+      setToast({ message: `Hata: ${error.message}`, type: 'error' })
+    } else {
+      setToast({ message: 'Personel eklendi!', type: 'success' })
+      setShowModal(false)
+      setForm({ name: '', phone: '', role: 'Teknisyen', salary: '' })
+      loadData()
+    }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner" />
-      </div>
-    )
+  const handlePerfSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const { error } = await supabase.from('staff_performance').insert([{
+      staff_id: perfForm.staff_id,
+      period: perfForm.period,
+      devices_repaired: parseInt(perfForm.devices_repaired) || 0,
+      total_revenue: parseFloat(perfForm.total_revenue) || 0
+    }])
+    if (error) {
+      setToast({ message: `Hata: ${error.message}`, type: 'error' })
+    } else {
+      setToast({ message: 'Performans kaydı eklendi!', type: 'success' })
+      setShowPerfModal(false)
+      setPerfForm({ staff_id: '', period: '', devices_repaired: '', total_revenue: '' })
+      loadData()
+    }
   }
+
+  // ===== PERFORMANS SİLME =====
+  const handleDeletePerformance = async (id: string) => {
+    if (!confirm('Bu performans kaydını silmek istediğinize emin misiniz?')) return
+
+    try {
+      const { error } = await supabase.from('staff_performance').delete().eq('id', id)
+      if (error) {
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
+      } else {
+        setToast({ message: 'Performans kaydı silindi!', type: 'success' })
+        setPerformance(prev => prev.filter(p => p.id !== id))
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
+  }
+
+  const handleDeleteStaff = async (id: string) => {
+    if (!confirm('Bu personeli silmek istediğinize emin misiniz? Bağlı performans kayıtları da silinecektir.')) return
+
+    try {
+      // Önce bağlı performans kayıtlarını sil
+      await supabase.from('staff_performance').delete().eq('staff_id', id)
+      // Sonra personeli sil
+      const { error } = await supabase.from('staff').delete().eq('id', id)
+      if (error) {
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
+      } else {
+        setToast({ message: 'Personel silindi!', type: 'success' })
+        setStaff(prev => prev.filter(s => s.id !== id))
+        setPerformance(prev => prev.filter(p => p.staff_id !== id))
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
+  }
+
+  if (loading && staff.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
     <div className="space-y-4">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg`}>
-          {toast.message}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Personel</h1>
+        <div className="flex gap-2">
+          {activeTab === 'performance' && (
+            <button onClick={() => setShowPerfModal(true)} className="btn btn-primary">+ Performans Ekle</button>
+          )}
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">+ Yeni Personel</button>
         </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-white">Personel</h1>
-        <button onClick={() => openModal()} className="btn btn-primary btn-sm">Yeni Personel</button>
       </div>
 
-      <div className="tabs">
-        <button className={`tab ${activeTab === 'list' ? 'active' : ''}`} onClick={() => setActiveTab('list')}>Personel Listesi</button>
-        <button className={`tab ${activeTab === 'performance' ? 'active' : ''}`} onClick={() => setActiveTab('performance')}>Performans</button>
+      {/* Tablar */}
+      <div className="flex gap-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
+        <button 
+          onClick={() => setActiveTab('list')}
+          className={`pb-2 px-1 font-medium ${activeTab === 'list' ? 'text-emerald-400 border-b-2 border-emerald-400' : ''}`}
+          style={{ color: activeTab === 'list' ? undefined : 'var(--text-muted)' }}
+        >
+          Personel Listesi
+        </button>
+        <button 
+          onClick={() => setActiveTab('performance')}
+          className={`pb-2 px-1 font-medium ${activeTab === 'performance' ? 'text-emerald-400 border-b-2 border-emerald-400' : ''}`}
+          style={{ color: activeTab === 'performance' ? undefined : 'var(--text-muted)' }}
+        >
+          Performans
+        </button>
       </div>
 
-      {activeTab === 'list' && (
+      {activeTab === 'list' ? (
         <div className="table-container">
           <table className="table">
-            <thead>
-              <tr>
-                <th>Ad</th>
-                <th>Rol</th>
-                <th>Telefon</th>
-                <th>E-posta</th>
-                <th>Durum</th>
-                <th>Islemler</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Ad</th><th>Rol</th><th>Telefon</th><th>Maaş</th><th>İşlemler</th></tr></thead>
             <tbody>
               {staff.map((s) => (
                 <tr key={s.id}>
-                  <td className="font-medium text-white">{s.name}</td>
-                  <td><span className="badge badge-blue">{s.role}</span></td>
-                  <td className="text-slate-300">{s.phone || '-'}</td>
-                  <td className="text-slate-300">{s.email || '-'}</td>
-                  <td><span className={`badge ${s.is_active ? 'badge-green' : 'badge-gray'}`}>{s.is_active ? 'Aktif' : 'Pasif'}</span></td>
+                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{s.name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{s.role}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{s.phone || '-'}</td>
+                  <td className="text-emerald-400">₺{(s.salary || 0).toLocaleString('tr-TR')}</td>
                   <td>
-                    <div className="flex gap-1">
-                      <button onClick={() => calculatePerformance(s.id, s.name)} className="btn btn-primary btn-sm">Hesapla</button>
-                      <button onClick={() => openModal(s)} className="btn btn-secondary btn-sm">Duzenle</button>
-                      <button onClick={() => handleDelete(s.id)} className="btn btn-danger btn-sm">Sil</button>
-                    </div>
+                    <button onClick={() => handleDeleteStaff(s.id)} className="btn btn-danger btn-sm">Sil</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {staff.length === 0 && <div className="empty-state"><p>Henüz personel kaydı yok</p></div>}
         </div>
-      )}
-
-      {activeTab === 'performance' && (
+      ) : (
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
                 <th>Personel</th>
-                <th>Donem</th>
+                <th>Dönem</th>
                 <th>Tamir Edilen</th>
                 <th>Toplam Ciro</th>
+                <th>İşlemler</th>
               </tr>
             </thead>
             <tbody>
               {performance.map((p) => (
                 <tr key={p.id}>
-                  <td className="font-medium text-white">{p.staff_name}</td>
-                  <td className="text-slate-300">{p.period_month}/{p.period_year}</td>
-                  <td className="text-emerald-400">{p.device_count} cihaz</td>
-                  <td className="text-emerald-400 font-medium">{p.total_revenue?.toLocaleString('tr-TR')} TL</td>
+                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.staff?.name || '-'}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{p.period}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{p.devices_repaired} cihaz</td>
+                  <td className="text-emerald-400">₺{(p.total_revenue || 0).toLocaleString('tr-TR')} TL</td>
+                  <td>
+                    <button onClick={() => handleDeletePerformance(p.id)} className="btn btn-danger btn-sm">Sil</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {performance.length === 0 && <div className="empty-state"><p>Henuz performans kaydi yok. Personel listesinden "Hesapla" butonuna basin.</p></div>}
+          {performance.length === 0 && <div className="empty-state"><p>Henüz performans kaydı yok</p></div>}
         </div>
       )}
 
-      {staff.length === 0 && activeTab === 'list' && (
-        <div className="empty-state">
-          <p>Henuz personel kaydi yok</p>
-        </div>
-      )}
-
+      {/* Personel Ekle Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">{editingId ? 'Personel Duzenle' : 'Yeni Personel'}</h2>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Personel</h2>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Ad Soyad *</label>
-                  <input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Rol</label>
-                  <select className="select" value={form.role} onChange={(e) => setForm({...form, role: e.target.value})}>
-                    <option>Teknisyen</option>
-                    <option>Satisci</option>
-                    <option>Admin</option>
-                    <option>Muhasebe</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Telefon</label>
-                  <input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>E-posta</label>
-                  <input className="input" type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} />
-                </div>
+                <div className="form-group"><label>Ad *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required /></div>
+                <div className="form-group"><label>Telefon</label><input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} /></div>
+                <div className="form-group"><label>Rol</label><select className="select" value={form.role} onChange={(e) => setForm({...form, role: e.target.value})}><option>Teknisyen</option><option>Satış</option><option>Yönetici</option></select></div>
+                <div className="form-group"><label>Maaş (TL)</label><input className="input" type="number" value={form.salary} onChange={(e) => setForm({...form, salary: e.target.value})} /></div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">{editingId ? 'Guncelle' : 'Kaydet'}</button>
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Performans Ekle Modal */}
+      {showPerfModal && (
+        <div className="modal-overlay" onClick={() => setShowPerfModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Performans Ekle</h2>
+              <button onClick={() => setShowPerfModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handlePerfSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label>Personel *</label>
+                  <select className="select" value={perfForm.staff_id} onChange={(e) => setPerfForm({...perfForm, staff_id: e.target.value})} required>
+                    <option value="">Seçin</option>
+                    {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group"><label>Dönem (AA/YYYY) *</label><input className="input" value={perfForm.period} onChange={(e) => setPerfForm({...perfForm, period: e.target.value})} placeholder="07/2026" required /></div>
+                <div className="form-group"><label>Tamir Edilen Cihaz</label><input className="input" type="number" value={perfForm.devices_repaired} onChange={(e) => setPerfForm({...perfForm, devices_repaired: e.target.value})} /></div>
+                <div className="form-group"><label>Toplam Ciro (TL)</label><input className="input" type="number" step="0.01" value={perfForm.total_revenue} onChange={(e) => setPerfForm({...perfForm, total_revenue: e.target.value})} /></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowPerfModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Kaydet</button>
               </div>
             </form>
           </div>
