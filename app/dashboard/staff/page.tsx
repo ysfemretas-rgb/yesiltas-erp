@@ -9,7 +9,6 @@ function InlineToast({ message, type, onClose }: { message: string; type: 'succe
     const timer = setTimeout(onClose, 4000)
     return () => clearTimeout(timer)
   }, [onClose])
-
   return (
     <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
       type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
@@ -22,6 +21,7 @@ function InlineToast({ message, type, onClose }: { message: string; type: 'succe
     </div>
   )
 }
+
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<any[]>([])
