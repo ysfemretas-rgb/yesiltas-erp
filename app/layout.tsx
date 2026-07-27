@@ -15,7 +15,6 @@ export const metadata: Metadata = {
     initialScale: 1,
     maximumScale: 1,
     userScalable: false,
-    themeColor: '#0f172a',
   },
 }
 
