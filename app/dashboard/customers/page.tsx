@@ -99,6 +99,7 @@ Yeşiltaş Teknoloji`
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([])
+  const [customerDebts, setCustomerDebts] = useState<Record<string, number>>({})
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -114,7 +115,21 @@ export default function CustomersPage() {
   const loadData = async () => {
     setLoading(true)
     const { data } = await supabase.from('customers').select('*').order('name')
-    if (data) setCustomers(data)
+    if (data) {
+      setCustomers(data)
+      // Her müşterinin borcunu hesapla
+      const debts: Record<string, number> = {}
+      await Promise.all(data.map(async (c: any) => {
+        const [debtsRes, paymentsRes] = await Promise.all([
+          supabase.from('debts').select('amount').eq('customer_id', c.id),
+          supabase.from('customer_payments').select('amount').eq('customer_id', c.id)
+        ])
+        const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.amount || 0), 0)
+        const totalPaid = (paymentsRes.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
+        debts[c.id] = totalDebt - totalPaid
+      }))
+      setCustomerDebts(debts)
+    }
     setLoading(false)
   }
 
@@ -214,19 +229,8 @@ export default function CustomersPage() {
     c.name?.toLowerCase().includes(search.toLowerCase()) || c.phone?.includes(search)
   )
 
-  // WhatsApp için borç hesaplama
-  const getCustomerDebt = async (customerId: string) => {
-    const [debtsRes, paymentsRes] = await Promise.all([
-      supabase.from('debts').select('amount').eq('customer_id', customerId),
-      supabase.from('customer_payments').select('amount').eq('customer_id', customerId)
-    ])
-    const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.amount || 0), 0)
-    const totalPaid = (paymentsRes.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
-    return totalDebt - totalPaid
-  }
-
   const openWhatsApp = async (customer: any) => {
-    const debt = await getCustomerDebt(customer.id)
+    const debt = customerDebts[customer.id] || 0
     if (debt <= 0) {
       setToast({ message: 'Bu müşterinin borcu yok!', type: 'error' })
       return
@@ -246,20 +250,37 @@ export default function CustomersPage() {
       <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
       <div className="table-container">
         <table className="table">
-          <thead><tr><th>Ad</th><th>Telefon</th><th>E-posta</th><th>Adres</th><th>İşlemler</th></tr></thead>
+          <thead><tr><th>Ad</th><th>Telefon</th><th>E-posta</th><th>Adres</th><th>Borç Durumu</th><th>İşlemler</th></tr></thead>
           <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id}>
-                <td className="font-medium cursor-pointer hover:underline" style={{ color: 'var(--text-primary)' }} onClick={() => loadCustomerDetails(c)}>{c.name}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{c.phone || '-'}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{c.email || '-'}</td>
-                <td style={{ color: 'var(--text-muted)' }}>{c.address || '-'}</td>
-                <td>
-                  <button onClick={() => openWhatsApp(c)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: '#fff', marginRight: '6px' }} title="WhatsApp Borç Bildirim">📱</button>
-                  <button onClick={() => handleDelete(c.id)} className="btn btn-danger btn-sm">Sil</button>
-                </td>
-              </tr>
-            ))}
+            {filtered.map((c) => {
+              const debt = customerDebts[c.id] || 0
+              const hasDebt = debt > 0
+              return (
+                <tr key={c.id}>
+                  <td className="font-medium cursor-pointer hover:underline" style={{ color: 'var(--text-primary)' }} onClick={() => loadCustomerDetails(c)}>{c.name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{c.phone || '-'}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{c.email || '-'}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{c.address || '-'}</td>
+                  <td>
+                    <span 
+                      className="px-2 py-1 rounded-full text-xs font-bold"
+                      style={{ 
+                        backgroundColor: hasDebt ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)',
+                        color: hasDebt ? '#f87171' : '#4ade80',
+                        border: `1px solid ${hasDebt ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {hasDebt ? `🔴 ₺${debt.toLocaleString('tr-TR')} Borç` : '🟢 Borç Yok'}
+                    </span>
+                  </td>
+                  <td>
+                    <button onClick={() => openWhatsApp(c)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: '#fff', marginRight: '6px' }} title="WhatsApp Borç Bildirim">📱</button>
+                    <button onClick={() => handleDelete(c.id)} className="btn btn-danger btn-sm">Sil</button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
