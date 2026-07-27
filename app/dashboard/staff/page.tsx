@@ -2,7 +2,26 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import Toast from '@/components/Toast'
+
+// Inline Toast Component
+function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+    }`}>
+      <div className="flex items-center gap-2">
+        <span>{type === 'success' ? '✅' : '❌'}</span>
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
+      </div>
+    </div>
+  )
+}
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<any[]>([])
@@ -64,10 +83,8 @@ export default function StaffPage() {
     }
   }
 
-  // ===== PERFORMANS SİLME =====
   const handleDeletePerformance = async (id: string) => {
     if (!confirm('Bu performans kaydını silmek istediğinize emin misiniz?')) return
-
     try {
       const { error } = await supabase.from('staff_performance').delete().eq('id', id)
       if (error) {
@@ -83,11 +100,8 @@ export default function StaffPage() {
 
   const handleDeleteStaff = async (id: string) => {
     if (!confirm('Bu personeli silmek istediğinize emin misiniz? Bağlı performans kayıtları da silinecektir.')) return
-
     try {
-      // Önce bağlı performans kayıtlarını sil
       await supabase.from('staff_performance').delete().eq('staff_id', id)
-      // Sonra personeli sil
       const { error } = await supabase.from('staff').delete().eq('id', id)
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
@@ -105,7 +119,7 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-4">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Personel</h1>
         <div className="flex gap-2">
@@ -116,22 +130,17 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* Tablar */}
       <div className="flex gap-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
         <button 
           onClick={() => setActiveTab('list')}
           className={`pb-2 px-1 font-medium ${activeTab === 'list' ? 'text-emerald-400 border-b-2 border-emerald-400' : ''}`}
           style={{ color: activeTab === 'list' ? undefined : 'var(--text-muted)' }}
-        >
-          Personel Listesi
-        </button>
+        >Personel Listesi</button>
         <button 
           onClick={() => setActiveTab('performance')}
           className={`pb-2 px-1 font-medium ${activeTab === 'performance' ? 'text-emerald-400 border-b-2 border-emerald-400' : ''}`}
           style={{ color: activeTab === 'performance' ? undefined : 'var(--text-muted)' }}
-        >
-          Performans
-        </button>
+        >Performans</button>
       </div>
 
       {activeTab === 'list' ? (
@@ -145,9 +154,7 @@ export default function StaffPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{s.role}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{s.phone || '-'}</td>
                   <td className="text-emerald-400">₺{(s.salary || 0).toLocaleString('tr-TR')}</td>
-                  <td>
-                    <button onClick={() => handleDeleteStaff(s.id)} className="btn btn-danger btn-sm">Sil</button>
-                  </td>
+                  <td><button onClick={() => handleDeleteStaff(s.id)} className="btn btn-danger btn-sm">Sil</button></td>
                 </tr>
               ))}
             </tbody>
@@ -157,15 +164,7 @@ export default function StaffPage() {
       ) : (
         <div className="table-container">
           <table className="table">
-            <thead>
-              <tr>
-                <th>Personel</th>
-                <th>Dönem</th>
-                <th>Tamir Edilen</th>
-                <th>Toplam Ciro</th>
-                <th>İşlemler</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Personel</th><th>Dönem</th><th>Tamir Edilen</th><th>Toplam Ciro</th><th>İşlemler</th></tr></thead>
             <tbody>
               {performance.map((p) => (
                 <tr key={p.id}>
@@ -173,9 +172,7 @@ export default function StaffPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{p.period}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{p.devices_repaired} cihaz</td>
                   <td className="text-emerald-400">₺{(p.total_revenue || 0).toLocaleString('tr-TR')} TL</td>
-                  <td>
-                    <button onClick={() => handleDeletePerformance(p.id)} className="btn btn-danger btn-sm">Sil</button>
-                  </td>
+                  <td><button onClick={() => handleDeletePerformance(p.id)} className="btn btn-danger btn-sm">Sil</button></td>
                 </tr>
               ))}
             </tbody>
@@ -184,7 +181,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Personel Ekle Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -208,7 +204,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Performans Ekle Modal */}
       {showPerfModal && (
         <div className="modal-overlay" onClick={() => setShowPerfModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

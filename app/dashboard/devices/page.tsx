@@ -2,20 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import Toast from '@/components/Toast'
 
-// WhatsApp mesaj link'i oluştur
+// Inline Toast Component
+function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+    }`}>
+      <div className="flex items-center gap-2">
+        <span>{type === 'success' ? '✅' : '❌'}</span>
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
+      </div>
+    </div>
+  )
+}
+
 function getWhatsAppLink(phone: string, message: string): string {
-  // Telefon numarasını temizle: sadece rakamlar
   const cleanPhone = phone.replace(/\D/g, '')
-  // Başındaki 0'ı kaldır, 90 ekle (Türkiye)
-  const intlPhone = cleanPhone.startsWith('0') 
-    ? '9' + cleanPhone 
-    : cleanPhone.startsWith('90') 
-      ? cleanPhone 
-      : '90' + cleanPhone
-  const encodedMsg = encodeURIComponent(message)
-  return `https://wa.me/${intlPhone}?text=${encodedMsg}`
+  const intlPhone = cleanPhone.startsWith('0') ? '9' + cleanPhone : cleanPhone.startsWith('90') ? cleanPhone : '90' + cleanPhone
+  return `https://wa.me/${intlPhone}?text=${encodeURIComponent(message)}`
 }
 
 export default function DevicesPage() {
@@ -26,15 +37,7 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [form, setForm] = useState({ 
-    customer_id: '', 
-    device_name: '', 
-    imei: '', 
-    issue: '', 
-    price: '', 
-    status: 'Beklemede',
-    technician: ''
-  })
+  const [form, setForm] = useState({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -88,23 +91,18 @@ export default function DevicesPage() {
     loadData()
   }
 
-  // ===== WHATSAPP "CİHAZINIZ HAZIR" MESAJI =====
   const sendWhatsAppReady = (device: any) => {
     const phone = device.customers?.phone
     if (!phone) {
       setToast({ message: 'HATA: Müşteri telefon numarası bulunamadı!', type: 'error' })
       return
     }
-
     const message = `Merhaba ${device.customers?.name || 'Sayın Müşterimiz'},\n\n${device.device_name} cihazınızın tamir işlemi tamamlanmıştır. Cihazınızı servisimizden teslim alabilirsiniz.\n\nÜcret: ₺${(device.price || 0).toLocaleString('tr-TR')}\nSorun: ${device.issue}\n\nYeşiltaş Teknoloji`
-
-    const waLink = getWhatsAppLink(phone, message)
-    window.open(waLink, '_blank')
+    window.open(getWhatsAppLink(phone, message), '_blank')
   }
 
   const filtered = devices.filter(d => {
-    const matchesSearch = 
-      d.device_name?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = d.device_name?.toLowerCase().includes(search.toLowerCase()) ||
       d.customers?.name?.toLowerCase().includes(search.toLowerCase()) ||
       d.imei?.includes(search)
     const matchesStatus = statusFilter === 'Tümü' || d.status === statusFilter
@@ -117,7 +115,7 @@ export default function DevicesPage() {
 
   return (
     <div className="space-y-4">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Teknik Servis</h1>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">+ Yeni Cihaz</button>
@@ -133,17 +131,7 @@ export default function DevicesPage() {
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Tarih</th>
-              <th>Müşteri</th>
-              <th>Cihaz</th>
-              <th>IMEI</th>
-              <th>Sorun</th>
-              <th>Ücret</th>
-              <th>Teknisyen</th>
-              <th>Durum</th>
-              <th>İşlemler</th>
-            </tr>
+            <tr><th>Tarih</th><th>Müşteri</th><th>Cihaz</th><th>IMEI</th><th>Sorun</th><th>Ücret</th><th>Teknisyen</th><th>Durum</th><th>İşlemler</th></tr>
           </thead>
           <tbody>
             {filtered.map((d) => (
@@ -156,34 +144,14 @@ export default function DevicesPage() {
                 <td className="text-emerald-400">₺{(d.price || 0).toLocaleString('tr-TR')}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{d.technician || '-'}</td>
                 <td>
-                  <select 
-                    className="select text-xs py-1" 
-                    value={d.status} 
-                    onChange={(e) => updateStatus(d.id, e.target.value)}
-                  >
-                    <option>Beklemede</option>
-                    <option>İşlemde</option>
-                    <option>Tamamlandı</option>
-                    <option>Teslim Edildi</option>
-                    <option>İptal</option>
+                  <select className="select text-xs py-1" value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
+                    <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                   </select>
                 </td>
                 <td>
                   <div className="flex gap-1 flex-wrap">
-                    {/* WhatsApp Butonu - Sadece Tamamlandı durumunda */}
                     {d.status === 'Tamamlandı' && d.customers?.phone && (
-                      <button 
-                        onClick={() => sendWhatsAppReady(d)}
-                        className="btn btn-sm"
-                        style={{ 
-                          backgroundColor: '#25D366', 
-                          color: 'white',
-                          border: 'none',
-                          fontSize: '0.75rem',
-                          padding: '0.25rem 0.5rem'
-                        }}
-                        title="WhatsApp'tan 'Cihazınız hazır' mesajı gönder"
-                      >
+                      <button onClick={() => sendWhatsAppReady(d)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="WhatsApp'tan bildirim gönder">
                         📱 WhatsApp
                       </button>
                     )}
@@ -221,11 +189,7 @@ export default function DevicesPage() {
                 <div className="form-group">
                   <label>Durum</label>
                   <select className="select" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
-                    <option>Beklemede</option>
-                    <option>İşlemde</option>
-                    <option>Tamamlandı</option>
-                    <option>Teslim Edildi</option>
-                    <option>İptal</option>
+                    <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                   </select>
                 </div>
               </div>
