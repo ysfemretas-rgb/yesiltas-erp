@@ -22,6 +22,80 @@ function InlineToast({ message, type, onClose }: { message: string; type: 'succe
   )
 }
 
+// WhatsApp Borç Bildirim Modalı
+function WhatsAppModal({ customer, debtAmount, onClose }: { customer: any; debtAmount: number; onClose: () => void }) {
+  const [iban, setIban] = useState('')
+  const [accountName, setAccountName] = useState('')
+  const [note, setNote] = useState('')
+
+  const handleSend = () => {
+    if (!iban.trim() || !accountName.trim()) {
+      alert('IBAN ve Hesap Sahibi zorunludur!')
+      return
+    }
+    const message = `Merhaba ${customer.name},
+
+Yeşiltaş Teknoloji'ye ait borç bilgileriniz:
+
+💰 Borç Tutarı: ₺${debtAmount.toLocaleString('tr-TR')}
+🏦 IBAN: ${iban}
+👤 Hesap Sahibi: ${accountName}
+
+Lütfen borç tutarını yukarıdaki IBAN'a havale/EFT yaparak ödeyiniz.
+
+${note ? `📝 Not:\n${note}\n` : ''}
+Ödeme yaptıktan sonra dekontu paylaşabilirsiniz.
+
+Teşekkür ederiz,
+Yeşiltaş Teknoloji`
+
+    const phone = customer.phone?.replace(/\D/g, '')
+    if (!phone) {
+      alert('Müşterinin telefon numarası yok!')
+      return
+    }
+    const url = `https://wa.me/90${phone}?text=${encodeURIComponent(message)}`
+    window.open(url, '_blank')
+    onClose()
+  }
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 100 }} onClick={onClose}>
+      <div className="modal" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>📱 WhatsApp Borç Bildirim</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <div className="modal-body space-y-3">
+          <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Müşteri</div>
+            <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{customer.name}</div>
+          </div>
+          <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Borç Tutarı</div>
+            <div className="text-xl font-bold text-red-400">₺{debtAmount.toLocaleString('tr-TR')}</div>
+          </div>
+          <div className="form-group">
+            <label>IBAN *</label>
+            <input className="input" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="TR12 3456 7890 1234 5678 9012 34" autoComplete="off" />
+          </div>
+          <div className="form-group">
+            <label>Hesap Sahibi (İsim) *</label>
+            <input className="input" value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Ad Soyad" autoComplete="off" />
+          </div>
+          <div className="form-group">
+            <label>Not / Açıklama</label>
+            <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="İsteğe bağlı not..." autoComplete="off" />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">İptal</button>
+          <button onClick={handleSend} className="btn btn-primary" style={{ backgroundColor: '#25D366', borderColor: '#25D366' }}>📤 WhatsApp'tan Gönder</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([])
@@ -33,6 +107,7 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
   const [customerDetails, setCustomerDetails] = useState<any>(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
+  const [whatsappModal, setWhatsappModal] = useState<{customer: any, debt: number} | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -139,6 +214,26 @@ export default function CustomersPage() {
     c.name?.toLowerCase().includes(search.toLowerCase()) || c.phone?.includes(search)
   )
 
+  // WhatsApp için borç hesaplama
+  const getCustomerDebt = async (customerId: string) => {
+    const [debtsRes, paymentsRes] = await Promise.all([
+      supabase.from('debts').select('amount').eq('customer_id', customerId),
+      supabase.from('customer_payments').select('amount').eq('customer_id', customerId)
+    ])
+    const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.amount || 0), 0)
+    const totalPaid = (paymentsRes.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
+    return totalDebt - totalPaid
+  }
+
+  const openWhatsApp = async (customer: any) => {
+    const debt = await getCustomerDebt(customer.id)
+    if (debt <= 0) {
+      setToast({ message: 'Bu müşterinin borcu yok!', type: 'error' })
+      return
+    }
+    setWhatsappModal({ customer, debt })
+  }
+
   if (loading && customers.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
@@ -159,7 +254,10 @@ export default function CustomersPage() {
                 <td style={{ color: 'var(--text-secondary)' }}>{c.phone || '-'}</td>
                 <td style={{ color: 'var(--text-secondary)' }}>{c.email || '-'}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{c.address || '-'}</td>
-                <td><button onClick={() => handleDelete(c.id)} className="btn btn-danger btn-sm">Sil</button></td>
+                <td>
+                  <button onClick={() => openWhatsApp(c)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: '#fff', marginRight: '6px' }} title="WhatsApp Borç Bildirim">📱</button>
+                  <button onClick={() => handleDelete(c.id)} className="btn btn-danger btn-sm">Sil</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -248,6 +346,14 @@ export default function CustomersPage() {
             ) : null}
           </div>
         </div>
+      )}
+
+      {whatsappModal && (
+        <WhatsAppModal
+          customer={whatsappModal.customer}
+          debtAmount={whatsappModal.debt}
+          onClose={() => setWhatsappModal(null)}
+        />
       )}
     </div>
   )
