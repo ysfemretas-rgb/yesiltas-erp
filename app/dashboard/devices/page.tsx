@@ -35,8 +35,10 @@ export default function DevicesPage() {
   const [statusFilter, setStatusFilter] = useState('Tümü')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [form, setForm] = useState({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
+  const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -77,7 +79,32 @@ export default function DevicesPage() {
     }
   }
 
-  // ===== DURUM GÜNCELLEME - DETAYLI HATA YAKALAMA =====
+  const handleCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const { data, error } = await supabase.from('customers').insert([{
+        name: customerForm.name.trim(),
+        phone: customerForm.phone.trim() || null,
+        email: customerForm.email.trim() || null,
+        address: customerForm.address.trim() || null,
+        notes: customerForm.notes.trim() || null
+      }]).select()
+      if (error) {
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
+      } else {
+        setToast({ message: 'Müşteri eklendi! Şimdi cihaz kaydına devam edebilirsiniz.', type: 'success' })
+        setShowCustomerModal(false)
+        setCustomerForm({ name: '', phone: '', email: '', address: '', notes: '' })
+        if (data && data[0]) {
+          setForm(prev => ({ ...prev, customer_id: data[0].id }))
+        }
+        loadData()
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
+  }
+
   const updateStatus = async (id: string, newStatus: string) => {
     try {
       console.log('Durum güncelleniyor:', id, '->', newStatus)
@@ -89,7 +116,6 @@ export default function DevicesPage() {
 
       if (error) {
         console.error('Durum güncelleme hatası:', error)
-        // Constraint hatası ise özel mesaj
         if (error.message?.includes('check constraint') || error.code === '23514') {
           setToast({ 
             message: `HATA: '${newStatus}' durumu veritabanında izin verilmiyor. Lütfen Supabase SQL Editor'da constraint'i kaldırın: ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_status_check;`, 
@@ -199,6 +225,7 @@ export default function DevicesPage() {
       </div>
       {filtered.length === 0 && <div className="empty-state"><p>Cihaz bulunamadı</p></div>}
 
+      {/* Yeni Cihaz Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -210,10 +237,21 @@ export default function DevicesPage() {
               <div className="modal-body space-y-4">
                 <div className="form-group">
                   <label>Müşteri *</label>
-                  <select className="select" value={form.customer_id} onChange={(e) => setForm({...form, customer_id: e.target.value})} required>
-                    <option value="">Seçin</option>
-                    {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
-                  </select>
+                  <div className="flex gap-2">
+                    <select className="select flex-1" value={form.customer_id} onChange={(e) => setForm({...form, customer_id: e.target.value})} required>
+                      <option value="">Seçin</option>
+                      {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
+                    </select>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowCustomerModal(true)} 
+                      className="btn btn-primary" 
+                      style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}
+                      title="Yeni müşteri ekle"
+                    >
+                      + Yeni Müşteri
+                    </button>
+                  </div>
                 </div>
                 <div className="form-group"><label>Cihaz Adı *</label><input className="input" value={form.device_name} onChange={(e) => setForm({...form, device_name: e.target.value})} required /></div>
                 <div className="form-group"><label>IMEI</label><input className="input" value={form.imei} onChange={(e) => setForm({...form, imei: e.target.value})} /></div>
@@ -234,6 +272,31 @@ export default function DevicesPage() {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">İptal</button>
                 <button type="submit" className="btn btn-primary">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Yeni Müşteri Modal (Cihaz modalının içinden açılır) */}
+      {showCustomerModal && (
+        <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowCustomerModal(false)}>
+          <div className="modal" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Müşteri Ekle</h2>
+              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleCustomerSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group"><label>Ad *</label><input className="input" value={customerForm.name} onChange={(e) => setCustomerForm({...customerForm, name: e.target.value})} required autoComplete="off" /></div>
+                <div className="form-group"><label>Telefon</label><input className="input" value={customerForm.phone} onChange={(e) => setCustomerForm({...customerForm, phone: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={customerForm.email} onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={customerForm.address} onChange={(e) => setCustomerForm({...customerForm, address: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={customerForm.notes} onChange={(e) => setCustomerForm({...customerForm, notes: e.target.value})} autoComplete="off" /></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowCustomerModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Müşteriyi Kaydet</button>
               </div>
             </form>
           </div>
