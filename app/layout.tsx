@@ -1,3 +1,7 @@
+export const metadata = {
+  title: 'Yeşiltaş Teknoloji ERP',
+  manifest: '/manifest.json',
+}
 import type { Metadata } from 'next'
 import './globals.css'
 
