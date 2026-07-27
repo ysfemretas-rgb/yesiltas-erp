@@ -22,7 +22,6 @@ function InlineToast({ message, type, onClose }: { message: string; type: 'succe
   )
 }
 
-
 function getWhatsAppLink(phone: string, message: string): string {
   const cleanPhone = phone.replace(/\D/g, '')
   const intlPhone = cleanPhone.startsWith('0') ? '9' + cleanPhone : cleanPhone.startsWith('90') ? cleanPhone : '90' + cleanPhone
@@ -54,32 +53,59 @@ export default function DevicesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const { error } = await supabase.from('devices').insert([{
-      customer_id: form.customer_id,
-      device_name: form.device_name.trim(),
-      imei: form.imei.trim() || null,
-      issue: form.issue.trim(),
-      price: parseFloat(form.price) || 0,
-      status: form.status,
-      technician: form.technician.trim() || null
-    }])
-    if (error) {
-      setToast({ message: `Hata: ${error.message}`, type: 'error' })
-    } else {
-      setToast({ message: 'Cihaz kaydı eklendi!', type: 'success' })
-      setShowModal(false)
-      setForm({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
-      loadData()
+    try {
+      const { error } = await supabase.from('devices').insert([{
+        customer_id: form.customer_id,
+        device_name: form.device_name.trim(),
+        imei: form.imei.trim() || null,
+        issue: form.issue.trim(),
+        price: parseFloat(form.price) || 0,
+        status: form.status,
+        technician: form.technician.trim() || null
+      }])
+      if (error) {
+        console.error('Ekleme hatası:', error)
+        setToast({ message: `Hata: ${error.message} (Kod: ${error.code})`, type: 'error' })
+      } else {
+        setToast({ message: 'Cihaz kaydı eklendi!', type: 'success' })
+        setShowModal(false)
+        setForm({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
+        loadData()
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
     }
   }
 
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from('devices').update({ status }).eq('id', id)
-    if (error) {
-      setToast({ message: `Hata: ${error.message}`, type: 'error' })
-    } else {
-      setToast({ message: 'Durum güncellendi!', type: 'success' })
-      loadData()
+  // ===== DURUM GÜNCELLEME - DETAYLI HATA YAKALAMA =====
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      console.log('Durum güncelleniyor:', id, '->', newStatus)
+      const { data, error } = await supabase
+        .from('devices')
+        .update({ status: newStatus })
+        .eq('id', id)
+        .select()
+
+      if (error) {
+        console.error('Durum güncelleme hatası:', error)
+        // Constraint hatası ise özel mesaj
+        if (error.message?.includes('check constraint') || error.code === '23514') {
+          setToast({ 
+            message: `HATA: '${newStatus}' durumu veritabanında izin verilmiyor. Lütfen Supabase SQL Editor'da constraint'i kaldırın: ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_status_check;`, 
+            type: 'error' 
+          })
+        } else {
+          setToast({ message: `Hata: ${error.message} (Kod: ${error.code})`, type: 'error' })
+        }
+      } else {
+        console.log('Durum güncellendi:', data)
+        setToast({ message: 'Durum güncellendi!', type: 'success' })
+        loadData()
+      }
+    } catch (err: any) {
+      console.error('Beklenmedik hata:', err)
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
     }
   }
 
@@ -144,8 +170,16 @@ export default function DevicesPage() {
                 <td className="text-emerald-400">₺{(d.price || 0).toLocaleString('tr-TR')}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{d.technician || '-'}</td>
                 <td>
-                  <select className="select text-xs py-1" value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
-                    <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
+                  <select 
+                    className="select text-xs py-1" 
+                    value={d.status || 'Beklemede'} 
+                    onChange={(e) => updateStatus(d.id, e.target.value)}
+                  >
+                    <option>Beklemede</option>
+                    <option>İşlemde</option>
+                    <option>Tamamlandı</option>
+                    <option>Teslim Edildi</option>
+                    <option>İptal</option>
                   </select>
                 </td>
                 <td>
@@ -189,7 +223,11 @@ export default function DevicesPage() {
                 <div className="form-group">
                   <label>Durum</label>
                   <select className="select" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
-                    <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
+                    <option>Beklemede</option>
+                    <option>İşlemde</option>
+                    <option>Tamamlandı</option>
+                    <option>Teslim Edildi</option>
+                    <option>İptal</option>
                   </select>
                 </div>
               </div>
