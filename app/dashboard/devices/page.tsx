@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// Inline Toast Component
 function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 4000)
@@ -28,7 +27,6 @@ function getWhatsAppLink(phone: string, message: string): string {
   return `https://wa.me/${intlPhone}?text=${encodeURIComponent(message)}`
 }
 
-// Ödeme durumu badge'i
 function PaymentStatusBadge({ device }: { device: any }) {
   const finalCost = device.final_cost || 0
   const paidAmount = device.paid_amount || 0
@@ -38,10 +36,10 @@ function PaymentStatusBadge({ device }: { device: any }) {
     return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8' }}>Ücretsiz</span>
   }
   if (remaining <= 0) {
-    return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>✅ Peşin Ödendi</span>
+    return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>✅ Ödendi</span>
   }
   if (paidAmount > 0) {
-    return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#facc15' }}>💰 Kısmi: ₺{paidAmount.toLocaleString('tr-TR')}</span>
+    return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#facc15' }}>💰 Kısmi</span>
   }
   return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>❌ Ödenmedi</span>
 }
@@ -59,7 +57,7 @@ export default function DevicesPage() {
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [form, setForm] = useState({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
   const [editForm, setEditForm] = useState({ id: '', customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', paid_amount: '', status: 'Beklemede', technician: '' })
-  const [paymentForm, setPaymentForm] = useState({ device_id: '', paid_amount: '', payment_status: 'Ödenmedi' })
+  const [paymentForm, setPaymentForm] = useState({ device_id: '', paid_amount: '' })
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
 
   useEffect(() => { loadData() }, [])
@@ -87,11 +85,9 @@ export default function DevicesPage() {
         final_cost: parseFloat(form.final_cost) || 0,
         status: form.status,
         technician: form.technician.trim() || null,
-        paid_amount: 0,
-        payment_status: 'Ödenmedi'
+        paid_amount: 0
       }])
       if (error) {
-        console.error('Ekleme hatası:', error)
         setToast({ message: `Hata: ${error.message} (Kod: ${error.code})`, type: 'error' })
       } else {
         setToast({ message: 'Cihaz kaydı eklendi!', type: 'success' })
@@ -148,8 +144,7 @@ export default function DevicesPage() {
   const openPaymentModal = (d: any) => {
     setPaymentForm({
       device_id: d.id,
-      paid_amount: (d.paid_amount || 0).toString(),
-      payment_status: d.payment_status || 'Ödenmedi'
+      paid_amount: (d.paid_amount || 0).toString()
     })
     setShowPaymentModal(true)
   }
@@ -160,35 +155,36 @@ export default function DevicesPage() {
       const device = devices.find(d => d.id === paymentForm.device_id)
       const finalCost = device?.final_cost || 0
       const newPaid = parseFloat(paymentForm.paid_amount) || 0
-      
-      let newStatus = paymentForm.payment_status
-      if (newPaid >= finalCost && finalCost > 0) {
-        newStatus = 'Ödendi'
-      } else if (newPaid > 0 && newPaid < finalCost) {
-        newStatus = 'Kısmi Ödeme'
-      } else if (newPaid === 0) {
-        newStatus = 'Ödenmedi'
-      }
 
       const { error } = await supabase.from('devices').update({
-        paid_amount: newPaid,
-        payment_status: newStatus
+        paid_amount: newPaid
       }).eq('id', paymentForm.device_id)
 
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
       } else {
-        // Ayrıca debts tablosuna da borç kaydı ekleyelim
-        if (finalCost > 0 && newPaid < finalCost) {
-          await supabase.from('debts').insert([{
-            customer_id: device.customer_id,
-            source_type: 'Teknik Servis',
-            source_id: device.id,
-            total_amount: finalCost,
-            paid_amount: newPaid,
-            remaining_amount: finalCost - newPaid,
-            status: newStatus === 'Ödendi' ? 'Ödendi' : 'Beklemede'
-          }])
+        // debts tablosuna da kaydet
+        const remaining = finalCost - newPaid
+        if (finalCost > 0) {
+          const { data: existing } = await supabase.from('debts').select('id').eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
+          if (!existing || existing.length === 0) {
+            await supabase.from('debts').insert([{
+              customer_id: device.customer_id,
+              source_type: 'Teknik Servis',
+              source_id: device.id,
+              total_amount: finalCost,
+              paid_amount: newPaid,
+              remaining_amount: remaining > 0 ? remaining : 0,
+              status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
+            }])
+          } else {
+            await supabase.from('debts').update({
+              total_amount: finalCost,
+              paid_amount: newPaid,
+              remaining_amount: remaining > 0 ? remaining : 0,
+              status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
+            }).eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
+          }
         }
         setToast({ message: 'Ödeme bilgisi güncellendi!', type: 'success' })
         setShowPaymentModal(false)
@@ -216,7 +212,7 @@ export default function DevicesPage() {
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
       } else {
-        setToast({ message: 'Müşteri eklendi! Şimdi cihaz kaydına devam edebilirsiniz.', type: 'success' })
+        setToast({ message: 'Müşteri eklendi!', type: 'success' })
         setShowCustomerModal(false)
         setCustomerForm({ name: '', phone: '', email: '', address: '', notes: '' })
         if (data && data[0]) {
@@ -292,18 +288,7 @@ export default function DevicesPage() {
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Tarih</th>
-              <th>Müşteri</th>
-              <th>Cihaz</th>
-              <th>IMEI</th>
-              <th>Sorun</th>
-              <th>Ücret</th>
-              <th>Ödeme</th>
-              <th>Teknisyen</th>
-              <th>Durum</th>
-              <th>İşlemler</th>
-            </tr>
+            <tr><th>Tarih</th><th>Müşteri</th><th>Cihaz</th><th>IMEI</th><th>Sorun</th><th>Ücret</th><th>Ödeme</th><th>Teknisyen</th><th>Durum</th><th>İşlemler</th></tr>
           </thead>
           <tbody>
             {filtered.map((d) => {
@@ -319,19 +304,13 @@ export default function DevicesPage() {
                   <td>
                     <div className="flex flex-col gap-1">
                       <PaymentStatusBadge device={d} />
-                      {remaining > 0 && (
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Kalan: ₺{remaining.toLocaleString('tr-TR')}</span>
-                      )}
+                      {remaining > 0 && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Kalan: ₺{remaining.toLocaleString('tr-TR')}</span>}
                     </div>
                   </td>
                   <td style={{ color: 'var(--text-muted)' }}>{d.technician || '-'}</td>
                   <td>
                     <select className="select text-xs py-1" value={d.status || 'Beklemede'} onChange={(e) => updateStatus(d.id, e.target.value)}>
-                      <option>Beklemede</option>
-                      <option>İşlemde</option>
-                      <option>Tamamlandı</option>
-                      <option>Teslim Edildi</option>
-                      <option>İptal</option>
+                      <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                     </select>
                   </td>
                   <td>
@@ -381,11 +360,7 @@ export default function DevicesPage() {
                 <div className="form-group">
                   <label>Durum</label>
                   <select className="select" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
-                    <option>Beklemede</option>
-                    <option>İşlemde</option>
-                    <option>Tamamlandı</option>
-                    <option>Teslim Edildi</option>
-                    <option>İptal</option>
+                    <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                   </select>
                 </div>
               </div>
@@ -424,11 +399,7 @@ export default function DevicesPage() {
                 <div className="form-group">
                   <label>Durum</label>
                   <select className="select" value={editForm.status} onChange={(e) => setEditForm({...editForm, status: e.target.value})}>
-                    <option>Beklemede</option>
-                    <option>İşlemde</option>
-                    <option>Tamamlandı</option>
-                    <option>Teslim Edildi</option>
-                    <option>İptal</option>
+                    <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                   </select>
                 </div>
               </div>
@@ -475,14 +446,6 @@ export default function DevicesPage() {
                       <div className="form-group">
                         <label>Ödenen Tutar (TL) *</label>
                         <input className="input" type="number" step="0.01" value={paymentForm.paid_amount} onChange={(e) => setPaymentForm({...paymentForm, paid_amount: e.target.value})} required />
-                      </div>
-                      <div className="form-group">
-                        <label>Ödeme Durumu</label>
-                        <select className="select" value={paymentForm.payment_status} onChange={(e) => setPaymentForm({...paymentForm, payment_status: e.target.value})}>
-                          <option>Ödenmedi</option>
-                          <option>Kısmi Ödeme</option>
-                          <option>Ödendi</option>
-                        </select>
                       </div>
                     </>
                   )
