@@ -119,13 +119,10 @@ export default function CustomersPage() {
       setCustomers(data)
       const debts: Record<string, number> = {}
       await Promise.all(data.map(async (c: any) => {
-        const [debtsRes, paymentsRes] = await Promise.all([
-          supabase.from('debts').select('amount').eq('customer_id', c.id),
-          supabase.from('customer_payments').select('amount').eq('customer_id', c.id)
-        ])
-        const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.amount || 0), 0)
-        const totalPaid = (paymentsRes.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
-        debts[c.id] = totalDebt - totalPaid
+        const { data: debtsData } = await supabase.from('debts').select('remaining_amount').eq('customer_id', c.id)
+        // remaining_amount zaten hesaplanmış kalan borç, toplamı alıyoruz
+        const totalRemaining = (debtsData || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
+        debts[c.id] = totalRemaining
       }))
       setCustomerDebts(debts)
     }
@@ -196,10 +193,10 @@ export default function CustomersPage() {
         supabase.from('devices').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
         supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
       ])
-      const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.amount || 0), 0)
-      const totalPaid = (paymentsRes.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
+      const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.total_amount || 0), 0)
+      const totalPaid = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.paid_amount || 0), 0)
       const allTransactions = [
-        ...(debtsRes.data || []).map((d: any) => ({...d, type: 'Borç', typeColor: 'text-red-400'})),
+        ...(debtsRes.data || []).map((d: any) => ({...d, type: 'Borç', typeColor: 'text-red-400', amount: d.total_amount || 0})),
         ...(paymentsRes.data || []).map((p: any) => ({...p, type: 'Ödeme', typeColor: 'text-emerald-400'})),
         ...(devicesRes.data || []).map((d: any) => ({...d, type: 'Teknik Servis', typeColor: 'text-blue-400', amount: d.final_cost || 0})),
         ...(salesRes.data || []).map((s: any) => ({...s, type: 'Satış', typeColor: 'text-purple-400'}))
@@ -209,6 +206,7 @@ export default function CustomersPage() {
         totalDebt, totalPaid, remaining: totalDebt - totalPaid, transactions: allTransactions
       })
     } catch (err) {
+      console.error('Detay yükleme hatası:', err)
       setToast({ message: 'Detaylar yüklenirken hata oluştu', type: 'error' })
     } finally {
       setDetailsLoading(false)
