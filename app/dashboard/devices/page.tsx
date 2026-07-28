@@ -35,9 +35,11 @@ export default function DevicesPage() {
   const [statusFilter, setStatusFilter] = useState('Tümü')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [form, setForm] = useState({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
+  const [editForm, setEditForm] = useState({ id: '', customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
 
   useEffect(() => { loadData() }, [])
@@ -73,6 +75,46 @@ export default function DevicesPage() {
         setToast({ message: 'Cihaz kaydı eklendi!', type: 'success' })
         setShowModal(false)
         setForm({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
+        loadData()
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
+  }
+
+  const openEditModal = (d: any) => {
+    setEditForm({
+      id: d.id,
+      customer_id: d.customer_id,
+      brand: d.brand || '',
+      model: d.model || '',
+      imei: d.imei || '',
+      complaint: d.complaint || '',
+      final_cost: d.final_cost?.toString() || '',
+      status: d.status || 'Beklemede',
+      technician: d.technician || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const { error } = await supabase.from('devices').update({
+        customer_id: editForm.customer_id,
+        brand: editForm.brand.trim(),
+        model: editForm.model.trim(),
+        imei: editForm.imei.trim() || null,
+        complaint: editForm.complaint.trim(),
+        final_cost: parseFloat(editForm.final_cost) || 0,
+        status: editForm.status,
+        technician: editForm.technician.trim() || null
+      }).eq('id', editForm.id)
+      if (error) {
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
+      } else {
+        setToast({ message: 'Cihaz kaydı güncellendi!', type: 'success' })
+        setShowEditModal(false)
         loadData()
       }
     } catch (err: any) {
@@ -195,6 +237,7 @@ export default function DevicesPage() {
                 </td>
                 <td>
                   <div className="flex gap-1 flex-wrap">
+                    <button onClick={() => openEditModal(d)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️ Düzenle</button>
                     {d.status === 'Tamamlandı' && d.customers?.phone && (
                       <button onClick={() => sendWhatsAppReady(d)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>📱 WhatsApp</button>
                     )}
@@ -247,6 +290,48 @@ export default function DevicesPage() {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">İptal</button>
                 <button type="submit" className="btn btn-primary">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Cihaz Kaydını Düzenle</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label>Müşteri *</label>
+                  <select className="select" value={editForm.customer_id} onChange={(e) => setEditForm({...editForm, customer_id: e.target.value})} required>
+                    <option value="">Seçin</option>
+                    {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
+                  </select>
+                </div>
+                <div className="form-group"><label>Marka *</label><input className="input" value={editForm.brand} onChange={(e) => setEditForm({...editForm, brand: e.target.value})} required /></div>
+                <div className="form-group"><label>Model *</label><input className="input" value={editForm.model} onChange={(e) => setEditForm({...editForm, model: e.target.value})} required /></div>
+                <div className="form-group"><label>IMEI</label><input className="input" value={editForm.imei} onChange={(e) => setEditForm({...editForm, imei: e.target.value})} /></div>
+                <div className="form-group"><label>Şikayet *</label><textarea className="input" rows={2} value={editForm.complaint} onChange={(e) => setEditForm({...editForm, complaint: e.target.value})} required /></div>
+                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={editForm.final_cost} onChange={(e) => setEditForm({...editForm, final_cost: e.target.value})} /></div>
+                <div className="form-group"><label>Teknisyen</label><input className="input" value={editForm.technician} onChange={(e) => setEditForm({...editForm, technician: e.target.value})} /></div>
+                <div className="form-group">
+                  <label>Durum</label>
+                  <select className="select" value={editForm.status} onChange={(e) => setEditForm({...editForm, status: e.target.value})}>
+                    <option>Beklemede</option>
+                    <option>İşlemde</option>
+                    <option>Tamamlandı</option>
+                    <option>Teslim Edildi</option>
+                    <option>İptal</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Güncelle</button>
               </div>
             </form>
           </div>
