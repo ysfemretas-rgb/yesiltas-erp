@@ -120,7 +120,6 @@ export default function CustomersPage() {
       const debts: Record<string, number> = {}
       await Promise.all(data.map(async (c: any) => {
         const { data: debtsData } = await supabase.from('debts').select('remaining_amount').eq('customer_id', c.id)
-        // remaining_amount zaten hesaplanmış kalan borç, toplamı alıyoruz
         const totalRemaining = (debtsData || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
         debts[c.id] = totalRemaining
       }))
@@ -193,17 +192,69 @@ export default function CustomersPage() {
         supabase.from('devices').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
         supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
       ])
-      const totalDebt = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.total_amount || 0), 0)
-      const totalPaid = (debtsRes.data || []).reduce((s: number, d: any) => s + (d.paid_amount || 0), 0)
+
+      // Teknik servis kayıtlarını borç olarak debts tablosuna otomatik ekle (yoksa)
+      const deviceDebts = (devicesRes.data || []).filter((d: any) => (d.final_cost || 0) > (d.paid_amount || 0))
+      for (const device of deviceDebts) {
+        const remaining = (device.final_cost || 0) - (device.paid_amount || 0)
+        // Aynı source_id ile kayıt var mı kontrol et
+        const { data: existing } = await supabase.from('debts').select('id').eq('source_id', device.id).eq('source_type', 'Teknik Servis')
+        if (!existing || existing.length === 0) {
+          await supabase.from('debts').insert([{
+            customer_id: customer.id,
+            source_type: 'Teknik Servis',
+            source_id: device.id,
+            total_amount: device.final_cost || 0,
+            paid_amount: device.paid_amount || 0,
+            remaining_amount: remaining,
+            status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
+          }])
+        } else {
+          // Varsa güncelle
+          await supabase.from('debts').update({
+            total_amount: device.final_cost || 0,
+            paid_amount: device.paid_amount || 0,
+            remaining_amount: remaining,
+            status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
+          }).eq('source_id', device.id).eq('source_type', 'Teknik Servis')
+        }
+      }
+
+      // debts'i tekrar çek (güncellenmiş haliyle)
+      const { data: updatedDebts } = await supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
+
+      const totalDebt = (updatedDebts || []).reduce((s: number, d: any) => s + (d.total_amount || 0), 0)
+      const totalPaid = (updatedDebts || []).reduce((s: number, d: any) => s + (d.paid_amount || 0), 0)
+      const totalRemaining = (updatedDebts || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
+
       const allTransactions = [
-        ...(debtsRes.data || []).map((d: any) => ({...d, type: 'Borç', typeColor: 'text-red-400', amount: d.total_amount || 0})),
+        ...(updatedDebts || []).map((d: any) => ({
+          ...d, 
+          type: d.source_type === 'Teknik Servis' ? '🔧 Teknik Servis Borcu' : 'Borç', 
+          typeColor: d.source_type === 'Teknik Servis' ? 'text-orange-400' : 'text-red-400',
+          amount: d.remaining_amount || 0,
+          description: d.source_type === 'Teknik Servis' ? `Cihaz kaydı - Kalan borç` : (d.description || 'Borç kaydı')
+        })),
         ...(paymentsRes.data || []).map((p: any) => ({...p, type: 'Ödeme', typeColor: 'text-emerald-400'})),
-        ...(devicesRes.data || []).map((d: any) => ({...d, type: 'Teknik Servis', typeColor: 'text-blue-400', amount: d.final_cost || 0})),
+        ...(devicesRes.data || []).map((d: any) => ({
+          ...d, 
+          type: '🔧 Teknik Servis', 
+          typeColor: 'text-blue-400', 
+          amount: d.final_cost || 0,
+          description: `${d.brand} ${d.model} - ${d.complaint || 'Tamir'}`
+        })),
         ...(salesRes.data || []).map((s: any) => ({...s, type: 'Satış', typeColor: 'text-purple-400'}))
       ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
       setCustomerDetails({
-        debts: debtsRes.data || [], payments: paymentsRes.data || [], devices: devicesRes.data || [], sales: salesRes.data || [],
-        totalDebt, totalPaid, remaining: totalDebt - totalPaid, transactions: allTransactions
+        debts: updatedDebts || [], 
+        payments: paymentsRes.data || [], 
+        devices: devicesRes.data || [], 
+        sales: salesRes.data || [],
+        totalDebt, 
+        totalPaid, 
+        remaining: totalRemaining, 
+        transactions: allTransactions
       })
     } catch (err) {
       console.error('Detay yükleme hatası:', err)
@@ -334,17 +385,43 @@ export default function CustomersPage() {
                 <div className="table-container" style={{ overflow: 'visible' }}>
                   <table className="table" style={{ tableLayout: 'auto', width: '100%' }}>
                     <thead>
-                      <tr><th style={{ whiteSpace: 'nowrap' }}>Tarih</th><th style={{ whiteSpace: 'nowrap' }}>Saat</th><th style={{ whiteSpace: 'nowrap' }}>İşlem Türü</th><th style={{ whiteSpace: 'nowrap' }}>Detay</th><th style={{ whiteSpace: 'nowrap' }}>Tutar</th><th style={{ whiteSpace: 'nowrap' }}>Durum</th></tr>
+                      <tr>
+                        <th style={{ whiteSpace: 'nowrap' }}>Tarih</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Saat</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>İşlem Türü</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Detay</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Tutar</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Durum</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {customerDetails.transactions.map((t: any, i: number) => (
                         <tr key={i}>
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleTimeString('tr-TR')}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}><span className={`font-semibold ${t.typeColor}`}>{t.type}</span></td>
-                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>{t.description || t.complaint || t.brand || t.product_name || t.notes || '-'}</td>
-                          <td style={{ whiteSpace: 'nowrap' }} className={t.type === 'Ödeme' ? 'text-emerald-400' : t.type === 'Borç' ? 'text-red-400' : 'text-blue-400'}>₺{(t.amount || 0).toLocaleString('tr-TR')}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}><span className={`badge ${t.status === 'Tamamlandı' || t.status === 'Ödendi' ? 'badge-green' : t.status === 'Beklemede' ? 'badge-yellow' : 'badge-blue'}`}>{t.status || 'Tamamlandı'}</span></td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <span className={`font-semibold ${t.typeColor}`}>{t.type}</span>
+                          </td>
+                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>
+                            {t.description || t.complaint || t.brand || t.product_name || t.notes || '-'}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }} className={
+                            t.type === 'Ödeme' ? 'text-emerald-400' : 
+                            t.type === '🔧 Teknik Servis Borcu' ? 'text-orange-400' :
+                            t.type === 'Borç' ? 'text-red-400' : 
+                            'text-blue-400'
+                          }>
+                            ₺{(t.amount || 0).toLocaleString('tr-TR')}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <span className={`badge ${
+                              t.status === 'Tamamlandı' || t.status === 'Ödendi' ? 'badge-green' : 
+                              t.status === 'Beklemede' ? 'badge-yellow' : 
+                              'badge-blue'
+                            }`}>
+                              {t.status || 'Tamamlandı'}
+                            </span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
