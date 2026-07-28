@@ -37,7 +37,7 @@ export default function DevicesPage() {
   const [showModal, setShowModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [form, setForm] = useState({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
+  const [form, setForm] = useState({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
 
   useEffect(() => { loadData() }, [])
@@ -58,10 +58,11 @@ export default function DevicesPage() {
     try {
       const { error } = await supabase.from('devices').insert([{
         customer_id: form.customer_id,
-        device_name: form.device_name.trim(),
+        brand: form.brand.trim(),
+        model: form.model.trim(),
         imei: form.imei.trim() || null,
-        issue: form.issue.trim(),
-        price: parseFloat(form.price) || 0,
+        complaint: form.complaint.trim(),
+        final_cost: parseFloat(form.final_cost) || 0,
         status: form.status,
         technician: form.technician.trim() || null
       }])
@@ -71,7 +72,7 @@ export default function DevicesPage() {
       } else {
         setToast({ message: 'Cihaz kaydı eklendi!', type: 'success' })
         setShowModal(false)
-        setForm({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
+        setForm({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
         loadData()
       }
     } catch (err: any) {
@@ -81,10 +82,14 @@ export default function DevicesPage() {
 
   const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!customerForm.phone.trim()) {
+      setToast({ message: 'Telefon numarası zorunludur!', type: 'error' })
+      return
+    }
     try {
       const { data, error } = await supabase.from('customers').insert([{
         name: customerForm.name.trim(),
-        phone: customerForm.phone.trim() || null,
+        phone: customerForm.phone.trim(),
         email: customerForm.email.trim() || null,
         address: customerForm.address.trim() || null,
         notes: customerForm.notes.trim() || null
@@ -107,30 +112,14 @@ export default function DevicesPage() {
 
   const updateStatus = async (id: string, newStatus: string) => {
     try {
-      console.log('Durum güncelleniyor:', id, '->', newStatus)
-      const { data, error } = await supabase
-        .from('devices')
-        .update({ status: newStatus })
-        .eq('id', id)
-        .select()
-
+      const { data, error } = await supabase.from('devices').update({ status: newStatus }).eq('id', id).select()
       if (error) {
-        console.error('Durum güncelleme hatası:', error)
-        if (error.message?.includes('check constraint') || error.code === '23514') {
-          setToast({ 
-            message: `HATA: '${newStatus}' durumu veritabanında izin verilmiyor. Lütfen Supabase SQL Editor'da constraint'i kaldırın: ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_status_check;`, 
-            type: 'error' 
-          })
-        } else {
-          setToast({ message: `Hata: ${error.message} (Kod: ${error.code})`, type: 'error' })
-        }
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
       } else {
-        console.log('Durum güncellendi:', data)
         setToast({ message: 'Durum güncellendi!', type: 'success' })
         loadData()
       }
     } catch (err: any) {
-      console.error('Beklenmedik hata:', err)
       setToast({ message: `Hata: ${err.message}`, type: 'error' })
     }
   }
@@ -149,12 +138,12 @@ export default function DevicesPage() {
       setToast({ message: 'HATA: Müşteri telefon numarası bulunamadı!', type: 'error' })
       return
     }
-    const message = `Merhaba ${device.customers?.name || 'Sayın Müşterimiz'},\n\n${device.device_name} cihazınızın tamir işlemi tamamlanmıştır. Cihazınızı servisimizden teslim alabilirsiniz.\n\nÜcret: ₺${(device.price || 0).toLocaleString('tr-TR')}\nSorun: ${device.issue}\n\nYeşiltaş Teknoloji`
+    const message = `Merhaba ${device.customers?.name || 'Sayın Müşterimiz'},\n\n${device.brand} ${device.model} cihazınızın tamir işlemi tamamlanmıştır. Cihazınızı servisimizden teslim alabilirsiniz.\n\nÜcret: ₺${(device.final_cost || 0).toLocaleString('tr-TR')}\nSorun: ${device.complaint}\n\nYeşiltaş Teknoloji`
     window.open(getWhatsAppLink(phone, message), '_blank')
   }
 
   const filtered = devices.filter(d => {
-    const matchesSearch = d.device_name?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = (d.brand + ' ' + d.model)?.toLowerCase().includes(search.toLowerCase()) ||
       d.customers?.name?.toLowerCase().includes(search.toLowerCase()) ||
       d.imei?.includes(search)
     const matchesStatus = statusFilter === 'Tümü' || d.status === statusFilter
@@ -190,17 +179,13 @@ export default function DevicesPage() {
               <tr key={d.id}>
                 <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(d.created_at).toLocaleDateString('tr-TR')}</td>
                 <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{d.customers?.name || '-'}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{d.device_name}</td>
+                <td style={{ color: 'var(--text-secondary)' }}>{d.brand} {d.model}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{d.imei || '-'}</td>
-                <td style={{ color: 'var(--text-secondary)', maxWidth: '200px' }} className="truncate">{d.issue}</td>
-                <td className="text-emerald-400">₺{(d.price || 0).toLocaleString('tr-TR')}</td>
+                <td style={{ color: 'var(--text-secondary)', maxWidth: '200px' }} className="truncate">{d.complaint}</td>
+                <td className="text-emerald-400">₺{(d.final_cost || 0).toLocaleString('tr-TR')}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{d.technician || '-'}</td>
                 <td>
-                  <select 
-                    className="select text-xs py-1" 
-                    value={d.status || 'Beklemede'} 
-                    onChange={(e) => updateStatus(d.id, e.target.value)}
-                  >
+                  <select className="select text-xs py-1" value={d.status || 'Beklemede'} onChange={(e) => updateStatus(d.id, e.target.value)}>
                     <option>Beklemede</option>
                     <option>İşlemde</option>
                     <option>Tamamlandı</option>
@@ -211,9 +196,7 @@ export default function DevicesPage() {
                 <td>
                   <div className="flex gap-1 flex-wrap">
                     {d.status === 'Tamamlandı' && d.customers?.phone && (
-                      <button onClick={() => sendWhatsAppReady(d)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="WhatsApp'tan bildirim gönder">
-                        📱 WhatsApp
-                      </button>
+                      <button onClick={() => sendWhatsAppReady(d)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>📱 WhatsApp</button>
                     )}
                     <button onClick={() => handleDelete(d.id)} className="btn btn-danger btn-sm">Sil</button>
                   </div>
@@ -225,7 +208,6 @@ export default function DevicesPage() {
       </div>
       {filtered.length === 0 && <div className="empty-state"><p>Cihaz bulunamadı</p></div>}
 
-      {/* Yeni Cihaz Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -242,21 +224,14 @@ export default function DevicesPage() {
                       <option value="">Seçin</option>
                       {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
                     </select>
-                    <button 
-                      type="button" 
-                      onClick={() => setShowCustomerModal(true)} 
-                      className="btn btn-primary" 
-                      style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}
-                      title="Yeni müşteri ekle"
-                    >
-                      + Yeni Müşteri
-                    </button>
+                    <button type="button" onClick={() => setShowCustomerModal(true)} className="btn btn-primary" style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}>+ Yeni Müşteri</button>
                   </div>
                 </div>
-                <div className="form-group"><label>Cihaz Adı *</label><input className="input" value={form.device_name} onChange={(e) => setForm({...form, device_name: e.target.value})} required /></div>
+                <div className="form-group"><label>Marka *</label><input className="input" value={form.brand} onChange={(e) => setForm({...form, brand: e.target.value})} required /></div>
+                <div className="form-group"><label>Model *</label><input className="input" value={form.model} onChange={(e) => setForm({...form, model: e.target.value})} required /></div>
                 <div className="form-group"><label>IMEI</label><input className="input" value={form.imei} onChange={(e) => setForm({...form, imei: e.target.value})} /></div>
-                <div className="form-group"><label>Sorun *</label><textarea className="input" rows={2} value={form.issue} onChange={(e) => setForm({...form, issue: e.target.value})} required /></div>
-                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={form.price} onChange={(e) => setForm({...form, price: e.target.value})} /></div>
+                <div className="form-group"><label>Şikayet *</label><textarea className="input" rows={2} value={form.complaint} onChange={(e) => setForm({...form, complaint: e.target.value})} required /></div>
+                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={form.final_cost} onChange={(e) => setForm({...form, final_cost: e.target.value})} /></div>
                 <div className="form-group"><label>Teknisyen</label><input className="input" value={form.technician} onChange={(e) => setForm({...form, technician: e.target.value})} /></div>
                 <div className="form-group">
                   <label>Durum</label>
@@ -278,7 +253,6 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {/* Yeni Müşteri Modal (Cihaz modalının içinden açılır) */}
       {showCustomerModal && (
         <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowCustomerModal(false)}>
           <div className="modal" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
@@ -289,7 +263,7 @@ export default function DevicesPage() {
             <form onSubmit={handleCustomerSubmit}>
               <div className="modal-body space-y-4">
                 <div className="form-group"><label>Ad *</label><input className="input" value={customerForm.name} onChange={(e) => setCustomerForm({...customerForm, name: e.target.value})} required autoComplete="off" /></div>
-                <div className="form-group"><label>Telefon</label><input className="input" value={customerForm.phone} onChange={(e) => setCustomerForm({...customerForm, phone: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Telefon *</label><input className="input" value={customerForm.phone} onChange={(e) => setCustomerForm({...customerForm, phone: e.target.value})} required autoComplete="off" /></div>
                 <div className="form-group"><label>E-posta</label><input className="input" type="email" value={customerForm.email} onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})} autoComplete="off" /></div>
                 <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={customerForm.address} onChange={(e) => setCustomerForm({...customerForm, address: e.target.value})} autoComplete="off" /></div>
                 <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={customerForm.notes} onChange={(e) => setCustomerForm({...customerForm, notes: e.target.value})} autoComplete="off" /></div>

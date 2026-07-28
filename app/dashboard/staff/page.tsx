@@ -32,10 +32,10 @@ export default function StaffPage() {
   const [showPerfModal, setShowPerfModal] = useState(false)
   const [showBulkPerfModal, setShowBulkPerfModal] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', role: 'Teknisyen', salary: '' })
-  const [editForm, setEditForm] = useState({ id: '', name: '', phone: '', role: 'Teknisyen', salary: '' })
-  const [perfForm, setPerfForm] = useState({ staff_id: '', period: '', devices_repaired: '', total_revenue: '' })
-  const [bulkPerfForm, setBulkPerfForm] = useState({ period: '', devices_repaired: '', total_revenue: '' })
+  const [form, setForm] = useState({ name: '', phone: '', role: 'Teknisyen', email: '' })
+  const [editForm, setEditForm] = useState({ id: '', name: '', phone: '', role: 'Teknisyen', email: '' })
+  const [perfForm, setPerfForm] = useState({ staff_id: '', period_month: '', period_year: '', device_count: '', total_revenue: '' })
+  const [bulkPerfForm, setBulkPerfForm] = useState({ period_month: '', period_year: '', device_count: '', total_revenue: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -43,7 +43,7 @@ export default function StaffPage() {
     setLoading(true)
     const [{ data: staffData }, { data: perfData }] = await Promise.all([
       supabase.from('staff').select('*').order('name'),
-      supabase.from('staff_performance').select('*, staff:staff_id(name)').order('period', { ascending: false })
+      supabase.from('staff_performance').select('*, staff:staff_id(name)').order('created_at', { ascending: false })
     ])
     if (staffData) setStaff(staffData)
     if (perfData) setPerformance(perfData)
@@ -52,18 +52,23 @@ export default function StaffPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.phone.trim()) {
+      setToast({ message: 'Telefon numarası zorunludur!', type: 'error' })
+      return
+    }
     const { error } = await supabase.from('staff').insert([{
       name: form.name.trim(),
-      phone: form.phone.trim() || null,
+      phone: form.phone.trim(),
       role: form.role,
-      salary: parseFloat(form.salary) || 0
+      email: form.email.trim() || null,
+      is_active: true
     }])
     if (error) {
       setToast({ message: `Hata: ${error.message}`, type: 'error' })
     } else {
       setToast({ message: 'Personel eklendi!', type: 'success' })
       setShowModal(false)
-      setForm({ name: '', phone: '', role: 'Teknisyen', salary: '' })
+      setForm({ name: '', phone: '', role: 'Teknisyen', email: '' })
       loadData()
     }
   }
@@ -72,9 +77,9 @@ export default function StaffPage() {
     e.preventDefault()
     const { error } = await supabase.from('staff').update({
       name: editForm.name.trim(),
-      phone: editForm.phone.trim() || null,
+      phone: editForm.phone.trim(),
       role: editForm.role,
-      salary: parseFloat(editForm.salary) || 0
+      email: editForm.email.trim() || null
     }).eq('id', editForm.id)
     if (error) {
       setToast({ message: `Hata: ${error.message}`, type: 'error' })
@@ -86,16 +91,19 @@ export default function StaffPage() {
   }
 
   const openEditModal = (s: any) => {
-    setEditForm({ id: s.id, name: s.name, phone: s.phone || '', role: s.role, salary: s.salary?.toString() || '' })
+    setEditForm({ id: s.id, name: s.name, phone: s.phone || '', role: s.role, email: s.email || '' })
     setShowEditModal(true)
   }
 
   const handlePerfSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const staffMember = staff.find(s => s.id === perfForm.staff_id)
     const { error } = await supabase.from('staff_performance').insert([{
       staff_id: perfForm.staff_id,
-      period: perfForm.period,
-      devices_repaired: parseInt(perfForm.devices_repaired) || 0,
+      staff_name: staffMember?.name || '',
+      period_month: perfForm.period_month,
+      period_year: parseInt(perfForm.period_year) || new Date().getFullYear(),
+      device_count: parseInt(perfForm.device_count) || 0,
       total_revenue: parseFloat(perfForm.total_revenue) || 0
     }])
     if (error) {
@@ -103,12 +111,11 @@ export default function StaffPage() {
     } else {
       setToast({ message: 'Performans kaydı eklendi!', type: 'success' })
       setShowPerfModal(false)
-      setPerfForm({ staff_id: '', period: '', devices_repaired: '', total_revenue: '' })
+      setPerfForm({ staff_id: '', period_month: '', period_year: '', device_count: '', total_revenue: '' })
       loadData()
     }
   }
 
-  // Toplu performans ekleme
   const handleBulkPerfSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (staff.length === 0) {
@@ -117,8 +124,10 @@ export default function StaffPage() {
     }
     const records = staff.map(s => ({
       staff_id: s.id,
-      period: bulkPerfForm.period,
-      devices_repaired: parseInt(bulkPerfForm.devices_repaired) || 0,
+      staff_name: s.name,
+      period_month: bulkPerfForm.period_month,
+      period_year: parseInt(bulkPerfForm.period_year) || new Date().getFullYear(),
+      device_count: parseInt(bulkPerfForm.device_count) || 0,
       total_revenue: parseFloat(bulkPerfForm.total_revenue) || 0
     }))
     const { error } = await supabase.from('staff_performance').insert(records)
@@ -127,7 +136,7 @@ export default function StaffPage() {
     } else {
       setToast({ message: `${staff.length} personel için performans kaydı eklendi!`, type: 'success' })
       setShowBulkPerfModal(false)
-      setBulkPerfForm({ period: '', devices_repaired: '', total_revenue: '' })
+      setBulkPerfForm({ period_month: '', period_year: '', device_count: '', total_revenue: '' })
       loadData()
     }
   }
@@ -164,17 +173,17 @@ export default function StaffPage() {
     }
   }
 
-  // CSV Export (Excel açar)
   const exportCSV = () => {
     if (performance.length === 0) {
       setToast({ message: 'Export edilecek veri yok!', type: 'error' })
       return
     }
-    const headers = ['Personel', 'Dönem', 'Tamir Edilen Cihaz', 'Toplam Ciro (TL)']
+    const headers = ['Personel', 'Ay', 'Yıl', 'Tamir Edilen Cihaz', 'Toplam Ciro (TL)']
     const rows = performance.map(p => [
-      p.staff?.name || '-',
-      p.period,
-      p.devices_repaired,
+      p.staff?.name || p.staff_name || '-',
+      p.period_month,
+      p.period_year,
+      p.device_count,
       p.total_revenue || 0
     ])
     const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
@@ -186,7 +195,6 @@ export default function StaffPage() {
     setToast({ message: 'CSV dosyası indirildi!', type: 'success' })
   }
 
-  // PDF Export (Tarayıcı print ile)
   const exportPDF = () => {
     if (performance.length === 0) {
       setToast({ message: 'Export edilecek veri yok!', type: 'error' })
@@ -215,7 +223,8 @@ export default function StaffPage() {
             <thead>
               <tr>
                 <th>Personel</th>
-                <th>Dönem</th>
+                <th>Ay</th>
+                <th>Yıl</th>
                 <th>Tamir Edilen Cihaz</th>
                 <th>Toplam Ciro (TL)</th>
               </tr>
@@ -223,9 +232,10 @@ export default function StaffPage() {
             <tbody>
               ${performance.map(p => `
                 <tr>
-                  <td>${p.staff?.name || '-'}</td>
-                  <td>${p.period}</td>
-                  <td>${p.devices_repaired}</td>
+                  <td>${p.staff?.name || p.staff_name || '-'}</td>
+                  <td>${p.period_month}</td>
+                  <td>${p.period_year}</td>
+                  <td>${p.device_count}</td>
                   <td>₺${(p.total_revenue || 0).toLocaleString('tr-TR')}</td>
                 </tr>
               `).join('')}
@@ -277,14 +287,22 @@ export default function StaffPage() {
       {activeTab === 'list' ? (
         <div className="table-container">
           <table className="table">
-            <thead><tr><th>Ad</th><th>Rol</th><th>Telefon</th><th>Maaş</th><th>İşlemler</th></tr></thead>
+            <thead><tr><th>Ad</th><th>Rol</th><th>Telefon</th><th>E-posta</th><th>Durum</th><th>İşlemler</th></tr></thead>
             <tbody>
               {staff.map((s) => (
                 <tr key={s.id}>
                   <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{s.name}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{s.role}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{s.phone || '-'}</td>
-                  <td className="text-emerald-400">₺{(s.salary || 0).toLocaleString('tr-TR')}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{s.email || '-'}</td>
+                  <td>
+                    <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ 
+                      backgroundColor: s.is_active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      color: s.is_active ? '#4ade80' : '#f87171'
+                    }}>
+                      {s.is_active ? '🟢 Aktif' : '🔴 Pasif'}
+                    </span>
+                  </td>
                   <td>
                     <button onClick={() => openEditModal(s)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', marginRight: '6px' }}>✏️ Düzenle</button>
                     <button onClick={() => handleDeleteStaff(s.id)} className="btn btn-danger btn-sm">Sil</button>
@@ -298,13 +316,14 @@ export default function StaffPage() {
       ) : (
         <div className="table-container">
           <table className="table">
-            <thead><tr><th>Personel</th><th>Dönem</th><th>Tamir Edilen</th><th>Toplam Ciro</th><th>İşlemler</th></tr></thead>
+            <thead><tr><th>Personel</th><th>Ay</th><th>Yıl</th><th>Tamir Edilen</th><th>Toplam Ciro</th><th>İşlemler</th></tr></thead>
             <tbody>
               {performance.map((p) => (
                 <tr key={p.id}>
-                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.staff?.name || '-'}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{p.period}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{p.devices_repaired} cihaz</td>
+                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.staff?.name || p.staff_name || '-'}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{p.period_month}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{p.period_year}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{p.device_count} cihaz</td>
                   <td className="text-emerald-400">₺{(p.total_revenue || 0).toLocaleString('tr-TR')} TL</td>
                   <td><button onClick={() => handleDeletePerformance(p.id)} className="btn btn-danger btn-sm">Sil</button></td>
                 </tr>
@@ -315,7 +334,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Yeni Personel Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -326,9 +344,9 @@ export default function StaffPage() {
             <form onSubmit={handleSubmit}>
               <div className="modal-body space-y-4">
                 <div className="form-group"><label>Ad *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required /></div>
-                <div className="form-group"><label>Telefon</label><input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} /></div>
+                <div className="form-group"><label>Telefon *</label><input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} required /></div>
+                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} /></div>
                 <div className="form-group"><label>Rol</label><select className="select" value={form.role} onChange={(e) => setForm({...form, role: e.target.value})}><option>Teknisyen</option><option>Satış</option><option>Yönetici</option></select></div>
-                <div className="form-group"><label>Maaş (TL)</label><input className="input" type="number" value={form.salary} onChange={(e) => setForm({...form, salary: e.target.value})} /></div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">İptal</button>
@@ -339,7 +357,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Personel Düzenle Modal */}
       {showEditModal && (
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -350,9 +367,9 @@ export default function StaffPage() {
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body space-y-4">
                 <div className="form-group"><label>Ad *</label><input className="input" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} required /></div>
-                <div className="form-group"><label>Telefon</label><input className="input" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} /></div>
+                <div className="form-group"><label>Telefon *</label><input className="input" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} required /></div>
+                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} /></div>
                 <div className="form-group"><label>Rol</label><select className="select" value={editForm.role} onChange={(e) => setEditForm({...editForm, role: e.target.value})}><option>Teknisyen</option><option>Satış</option><option>Yönetici</option></select></div>
-                <div className="form-group"><label>Maaş (TL)</label><input className="input" type="number" value={editForm.salary} onChange={(e) => setEditForm({...editForm, salary: e.target.value})} /></div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
@@ -363,7 +380,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Tekil Performans Ekle Modal */}
       {showPerfModal && (
         <div className="modal-overlay" onClick={() => setShowPerfModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -380,8 +396,9 @@ export default function StaffPage() {
                     {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
-                <div className="form-group"><label>Dönem (AA/YYYY) *</label><input className="input" value={perfForm.period} onChange={(e) => setPerfForm({...perfForm, period: e.target.value})} placeholder="07/2026" required /></div>
-                <div className="form-group"><label>Tamir Edilen Cihaz</label><input className="input" type="number" value={perfForm.devices_repaired} onChange={(e) => setPerfForm({...perfForm, devices_repaired: e.target.value})} /></div>
+                <div className="form-group"><label>Ay *</label><input className="input" value={perfForm.period_month} onChange={(e) => setPerfForm({...perfForm, period_month: e.target.value})} placeholder="Temmuz" required /></div>
+                <div className="form-group"><label>Yıl *</label><input className="input" type="number" value={perfForm.period_year} onChange={(e) => setPerfForm({...perfForm, period_year: e.target.value})} placeholder="2026" required /></div>
+                <div className="form-group"><label>Tamir Edilen Cihaz</label><input className="input" type="number" value={perfForm.device_count} onChange={(e) => setPerfForm({...perfForm, device_count: e.target.value})} /></div>
                 <div className="form-group"><label>Toplam Ciro (TL)</label><input className="input" type="number" step="0.01" value={perfForm.total_revenue} onChange={(e) => setPerfForm({...perfForm, total_revenue: e.target.value})} /></div>
               </div>
               <div className="modal-footer">
@@ -393,7 +410,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Toplu Performans Ekle Modal */}
       {showBulkPerfModal && (
         <div className="modal-overlay" onClick={() => setShowBulkPerfModal(false)}>
           <div className="modal" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
@@ -407,10 +423,11 @@ export default function StaffPage() {
                   <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Eklenecek Personel Sayısı</div>
                   <div className="text-xl font-bold text-emerald-400">{staff.length} kişi</div>
                 </div>
-                <div className="form-group"><label>Dönem (AA/YYYY) *</label><input className="input" value={bulkPerfForm.period} onChange={(e) => setBulkPerfForm({...bulkPerfForm, period: e.target.value})} placeholder="07/2026" required /></div>
-                <div className="form-group"><label>Tamir Edilen Cihaz (Herkes için aynı)</label><input className="input" type="number" value={bulkPerfForm.devices_repaired} onChange={(e) => setBulkPerfForm({...bulkPerfForm, devices_repaired: e.target.value})} /></div>
+                <div className="form-group"><label>Ay *</label><input className="input" value={bulkPerfForm.period_month} onChange={(e) => setBulkPerfForm({...bulkPerfForm, period_month: e.target.value})} placeholder="Temmuz" required /></div>
+                <div className="form-group"><label>Yıl *</label><input className="input" type="number" value={bulkPerfForm.period_year} onChange={(e) => setBulkPerfForm({...bulkPerfForm, period_year: e.target.value})} placeholder="2026" required /></div>
+                <div className="form-group"><label>Tamir Edilen Cihaz (Herkes için aynı)</label><input className="input" type="number" value={bulkPerfForm.device_count} onChange={(e) => setBulkPerfForm({...bulkPerfForm, device_count: e.target.value})} /></div>
                 <div className="form-group"><label>Toplam Ciro - TL (Herkes için aynı)</label><input className="input" type="number" step="0.01" value={bulkPerfForm.total_revenue} onChange={(e) => setBulkPerfForm({...bulkPerfForm, total_revenue: e.target.value})} /></div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Bu işlem tüm personel için aynı dönem ve değerlerle performans kaydı oluşturur.</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Bu işlem tüm personel için aynı ay/yıl ve değerlerle performans kaydı oluşturur.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowBulkPerfModal(false)} className="btn btn-secondary">İptal</button>

@@ -117,7 +117,6 @@ export default function CustomersPage() {
     const { data } = await supabase.from('customers').select('*').order('name')
     if (data) {
       setCustomers(data)
-      // Her müşterinin borcunu hesapla
       const debts: Record<string, number> = {}
       await Promise.all(data.map(async (c: any) => {
         const [debtsRes, paymentsRes] = await Promise.all([
@@ -135,26 +134,21 @@ export default function CustomersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.phone.trim()) {
+      setToast({ message: 'Telefon numarası zorunludur!', type: 'error' })
+      return
+    }
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session) {
-        setToast({ message: 'HATA: Oturum bulunamadı! Lütfen tekrar giriş yapın.', type: 'error' })
-        return
-      }
-      const insertData = {
+      const { data, error } = await supabase.from('customers').insert([{
         name: form.name.trim(),
-        phone: form.phone.trim() || null,
+        phone: form.phone.trim(),
         email: form.email.trim() || null,
         address: form.address.trim() || null,
         notes: form.notes.trim() || null
-      }
-      console.log('Gönderilen veri:', insertData)
-      const { data, error } = await supabase.from('customers').insert([insertData]).select()
+      }]).select()
       if (error) {
-        console.error('Supabase hatası:', error)
         setToast({ message: `HATA: ${error.message} (Kod: ${error.code})`, type: 'error' })
       } else {
-        console.log('Başarıyla eklendi:', data)
         setToast({ message: 'Müşteri eklendi!', type: 'success' })
         setShowModal(false)
         setForm({ name: '', phone: '', email: '', address: '', notes: '' })
@@ -162,7 +156,6 @@ export default function CustomersPage() {
         loadData()
       }
     } catch (err: any) {
-      console.error('Beklenmedik hata:', err)
       setToast({ message: `HATA: ${err.message || 'Bilinmeyen hata'}`, type: 'error' })
     }
   }
@@ -180,7 +173,6 @@ export default function CustomersPage() {
       await supabase.from('appointments').delete().eq('customer_id', id)
       const { error: custError } = await supabase.from('customers').delete().eq('id', id)
       if (custError) {
-        console.error('Müşteri silme hatası:', custError)
         setToast({ message: `HATA: ${custError.message} (Kod: ${custError.code})`, type: 'error' })
       } else {
         setToast({ message: 'Müşteri ve tüm bağlı kayıtlar silindi!', type: 'success' })
@@ -188,7 +180,6 @@ export default function CustomersPage() {
         if (selectedCustomer?.id === id) { setSelectedCustomer(null); setCustomerDetails(null) }
       }
     } catch (err: any) {
-      console.error('Silme hatası:', err)
       setToast({ message: `HATA: ${err.message || 'Silme işlemi başarısız'}`, type: 'error' })
     } finally {
       setLoading(false)
@@ -210,7 +201,7 @@ export default function CustomersPage() {
       const allTransactions = [
         ...(debtsRes.data || []).map((d: any) => ({...d, type: 'Borç', typeColor: 'text-red-400'})),
         ...(paymentsRes.data || []).map((p: any) => ({...p, type: 'Ödeme', typeColor: 'text-emerald-400'})),
-        ...(devicesRes.data || []).map((d: any) => ({...d, type: 'Teknik Servis', typeColor: 'text-blue-400', amount: d.price || 0})),
+        ...(devicesRes.data || []).map((d: any) => ({...d, type: 'Teknik Servis', typeColor: 'text-blue-400', amount: d.final_cost || 0})),
         ...(salesRes.data || []).map((s: any) => ({...s, type: 'Satış', typeColor: 'text-purple-400'}))
       ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       setCustomerDetails({
@@ -218,7 +209,6 @@ export default function CustomersPage() {
         totalDebt, totalPaid, remaining: totalDebt - totalPaid, transactions: allTransactions
       })
     } catch (err) {
-      console.error('Detay yükleme hatası:', err)
       setToast({ message: 'Detaylar yüklenirken hata oluştu', type: 'error' })
     } finally {
       setDetailsLoading(false)
@@ -295,11 +285,11 @@ export default function CustomersPage() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body space-y-4">
-                <div className="form-group"><label>Ad *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" name="musteri-ad" /></div>
-                <div className="form-group"><label>Telefon</label><input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" name="musteri-tel" /></div>
-                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" name="musteri-mail" /></div>
-                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={form.address} onChange={(e) => setForm({...form, address: e.target.value})} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" name="musteri-adres" /></div>
-                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" name="musteri-not" /></div>
+                <div className="form-group"><label>Ad *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required autoComplete="off" /></div>
+                <div className="form-group"><label>Telefon *</label><input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} required autoComplete="off" /></div>
+                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={form.address} onChange={(e) => setForm({...form, address: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} autoComplete="off" /></div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">İptal</button>
@@ -354,7 +344,7 @@ export default function CustomersPage() {
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleTimeString('tr-TR')}</td>
                           <td style={{ whiteSpace: 'nowrap' }}><span className={`font-semibold ${t.typeColor}`}>{t.type}</span></td>
-                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>{t.description || t.issue || t.device_name || t.product_name || t.notes || '-'}</td>
+                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>{t.description || t.complaint || t.brand || t.product_name || t.notes || '-'}</td>
                           <td style={{ whiteSpace: 'nowrap' }} className={t.type === 'Ödeme' ? 'text-emerald-400' : t.type === 'Borç' ? 'text-red-400' : 'text-blue-400'}>₺{(t.amount || 0).toLocaleString('tr-TR')}</td>
                           <td style={{ whiteSpace: 'nowrap' }}><span className={`badge ${t.status === 'Tamamlandı' || t.status === 'Ödendi' ? 'badge-green' : t.status === 'Beklemede' ? 'badge-yellow' : 'badge-blue'}`}>{t.status || 'Tamamlandı'}</span></td>
                         </tr>
