@@ -24,7 +24,7 @@ function InlineToast({ message, type, onClose }: { message: string; type: 'succe
 
 interface Sale {
   id: string
-  müşteri_id: string
+  müşteri_kimliği: string
   ürün_adi: string
   ürün_türü: string
   miktar: number
@@ -33,9 +33,9 @@ interface Sale {
   ödeme_yöntemi: string
   taksitler: number
   kalan_miktar: number
-  garanti_aylari: number
-  garanti_bitis_tarihi: string
-  olusturma_tarihi: string
+  garanti_aylar: number
+  garanti_bitiş: string
+  oluşturma_tarihi: string
 }
 
 interface Customer {
@@ -55,14 +55,14 @@ export default function SoldDevicesPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [editForm, setEditForm] = useState({
     id: '',
-    müşteri_id: '',
+    müşteri_kimliği: '',
     ürün_adi: '',
     birim_fiyati: '',
     miktar: '1',
     ödeme_yöntemi: 'Nakit',
     taksitler: '1',
     kalan_miktar: '',
-    garanti_aylari: '12'
+    garanti_aylar: '12'
   })
   const [paymentForm, setPaymentForm] = useState({
     sale_id: '',
@@ -83,7 +83,7 @@ export default function SoldDevicesPage() {
   const loadData = async () => {
     setLoading(true)
     const [salesRes, customersRes] = await Promise.all([
-      supabase.from('sales').select('*').eq('ürün_türü', 'Cihaz').order('olusturma_tarihi', { ascending: false }),
+      supabase.from('sales').select('*').eq('ürün_türü', 'Cihaz').order('oluşturma_tarihi', { ascending: false }),
       supabase.from('customers').select('id, name, phone')
     ])
     if (salesRes.data) setSales(salesRes.data)
@@ -94,14 +94,14 @@ export default function SoldDevicesPage() {
   const openEditModal = (sale: Sale) => {
     setEditForm({
       id: sale.id,
-      müşteri_id: sale.müşteri_id,
+      müşteri_kimliği: sale.müşteri_kimliği,
       ürün_adi: sale.ürün_adi,
       birim_fiyati: sale.birim_fiyati?.toString() || '',
       miktar: sale.miktar?.toString() || '1',
       ödeme_yöntemi: sale.ödeme_yöntemi || 'Nakit',
       taksitler: sale.taksitler?.toString() || '1',
       kalan_miktar: sale.kalan_miktar?.toString() || '',
-      garanti_aylari: sale.garanti_aylari?.toString() || '12'
+      garanti_aylar: sale.garanti_aylar?.toString() || '12'
     })
     setShowEditModal(true)
   }
@@ -111,7 +111,7 @@ export default function SoldDevicesPage() {
     try {
       const total = parseFloat(editForm.birim_fiyati) * parseInt(editForm.miktar)
       const { error } = await supabase.from('sales').update({
-        müşteri_id: editForm.müşteri_id,
+        müşteri_kimliği: editForm.müşteri_kimliği,
         ürün_adi: editForm.ürün_adi.trim(),
         birim_fiyati: parseFloat(editForm.birim_fiyati) || 0,
         miktar: parseInt(editForm.miktar) || 1,
@@ -119,7 +119,7 @@ export default function SoldDevicesPage() {
         ödeme_yöntemi: editForm.ödeme_yöntemi,
         taksitler: parseInt(editForm.taksitler) || 1,
         kalan_miktar: parseFloat(editForm.kalan_miktar) || 0,
-        garanti_aylari: parseInt(editForm.garanti_aylari) || 12
+        garanti_aylar: parseInt(editForm.garanti_aylar) || 12
       }).eq('id', editForm.id)
 
       if (error) {
@@ -160,7 +160,7 @@ export default function SoldDevicesPage() {
       } else {
         // Ödeme kaydı ekle
         await supabase.from('customer_payments').insert([{
-          customer_id: sale.müşteri_id,
+          customer_id: sale.müşteri_kimliği,
           amount: paymentAmount,
           payment_method: sale.ödeme_yöntemi,
           notes: `Taksit ödemesi - ${sale.ürün_adi}`
@@ -234,7 +234,7 @@ export default function SoldDevicesPage() {
     <div className="space-y-4">
       {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Satilan Cihazlar</h1>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Satılan Cihazlar</h1>
       </div>
 
       <input type="text" className="input" placeholder="Cihaz ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -244,21 +244,21 @@ export default function SoldDevicesPage() {
           <thead>
             <tr>
               <th>Cihaz</th>
-              <th>Musteri</th>
+              <th>Müşteri</th>
               <th>Tutar</th>
-              <th>Odeme</th>
+              <th>Ödeme</th>
               <th>Taksit</th>
               <th>Garanti</th>
-              <th>Kalan Sure</th>
-              <th>Satis Tarihi</th>
-              <th>Islemler</th>
+              <th>Kalan Süre</th>
+              <th>Satış Tarihi</th>
+              <th>İşlemler</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((sale) => {
-              const customer = customers.find(c => c.id === sale.müşteri_id)
-              const active = isWarrantyActive(sale.garanti_bitis_tarihi)
-              const daysLeft = daysUntilExpiry(sale.garanti_bitis_tarihi)
+              const customer = customers.find(c => c.id === sale.müşteri_kimliği)
+              const active = isWarrantyActive(sale.garanti_bitiş)
+              const daysLeft = daysUntilExpiry(sale.garanti_bitiş)
               const monthlyInstallment = sale.ödeme_yöntemi === 'Taksit' ? (sale.toplam_fiyat || 0) / (sale.taksitler || 1) : 0
               return (
                 <tr key={sale.id}>
@@ -278,9 +278,9 @@ export default function SoldDevicesPage() {
                   </td>
                   <td><span className={`badge ${active ? 'badge-green' : 'badge-red'}`}>{active ? 'Aktif' : 'Sona Erdi'}</span></td>
                   <td className={daysLeft < 30 ? 'text-red-400' : ''} style={{ color: daysLeft >= 30 ? 'var(--text-secondary)' : undefined }}>
-                    {active ? `${daysLeft} gun` : 'Sona erdi'}
+                    {active ? `${daysLeft} gün` : 'Sona erdi'}
                   </td>
-                  <td className="text-sm" style={{ color: 'var(--text-muted)' }}>{new Date(sale.olusturma_tarihi).toLocaleDateString('tr-TR')}</td>
+                  <td className="text-sm" style={{ color: 'var(--text-muted)' }}>{new Date(sale.oluşturma_tarihi).toLocaleDateString('tr-TR')}</td>
                   <td>
                     <div className="flex gap-1 flex-wrap">
                       <button onClick={() => openEditModal(sale)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️</button>
@@ -299,7 +299,7 @@ export default function SoldDevicesPage() {
 
       {filtered.length === 0 && (
         <div className="empty-state">
-          <p>Henuz satilan cihaz kaydi yok</p>
+          <p>Henüz satılan cihaz kaydı yok</p>
         </div>
       )}
 
@@ -314,37 +314,37 @@ export default function SoldDevicesPage() {
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body space-y-4">
                 <div className="form-group">
-                  <label>Musteri *</label>
-                  <select className="select" value={editForm.müşteri_id} onChange={(e) => setEditForm({...editForm, müşteri_id: e.target.value})} required>
-                    <option value="">Secin</option>
+                  <label>Müşteri *</label>
+                  <select className="select" value={editForm.müşteri_kimliği} onChange={(e) => setEditForm({...editForm, müşteri_kimliği: e.target.value})} required>
+                    <option value="">Seçin</option>
                     {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
                   </select>
                 </div>
-                <div className="form-group"><label>Urun Adi *</label><input className="input" value={editForm.ürün_adi} onChange={(e) => setEditForm({...editForm, ürün_adi: e.target.value})} required /></div>
+                <div className="form-group"><label>Ürün Adı *</label><input className="input" value={editForm.ürün_adi} onChange={(e) => setEditForm({...editForm, ürün_adi: e.target.value})} required /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="form-group"><label>Birim Fiyati (TL)</label><input className="input" type="number" step="0.01" value={editForm.birim_fiyati} onChange={(e) => setEditForm({...editForm, birim_fiyati: e.target.value})} /></div>
+                  <div className="form-group"><label>Birim Fiyatı (TL)</label><input className="input" type="number" step="0.01" value={editForm.birim_fiyati} onChange={(e) => setEditForm({...editForm, birim_fiyati: e.target.value})} /></div>
                   <div className="form-group"><label>Miktar</label><input className="input" type="number" value={editForm.miktar} onChange={(e) => setEditForm({...editForm, miktar: e.target.value})} /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="form-group">
-                    <label>Odeme Yontemi</label>
+                    <label>Ödeme Yöntemi</label>
                     <select className="select" value={editForm.ödeme_yöntemi} onChange={(e) => setEditForm({...editForm, ödeme_yöntemi: e.target.value})}>
                       <option>Nakit</option>
-                      <option>Kredi Karti</option>
+                      <option>Kredi Kartı</option>
                       <option>Taksit</option>
                       <option>Havale</option>
                     </select>
                   </div>
-                  <div className="form-group"><label>Taksit Sayisi</label><input className="input" type="number" value={editForm.taksitler} onChange={(e) => setEditForm({...editForm, taksitler: e.target.value})} /></div>
+                  <div className="form-group"><label>Taksit Sayısı</label><input className="input" type="number" value={editForm.taksitler} onChange={(e) => setEditForm({...editForm, taksitler: e.target.value})} /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="form-group"><label>Kalan Miktar (TL)</label><input className="input" type="number" step="0.01" value={editForm.kalan_miktar} onChange={(e) => setEditForm({...editForm, kalan_miktar: e.target.value})} /></div>
-                  <div className="form-group"><label>Garanti (Ay)</label><input className="input" type="number" value={editForm.garanti_aylari} onChange={(e) => setEditForm({...editForm, garanti_aylari: e.target.value})} /></div>
+                  <div className="form-group"><label>Garanti (Ay)</label><input className="input" type="number" value={editForm.garanti_aylar} onChange={(e) => setEditForm({...editForm, garanti_aylar: e.target.value})} /></div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">Guncelle</button>
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Güncelle</button>
               </div>
             </form>
           </div>
@@ -356,7 +356,7 @@ export default function SoldDevicesPage() {
         <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowPaymentModal(false)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>💳 Taksit Odeme</h2>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>💳 Taksit Ödeme</h2>
               <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
             <form onSubmit={handlePaymentSubmit}>
@@ -379,7 +379,7 @@ export default function SoldDevicesPage() {
                           <div className="font-bold text-emerald-400">₺{total.toLocaleString('tr-TR')}</div>
                         </div>
                         <div className="p-2 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Odenen</div>
+                          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Ödenen</div>
                           <div className="font-bold text-blue-400">₺{paid.toLocaleString('tr-TR')}</div>
                         </div>
                         <div className="p-2 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -388,11 +388,11 @@ export default function SoldDevicesPage() {
                         </div>
                       </div>
                       <div className="p-2 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Aylik Taksit</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Aylık Taksit</div>
                         <div className="font-bold text-yellow-400">₺{monthly.toLocaleString('tr-TR')}</div>
                       </div>
                       <div className="form-group">
-                        <label>Odeme Tutari (TL) *</label>
+                        <label>Ödeme Tutarı (TL) *</label>
                         <input className="input" type="number" step="0.01" value={paymentForm.payment_amount} onChange={(e) => setPaymentForm({...paymentForm, payment_amount: e.target.value})} placeholder={monthly.toString()} required />
                       </div>
                     </>
@@ -400,8 +400,8 @@ export default function SoldDevicesPage() {
                 })()}
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}>💳 Odemeyi Kaydet</button>
+                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}>💳 Ödemeyi Kaydet</button>
               </div>
             </form>
           </div>
