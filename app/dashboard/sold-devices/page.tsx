@@ -61,7 +61,8 @@ export default function SoldDevicesPage() {
     payment_method: 'Nakit',
     installments: '1',
     remaining_amount: '',
-    warranty_months: '12'
+    warranty_months: '12',
+    created_at: ''
   })
   const [paymentForm, setPaymentForm] = useState({
     sale_id: '',
@@ -100,7 +101,8 @@ export default function SoldDevicesPage() {
       payment_method: sale.payment_method || 'Nakit',
       installments: sale.installments?.toString() || '1',
       remaining_amount: sale.remaining_amount?.toString() || '',
-      warranty_months: sale.warranty_months?.toString() || '12'
+      warranty_months: sale.warranty_months?.toString() || '12',
+      created_at: sale.created_at || ''
     })
     setShowEditModal(true)
   }
@@ -109,6 +111,14 @@ export default function SoldDevicesPage() {
     e.preventDefault()
     try {
       const total = parseFloat(editForm.unit_price) * parseInt(editForm.quantity)
+      const months = parseInt(editForm.warranty_months) || 12
+      
+      // Garanti bitiş tarihini hesapla (created_at + warranty_months)
+      const startDate = editForm.created_at ? new Date(editForm.created_at) : new Date()
+      const endDate = new Date(startDate)
+      endDate.setMonth(endDate.getMonth() + months)
+      const warrantyEndDate = endDate.toISOString().split('T')[0]
+
       const { error } = await supabase.from('sales').update({
         customer_id: editForm.customer_id,
         item_name: editForm.item_name.trim(),
@@ -118,13 +128,14 @@ export default function SoldDevicesPage() {
         payment_method: editForm.payment_method,
         installments: parseInt(editForm.installments) || 1,
         remaining_amount: parseFloat(editForm.remaining_amount) || 0,
-        warranty_months: parseInt(editForm.warranty_months) || 12
+        warranty_months: months,
+        warranty_end_date: warrantyEndDate
       }).eq('id', editForm.id)
 
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
       } else {
-        setToast({ message: 'Satış kaydı güncellendi!', type: 'success' })
+        setToast({ message: 'Satış kaydı güncellendi! Garanti süresi hesaplandı.', type: 'success' })
         setShowEditModal(false)
         loadData()
       }
