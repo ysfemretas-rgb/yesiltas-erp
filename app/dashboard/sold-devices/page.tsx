@@ -113,7 +113,6 @@ export default function SoldDevicesPage() {
       const total = parseFloat(editForm.unit_price) * parseInt(editForm.quantity)
       const months = parseInt(editForm.warranty_months) || 12
       
-      // Garanti bitiş tarihini hesapla (created_at + warranty_months)
       const startDate = editForm.created_at ? new Date(editForm.created_at) : new Date()
       const endDate = new Date(startDate)
       endDate.setMonth(endDate.getMonth() + months)
@@ -184,12 +183,16 @@ export default function SoldDevicesPage() {
     }
   }
 
- const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Bu satış kaydını silmek istediğinize emin misiniz?')) return
     try {
-      // Önce debts tablosundaki ilgili kaydı sil
+      // Önce warranties tablosundaki ilgili kaydı sil
+      await supabase.from('warranties').delete().eq('sale_id', id)
+      
+      // Sonra debts tablosundaki ilgili kaydı sil
       await supabase.from('debts').delete().eq('kaynak_kimliği', id).eq('kaynak_türü', 'satış')
       
+      // En son sales tablosundan sil
       const { error } = await supabase.from('sales').delete().eq('id', id)
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
