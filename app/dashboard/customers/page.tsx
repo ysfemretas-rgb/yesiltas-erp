@@ -107,12 +107,12 @@ function DebtDetailModal({ customer, debtAmount, onClose }: { customer: any; deb
   const loadDebtDetails = async () => {
     setLoading(true)
     try {
-      // debts tablosundan borç kayıtları
+      // debts tablosundan borç kayıtları (Türkçe sütun adları)
       const { data: debtsData } = await supabase
         .from('debts')
         .select('*')
-        .eq('customer_id', customer.id)
-        .order('created_at', { ascending: false })
+        .eq('müşteri_kimliği', customer.id)
+        .order('oluşturma_tarihi', { ascending: false })
 
       // devices tablosundan ödenmemiş cihaz borçları
       const { data: devicesData } = await supabase
@@ -129,13 +129,13 @@ function DebtDetailModal({ customer, debtAmount, onClose }: { customer: any; deb
       const allDebts = [
         ...(debtsData || []).map((d: any) => ({
           id: d.id,
-          date: d.created_at,
-          source: d.source_type || 'Borç',
-          description: d.description || `${d.source_type} borcu`,
-          total: d.total_amount || 0,
-          paid: d.paid_amount || 0,
-          remaining: d.remaining_amount || 0,
-          status: d.status || 'Beklemede'
+          date: d.olusturma_tarihi || d.created_at,
+          source: d.kaynak_türü || d.source_type || 'Borç',
+          description: d.kaynak_türü === 'satış' ? 'Satış borcu' : (d.kaynak_türü === 'Teknik Servis' ? 'Teknik servis borcu' : (d.durum || 'Borç')),
+          total: d.toplam_miktar || d.total_amount || 0,
+          paid: d.ödenen_miktar || d.paid_amount || 0,
+          remaining: d.kalan_miktar || d.remaining_amount || 0,
+          status: d.durum || d.status || 'Beklemede'
         })),
         ...(devicesData || [])
           .filter((d: any) => (d.final_cost || 0) > (d.paid_amount || 0))
@@ -259,15 +259,18 @@ export default function CustomersPage() {
       setCustomers(data)
       const debts: Record<string, number> = {}
       await Promise.all(data.map(async (c: any) => {
-        const { data: debtsData } = await supabase.from('debts').select('remaining_amount').eq('customer_id', c.id)
-        const debtsTotal = (debtsData || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
+        // 1. debts tablosundaki borçlar (Türkçe sütun adları)
+        const { data: debtsData } = await supabase.from('debts').select('kalan_miktar, remaining_amount').eq('müşteri_kimliği', c.id)
+        const debtsTotal = (debtsData || []).reduce((s: number, d: any) => s + (d.kalan_miktar || d.remaining_amount || 0), 0)
         
+        // 2. devices tablosundaki ödenmemiş cihaz borçları
         const { data: devicesData } = await supabase.from('devices').select('final_cost, paid_amount').eq('customer_id', c.id)
         const devicesTotal = (devicesData || []).reduce((s: number, d: any) => {
           const remaining = (d.final_cost || 0) - (d.paid_amount || 0)
           return s + (remaining > 0 ? remaining : 0)
         }, 0)
 
+        // Toplam = debts + devices
         debts[c.id] = debtsTotal + devicesTotal
       }))
       setCustomerDebts(debts)
@@ -311,7 +314,7 @@ export default function CustomersPage() {
       await supabase.from('devices').delete().eq('customer_id', id)
       await supabase.from('sales').delete().eq('customer_id', id)
       await supabase.from('customer_payments').delete().eq('customer_id', id)
-      await supabase.from('debts').delete().eq('customer_id', id)
+      await supabase.from('debts').delete().eq('müşteri_kimliği', id)
       await supabase.from('warranties').delete().eq('customer_id', id)
       await supabase.from('appointments').delete().eq('customer_id', id)
       const { error: custError } = await supabase.from('customers').delete().eq('id', id)
@@ -334,49 +337,51 @@ export default function CustomersPage() {
     setDetailsLoading(true)
     try {
       const [debtsRes, paymentsRes, devicesRes, salesRes] = await Promise.all([
-        supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
+        supabase.from('debts').select('*').eq('müşteri_kimliği', customer.id).order('oluşturma_tarihi', { ascending: false }),
         supabase.from('customer_payments').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
         supabase.from('devices').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
         supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
       ])
 
+      // devices'taki borçları debts tablosuna senkronize et
       const deviceDebts = (devicesRes.data || []).filter((d: any) => (d.final_cost || 0) > (d.paid_amount || 0))
       for (const device of deviceDebts) {
         const remaining = (device.final_cost || 0) - (device.paid_amount || 0)
-        const { data: existing } = await supabase.from('debts').select('id').eq('source_id', device.id).eq('source_type', 'Teknik Servis')
+        const { data: existing } = await supabase.from('debts').select('id').eq('kaynak_kimliği', device.id).eq('kaynak_türü', 'Teknik Servis')
         if (!existing || existing.length === 0) {
           await supabase.from('debts').insert([{
-            customer_id: customer.id,
-            source_type: 'Teknik Servis',
-            source_id: device.id,
-            total_amount: device.final_cost || 0,
-            paid_amount: device.paid_amount || 0,
-            remaining_amount: remaining,
-            status: 'Beklemede'
+            müşteri_kimliği: customer.id,
+            kaynak_türü: 'Teknik Servis',
+            kaynak_kimliği: device.id,
+            toplam_miktar: device.final_cost || 0,
+            ödenen_miktar: device.paid_amount || 0,
+            kalan_miktar: remaining,
+            durum: 'Beklemede'
           }])
         } else {
           await supabase.from('debts').update({
-            total_amount: device.final_cost || 0,
-            paid_amount: device.paid_amount || 0,
-            remaining_amount: remaining,
-            status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
-          }).eq('source_id', device.id).eq('source_type', 'Teknik Servis')
+            toplam_miktar: device.final_cost || 0,
+            ödenen_miktar: device.paid_amount || 0,
+            kalan_miktar: remaining,
+            durum: remaining <= 0 ? 'Ödendi' : 'Beklemede'
+          }).eq('kaynak_kimliği', device.id).eq('kaynak_türü', 'Teknik Servis')
         }
       }
 
-      const { data: updatedDebts } = await supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
+      // Güncellenmiş debts'i tekrar çek
+      const { data: updatedDebts } = await supabase.from('debts').select('*').eq('müşteri_kimliği', customer.id).order('oluşturma_tarihi', { ascending: false })
 
-      const totalDebt = (updatedDebts || []).reduce((s: number, d: any) => s + (d.total_amount || 0), 0)
-      const totalPaid = (updatedDebts || []).reduce((s: number, d: any) => s + (d.paid_amount || 0), 0)
-      const totalRemaining = (updatedDebts || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
+      const totalDebt = (updatedDebts || []).reduce((s: number, d: any) => s + (d.toplam_miktar || d.total_amount || 0), 0)
+      const totalPaid = (updatedDebts || []).reduce((s: number, d: any) => s + (d.ödenen_miktar || d.paid_amount || 0), 0)
+      const totalRemaining = (updatedDebts || []).reduce((s: number, d: any) => s + (d.kalan_miktar || d.remaining_amount || 0), 0)
 
       const allTransactions = [
         ...(updatedDebts || []).map((d: any) => ({
           ...d,
-          type: d.source_type === 'Teknik Servis' ? '🔧 Teknik Servis Borcu' : d.source_type === 'satış' ? '🛒 Satış Borcu' : 'Borç',
-          typeColor: d.source_type === 'Teknik Servis' ? 'text-orange-400' : d.source_type === 'satış' ? 'text-purple-400' : 'text-red-400',
-          amount: d.remaining_amount || 0,
-          description: d.source_type === 'Teknik Servis' ? `Cihaz: ${devicesRes.data?.find((dev: any) => dev.id === d.source_id)?.brand || ''} ${devicesRes.data?.find((dev: any) => dev.id === d.source_id)?.model || ''}` : (d.description || `${d.source_type} borcu`)
+          type: d.kaynak_türü === 'Teknik Servis' ? '🔧 Teknik Servis Borcu' : d.kaynak_türü === 'satış' ? '🛒 Satış Borcu' : 'Borç',
+          typeColor: d.kaynak_türü === 'Teknik Servis' ? 'text-orange-400' : d.kaynak_türü === 'satış' ? 'text-purple-400' : 'text-red-400',
+          amount: d.kalan_miktar || d.remaining_amount || 0,
+          description: d.kaynak_türü === 'Teknik Servis' ? `Cihaz: ${devicesRes.data?.find((dev: any) => dev.id === d.kaynak_kimliği)?.brand || ''} ${devicesRes.data?.find((dev: any) => dev.id === d.kaynak_kimliği)?.model || ''}` : (d.durum || `${d.kaynak_türü} borcu`)
         })),
         ...(paymentsRes.data || []).map((p: any) => ({...p, type: 'Ödeme', typeColor: 'text-emerald-400'})),
         ...(devicesRes.data || []).map((d: any) => ({

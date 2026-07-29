@@ -419,3 +419,20 @@ export default function SoldDevicesPage() {
     </div>
   )
 }
+const handleDelete = async (id: string) => {
+    if (!confirm('Bu satış kaydını silmek istediğinize emin misiniz?')) return
+    try {
+      // Önce debts tablosundaki ilgili kaydı sil
+      await supabase.from('debts').delete().eq('kaynak_kimliği', id).eq('kaynak_türü', 'satış')
+      
+      const { error } = await supabase.from('sales').delete().eq('id', id)
+      if (error) {
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
+      } else {
+        setToast({ message: 'Satış kaydı silindi!', type: 'success' })
+        loadData()
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
+  }
