@@ -34,7 +34,7 @@ interface Sale {
   kalan_miktar: number
   garanti_aylar: number
   garanti_bitiş: string
-  oluşturma_tarihi: string
+  [key: string]: any
 }
 
 interface Customer {
@@ -84,11 +84,10 @@ export default function SoldDevicesPage() {
     setLoading(true)
     setError(null)
     try {
-      // Önce TÜM satışları çek, filtre yok
+      // order by KALDIRILDI - tüm satışları çek
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select('*')
-        .order('oluşturma_tarihi', { ascending: false })
 
       if (salesError) {
         setError(`Sales hatası: ${salesError.message}`)
@@ -97,6 +96,7 @@ export default function SoldDevicesPage() {
       }
 
       console.log('Sales data:', salesData)
+      console.log('Sales keys:', salesData?.[0] ? Object.keys(salesData[0]) : 'no data')
       console.log('Sales count:', salesData?.length)
 
       const { data: customersData } = await supabase.from('customers').select('id, name, phone')
@@ -240,6 +240,11 @@ export default function SoldDevicesPage() {
     return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>❌ ₺{remaining.toLocaleString('tr-TR')}</span>
   }
 
+  // Tarih sütununu dinamik bul
+  const getDateValue = (sale: Sale) => {
+    return sale.oluşturma_tarihi || sale['oluşturma_tarihi'] || sale.created_at || sale['created_at'] || sale.olusturma_tarihi || ''
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -288,6 +293,7 @@ export default function SoldDevicesPage() {
               const active = isWarrantyActive(sale.garanti_bitiş)
               const daysLeft = daysUntilExpiry(sale.garanti_bitiş)
               const monthlyInstallment = sale.ödeme_yöntemi === 'Taksit' ? (sale.toplam_fiyat || 0) / (sale.taksitler || 1) : 0
+              const dateVal = getDateValue(sale)
               return (
                 <tr key={sale.id}>
                   <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{sale.ürün_adi}</td>
@@ -308,7 +314,9 @@ export default function SoldDevicesPage() {
                   <td className={daysLeft < 30 ? 'text-red-400' : ''} style={{ color: daysLeft >= 30 ? 'var(--text-secondary)' : undefined }}>
                     {active ? `${daysLeft} gün` : 'Sona erdi'}
                   </td>
-                  <td className="text-sm" style={{ color: 'var(--text-muted)' }}>{sale.oluşturma_tarihi ? new Date(sale.oluşturma_tarihi).toLocaleDateString('tr-TR') : '-'}</td>
+                  <td className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {dateVal ? new Date(dateVal).toLocaleDateString('tr-TR') : '-'}
+                  </td>
                   <td>
                     <div className="flex gap-1 flex-wrap">
                       <button onClick={() => openEditModal(sale)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️</button>
@@ -328,7 +336,7 @@ export default function SoldDevicesPage() {
       {filtered.length === 0 && !error && (
         <div className="empty-state">
           <p>Henüz satılan cihaz kaydı yok</p>
-          <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Toplam {sales.length} satış kaydı var (tüm türler)</p>
+          <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Toplam {sales.length} satış kaydı var</p>
         </div>
       )}
     </div>
