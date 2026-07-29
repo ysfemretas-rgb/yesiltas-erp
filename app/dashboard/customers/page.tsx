@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// Inline Toast Component
 function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 4000)
@@ -22,7 +21,6 @@ function InlineToast({ message, type, onClose }: { message: string; type: 'succe
   )
 }
 
-// WhatsApp Borç Bildirim Modalı
 function WhatsAppModal({ customer, debtAmount, onClose }: { customer: any; debtAmount: number; onClose: () => void }) {
   const [iban, setIban] = useState('')
   const [accountName, setAccountName] = useState('')
@@ -37,7 +35,7 @@ function WhatsAppModal({ customer, debtAmount, onClose }: { customer: any; debtA
 
 Yeşiltaş Teknoloji'ye ait borç bilgileriniz:
 
-💰 Borç Tutarı: ₺${debtAmount.toLocaleString('tr-TR')}
+💰 Borç Tutarı: ₺${debtAmount.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
 🏦 IBAN: ${iban}
 👤 Hesap Sahibi: ${accountName}
 
@@ -73,7 +71,7 @@ Yeşiltaş Teknoloji`
           </div>
           <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
             <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Borç Tutarı</div>
-            <div className="text-xl font-bold text-red-400">₺{debtAmount.toLocaleString('tr-TR')}</div>
+            <div className="text-xl font-bold text-red-400">₺{debtAmount.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
           </div>
           <div className="form-group">
             <label>IBAN *</label>
@@ -119,9 +117,19 @@ export default function CustomersPage() {
       setCustomers(data)
       const debts: Record<string, number> = {}
       await Promise.all(data.map(async (c: any) => {
+        // 1. debts tablosundaki borçlar
         const { data: debtsData } = await supabase.from('debts').select('remaining_amount').eq('customer_id', c.id)
-        const totalRemaining = (debtsData || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
-        debts[c.id] = totalRemaining
+        const debtsTotal = (debtsData || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
+        
+        // 2. devices tablosundaki ödenmemiş cihaz borçları
+        const { data: devicesData } = await supabase.from('devices').select('final_cost, paid_amount').eq('customer_id', c.id)
+        const devicesTotal = (devicesData || []).reduce((s: number, d: any) => {
+          const remaining = (d.final_cost || 0) - (d.paid_amount || 0)
+          return s + (remaining > 0 ? remaining : 0)
+        }, 0)
+
+        // Toplam = debts + devices
+        debts[c.id] = debtsTotal + devicesTotal
       }))
       setCustomerDebts(debts)
     }
@@ -193,11 +201,10 @@ export default function CustomersPage() {
         supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
       ])
 
-      // Teknik servis kayıtlarını borç olarak debts tablosuna otomatik ekle (yoksa)
+      // devices'taki borçları debts tablosuna senkronize et
       const deviceDebts = (devicesRes.data || []).filter((d: any) => (d.final_cost || 0) > (d.paid_amount || 0))
       for (const device of deviceDebts) {
         const remaining = (device.final_cost || 0) - (device.paid_amount || 0)
-        // Aynı source_id ile kayıt var mı kontrol et
         const { data: existing } = await supabase.from('debts').select('id').eq('source_id', device.id).eq('source_type', 'Teknik Servis')
         if (!existing || existing.length === 0) {
           await supabase.from('debts').insert([{
@@ -207,10 +214,9 @@ export default function CustomersPage() {
             total_amount: device.final_cost || 0,
             paid_amount: device.paid_amount || 0,
             remaining_amount: remaining,
-            status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
+            status: 'Beklemede'
           }])
         } else {
-          // Varsa güncelle
           await supabase.from('debts').update({
             total_amount: device.final_cost || 0,
             paid_amount: device.paid_amount || 0,
@@ -220,7 +226,7 @@ export default function CustomersPage() {
         }
       }
 
-      // debts'i tekrar çek (güncellenmiş haliyle)
+      // Güncellenmiş debts'i tekrar çek
       const { data: updatedDebts } = await supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
 
       const totalDebt = (updatedDebts || []).reduce((s: number, d: any) => s + (d.total_amount || 0), 0)
@@ -229,17 +235,17 @@ export default function CustomersPage() {
 
       const allTransactions = [
         ...(updatedDebts || []).map((d: any) => ({
-          ...d, 
-          type: d.source_type === 'Teknik Servis' ? '🔧 Teknik Servis Borcu' : 'Borç', 
-          typeColor: d.source_type === 'Teknik Servis' ? 'text-orange-400' : 'text-red-400',
+          ...d,
+          type: d.source_type === 'Teknik Servis' ? '🔧 Teknik Servis Borcu' : d.source_type === 'satış' ? '🛒 Satış Borcu' : 'Borç',
+          typeColor: d.source_type === 'Teknik Servis' ? 'text-orange-400' : d.source_type === 'satış' ? 'text-purple-400' : 'text-red-400',
           amount: d.remaining_amount || 0,
-          description: d.source_type === 'Teknik Servis' ? `Cihaz kaydı - Kalan borç` : (d.description || 'Borç kaydı')
+          description: d.source_type === 'Teknik Servis' ? `Cihaz: ${devicesRes.data?.find((dev: any) => dev.id === d.source_id)?.brand || ''} ${devicesRes.data?.find((dev: any) => dev.id === d.source_id)?.model || ''}` : (d.description || `${d.source_type} borcu`)
         })),
         ...(paymentsRes.data || []).map((p: any) => ({...p, type: 'Ödeme', typeColor: 'text-emerald-400'})),
         ...(devicesRes.data || []).map((d: any) => ({
-          ...d, 
-          type: '🔧 Teknik Servis', 
-          typeColor: 'text-blue-400', 
+          ...d,
+          type: '🔧 Teknik Servis',
+          typeColor: 'text-blue-400',
           amount: d.final_cost || 0,
           description: `${d.brand} ${d.model} - ${d.complaint || 'Tamir'}`
         })),
@@ -247,13 +253,13 @@ export default function CustomersPage() {
       ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
       setCustomerDetails({
-        debts: updatedDebts || [], 
-        payments: paymentsRes.data || [], 
-        devices: devicesRes.data || [], 
+        debts: updatedDebts || [],
+        payments: paymentsRes.data || [],
+        devices: devicesRes.data || [],
         sales: salesRes.data || [],
-        totalDebt, 
-        totalPaid, 
-        remaining: totalRemaining, 
+        totalDebt,
+        totalPaid,
+        remaining: totalRemaining,
         transactions: allTransactions
       })
     } catch (err) {
@@ -310,7 +316,7 @@ export default function CustomersPage() {
                         whiteSpace: 'nowrap'
                       }}
                     >
-                      {hasDebt ? `🔴 ₺${debt.toLocaleString('tr-TR')} Borç` : '🟢 Borç Yok'}
+                      {hasDebt ? `🔴 ₺${debt.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Borç` : '🟢 Borç Yok'}
                     </span>
                   </td>
                   <td>
@@ -365,15 +371,15 @@ export default function CustomersPage() {
               <div className="modal-body space-y-4" style={{ overflow: 'hidden' }}>
                 <div className="grid grid-cols-4 gap-3">
                   <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                    <div className="text-2xl font-bold text-red-400">₺{customerDetails.totalDebt.toLocaleString('tr-TR')}</div>
+                    <div className="text-2xl font-bold text-red-400">₺{customerDetails.totalDebt.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Borç</div>
                   </div>
                   <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                    <div className="text-2xl font-bold text-emerald-400">₺{customerDetails.totalPaid.toLocaleString('tr-TR')}</div>
+                    <div className="text-2xl font-bold text-emerald-400">₺{customerDetails.totalPaid.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Ödeme</div>
                   </div>
                   <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                    <div className={`text-2xl font-bold ${customerDetails.remaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>₺{customerDetails.remaining.toLocaleString('tr-TR')}</div>
+                    <div className={`text-2xl font-bold ${customerDetails.remaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>₺{customerDetails.remaining.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Kalan Borç</div>
                   </div>
                   <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -385,43 +391,23 @@ export default function CustomersPage() {
                 <div className="table-container" style={{ overflow: 'visible' }}>
                   <table className="table" style={{ tableLayout: 'auto', width: '100%' }}>
                     <thead>
-                      <tr>
-                        <th style={{ whiteSpace: 'nowrap' }}>Tarih</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>Saat</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>İşlem Türü</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>Detay</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>Tutar</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>Durum</th>
-                      </tr>
+                      <tr><th style={{ whiteSpace: 'nowrap' }}>Tarih</th><th style={{ whiteSpace: 'nowrap' }}>Saat</th><th style={{ whiteSpace: 'nowrap' }}>İşlem Türü</th><th style={{ whiteSpace: 'nowrap' }}>Detay</th><th style={{ whiteSpace: 'nowrap' }}>Tutar</th><th style={{ whiteSpace: 'nowrap' }}>Durum</th></tr>
                     </thead>
                     <tbody>
                       {customerDetails.transactions.map((t: any, i: number) => (
                         <tr key={i}>
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleTimeString('tr-TR')}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <span className={`font-semibold ${t.typeColor}`}>{t.type}</span>
-                          </td>
-                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>
-                            {t.description || t.complaint || t.brand || t.product_name || t.notes || '-'}
-                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}><span className={`font-semibold ${t.typeColor}`}>{t.type}</span></td>
+                          <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--text-secondary)' }}>{t.description || t.complaint || t.brand || t.product_name || t.notes || '-'}</td>
                           <td style={{ whiteSpace: 'nowrap' }} className={
                             t.type === 'Ödeme' ? 'text-emerald-400' : 
                             t.type === '🔧 Teknik Servis Borcu' ? 'text-orange-400' :
+                            t.type === '🛒 Satış Borcu' ? 'text-purple-400' :
                             t.type === 'Borç' ? 'text-red-400' : 
                             'text-blue-400'
-                          }>
-                            ₺{(t.amount || 0).toLocaleString('tr-TR')}
-                          </td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <span className={`badge ${
-                              t.status === 'Tamamlandı' || t.status === 'Ödendi' ? 'badge-green' : 
-                              t.status === 'Beklemede' ? 'badge-yellow' : 
-                              'badge-blue'
-                            }`}>
-                              {t.status || 'Tamamlandı'}
-                            </span>
-                          </td>
+                          }>₺{(t.amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}><span className={`badge ${t.status === 'Tamamlandı' || t.status === 'Ödendi' ? 'badge-green' : t.status === 'Beklemede' ? 'badge-yellow' : 'badge-blue'}`}>{t.status || 'Tamamlandı'}</span></td>
                         </tr>
                       ))}
                     </tbody>
