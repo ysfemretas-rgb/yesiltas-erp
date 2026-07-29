@@ -83,16 +83,6 @@ export default function SalesPage() {
     }
   }
 
-  // Ödeme yöntemini veritabanı constraint'ine uygun hale getir
-  const getDbPaymentMethod = (method: string) => {
-    // Constraint: sales_payment_method_check
-    // Muhtemelen sadece 'Nakit' ve 'Kredi' (veya 'kredi') kabul ediyor
-    const m = method.trim()
-    if (m === 'Nakit') return 'Nakit'
-    // Diğer tümü için 'Kredi' dene, olmazsa 'Nakit' fallback
-    return 'Kredi'
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const qty = parseInt(form.quantity) || 1
@@ -101,14 +91,12 @@ export default function SalesPage() {
     const installments = parseInt(form.installments) || 1
     const warrantyMonths = parseInt(form.warranty_months) || 12
 
-    // Constraint'e uygun payment_method değeri
-    const dbPaymentMethod = getDbPaymentMethod(form.payment_method)
+    // Kullanıcının seçtiği gerçek değeri kaydet (constraint artık izin veriyor)
+    const dbPaymentMethod = form.payment_method
     const remaining = form.payment_method === 'Taksit' || form.payment_method === 'Borc' ? total : 0
 
     const warrantyEnd = new Date()
     warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
-
-    console.log('Gönderilen payment_method:', dbPaymentMethod)
 
     const { data: saleData, error } = await supabase.from('sales').insert([{
       customer_id: form.customer_id || null,
@@ -125,7 +113,6 @@ export default function SalesPage() {
     }]).select()
 
     if (error) {
-      console.error('Satış hatası:', error)
       showToast('Hata: ' + error.message, 'error')
       return
     }
