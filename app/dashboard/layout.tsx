@@ -10,7 +10,6 @@ const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/dashboard/sales', label: 'Satış (POS)', icon: '💰' },
   { href: '/dashboard/devices', label: 'Teknik Servis', icon: '🔧' },
-  { href: '/dashboard/sold-devices', label: 'Satılan Cihazlar', icon: '📱' },
   { href: '/dashboard/customers', label: 'Müşteriler', icon: '👥' },
   { href: '/dashboard/appointments', label: 'Randevular', icon: '📅' },
   { href: '/dashboard/inventory', label: 'Stok', icon: '📦' },
