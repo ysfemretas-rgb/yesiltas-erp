@@ -83,6 +83,18 @@ export default function SalesPage() {
     }
   }
 
+  // Ödeme yöntemini veritabanı constraint'ine uygun hale getir
+  const getDbPaymentMethod = (method: string) => {
+    switch (method) {
+      case 'Nakit': return 'Nakit'
+      case 'Kredi Karti': return 'Kredi'
+      case 'Havale': return 'Nakit' // Havale de Nakit olarak kaydedilsin (constraint sadece Nakit/Kredi)
+      case 'Taksit': return 'Kredi' // Taksit de Kredi olarak kaydedilsin
+      case 'Borc': return 'Kredi'   // Borç da Kredi olarak kaydedilsin
+      default: return 'Nakit'
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const qty = parseInt(form.quantity) || 1
@@ -92,7 +104,7 @@ export default function SalesPage() {
     const warrantyMonths = parseInt(form.warranty_months) || 12
 
     // Constraint'e uygun payment_method değeri
-    const dbPaymentMethod = form.payment_method === 'Kredi Karti' ? 'Kredi' : form.payment_method
+    const dbPaymentMethod = getDbPaymentMethod(form.payment_method)
     const remaining = form.payment_method === 'Taksit' || form.payment_method === 'Borc' ? total : 0
 
     const warrantyEnd = new Date()
