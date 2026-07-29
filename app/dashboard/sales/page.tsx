@@ -85,14 +85,12 @@ export default function SalesPage() {
 
   // Ödeme yöntemini veritabanı constraint'ine uygun hale getir
   const getDbPaymentMethod = (method: string) => {
-    switch (method) {
-      case 'Nakit': return 'Nakit'
-      case 'Kredi Karti': return 'Kredi'
-      case 'Havale': return 'Nakit' // Havale de Nakit olarak kaydedilsin (constraint sadece Nakit/Kredi)
-      case 'Taksit': return 'Kredi' // Taksit de Kredi olarak kaydedilsin
-      case 'Borc': return 'Kredi'   // Borç da Kredi olarak kaydedilsin
-      default: return 'Nakit'
-    }
+    // Constraint: sales_payment_method_check
+    // Muhtemelen sadece 'Nakit' ve 'Kredi' (veya 'kredi') kabul ediyor
+    const m = method.trim()
+    if (m === 'Nakit') return 'Nakit'
+    // Diğer tümü için 'Kredi' dene, olmazsa 'Nakit' fallback
+    return 'Kredi'
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,6 +108,8 @@ export default function SalesPage() {
     const warrantyEnd = new Date()
     warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
+    console.log('Gönderilen payment_method:', dbPaymentMethod)
+
     const { data: saleData, error } = await supabase.from('sales').insert([{
       customer_id: form.customer_id || null,
       item_name: form.item_name,
@@ -125,6 +125,7 @@ export default function SalesPage() {
     }]).select()
 
     if (error) {
+      console.error('Satış hatası:', error)
       showToast('Hata: ' + error.message, 'error')
       return
     }
