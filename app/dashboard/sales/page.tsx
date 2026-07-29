@@ -47,6 +47,9 @@ export default function SalesPage() {
     warranty_months: '12', selected_inventory: ''
   })
 
+  // Anlık toplam hesaplama
+  const calculatedTotal = (parseInt(form.quantity) || 1) * (parseFloat(form.unit_price) || 0)
+
   useEffect(() => { loadData() }, [])
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -87,6 +90,9 @@ export default function SalesPage() {
     const total = qty * price
     const installments = parseInt(form.installments) || 1
     const warrantyMonths = parseInt(form.warranty_months) || 12
+
+    // Constraint'e uygun payment_method değeri
+    const dbPaymentMethod = form.payment_method === 'Kredi Karti' ? 'Kredi' : form.payment_method
     const remaining = form.payment_method === 'Taksit' || form.payment_method === 'Borc' ? total : 0
 
     const warrantyEnd = new Date()
@@ -99,7 +105,7 @@ export default function SalesPage() {
       quantity: qty,
       unit_price: price,
       total_price: total,
-      payment_method: form.payment_method,
+      payment_method: dbPaymentMethod,
       installments,
       remaining_amount: remaining,
       warranty_months: warrantyMonths,
@@ -146,13 +152,14 @@ export default function SalesPage() {
     // Create debt record for installment/debt sales
     if (remaining > 0) {
       await supabase.from('debts').insert([{
-        customer_id: form.customer_id || null,
-        source_type: 'sale',
-        source_id: saleData?.[0]?.id,
-        total_amount: total,
-        paid_amount: 0,
-        remaining_amount: remaining,
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        müşteri_kimliği: form.customer_id || null,
+        kaynak_türü: 'satış',
+        kaynak_kimliği: saleData?.[0]?.id,
+        toplam_miktar: total,
+        ödenen_miktar: 0,
+        kalan_miktar: remaining,
+        durum: 'Beklemede',
+        bitiş_tarihi: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       }])
     }
 
@@ -274,6 +281,14 @@ export default function SalesPage() {
                 <div className="form-group">
                   <label>Birim Fiyat (TL) *</label>
                   <input className="input" type="number" step="0.01" value={form.unit_price} onChange={(e) => setForm({...form, unit_price: e.target.value})} required />
+                </div>
+                {/* Anlık Toplam Gösterimi */}
+                <div className="p-3 rounded-lg text-center" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                  <div className="text-sm" style={{ color: '#4ade80' }}>Hesaplanan Toplam</div>
+                  <div className="text-2xl font-bold text-emerald-400">₺{calculatedTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {form.quantity} adet × ₺{parseFloat(form.unit_price || '0').toLocaleString('tr-TR')} = ₺{calculatedTotal.toLocaleString('tr-TR')}
+                  </div>
                 </div>
                 <div className="grid-2">
                   <div className="form-group">
