@@ -95,6 +95,147 @@ Yeşiltaş Teknoloji`
   )
 }
 
+// Borç Detay Modalı
+function DebtDetailModal({ customer, debtAmount, onClose }: { customer: any; debtAmount: number; onClose: () => void }) {
+  const [details, setDetails] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadDebtDetails()
+  }, [])
+
+  const loadDebtDetails = async () => {
+    setLoading(true)
+    try {
+      // debts tablosundan borç kayıtları
+      const { data: debtsData } = await supabase
+        .from('debts')
+        .select('*')
+        .eq('customer_id', customer.id)
+        .order('created_at', { ascending: false })
+
+      // devices tablosundan ödenmemiş cihaz borçları
+      const { data: devicesData } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('customer_id', customer.id)
+
+      // sales tablosundan ödenmemiş satış borçları
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('customer_id', customer.id)
+
+      const allDebts = [
+        ...(debtsData || []).map((d: any) => ({
+          id: d.id,
+          date: d.created_at,
+          source: d.source_type || 'Borç',
+          description: d.description || `${d.source_type} borcu`,
+          total: d.total_amount || 0,
+          paid: d.paid_amount || 0,
+          remaining: d.remaining_amount || 0,
+          status: d.status || 'Beklemede'
+        })),
+        ...(devicesData || [])
+          .filter((d: any) => (d.final_cost || 0) > (d.paid_amount || 0))
+          .map((d: any) => ({
+            id: d.id,
+            date: d.created_at,
+            source: '🔧 Teknik Servis',
+            description: `${d.brand} ${d.model} - ${d.complaint || 'Tamir'}`,
+            total: d.final_cost || 0,
+            paid: d.paid_amount || 0,
+            remaining: (d.final_cost || 0) - (d.paid_amount || 0),
+            status: ((d.final_cost || 0) - (d.paid_amount || 0)) <= 0 ? 'Ödendi' : 'Beklemede'
+          })),
+        ...(salesData || [])
+          .filter((s: any) => (s.remaining_amount || 0) > 0)
+          .map((s: any) => ({
+            id: s.id,
+            date: s.created_at,
+            source: '🛒 Satış',
+            description: s.item_name || 'Satış',
+            total: s.total_price || 0,
+            paid: (s.total_price || 0) - (s.remaining_amount || 0),
+            remaining: s.remaining_amount || 0,
+            status: 'Beklemede'
+          }))
+      ].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+      setDetails(allDebts)
+    } catch (err) {
+      console.error('Borç detay hatası:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 100 }} onClick={onClose}>
+      <div className="modal max-w-4xl w-full" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '85vh', overflow: 'hidden' }}>
+        <div className="modal-header">
+          <div>
+            <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>💰 {customer.name} - Borç Detayları</h2>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Toplam Borç: ₺{debtAmount.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <div className="modal-body space-y-4" style={{ overflow: 'auto', maxHeight: 'calc(85vh - 80px)' }}>
+          {loading ? (
+            <div className="p-8 flex justify-center"><div className="spinner" /></div>
+          ) : details.length === 0 ? (
+            <div className="empty-state"><p>Henüz borç kaydı yok</p></div>
+          ) : (
+            <div className="table-container">
+              <table className="table" style={{ tableLayout: 'auto', width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ whiteSpace: 'nowrap' }}>Tarih</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Kaynak</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Açıklama</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Toplam</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Ödenen</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Kalan</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {details.map((d, i) => (
+                    <tr key={i}>
+                      <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                        {d.date ? new Date(d.date).toLocaleDateString('tr-TR') : '-'}
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span className={`font-semibold ${
+                          d.source.includes('Teknik') ? 'text-orange-400' :
+                          d.source.includes('Satış') ? 'text-purple-400' :
+                          'text-red-400'
+                        }`}>{d.source}</span>
+                      </td>
+                      <td style={{ color: 'var(--text-secondary)', maxWidth: '250px', wordBreak: 'break-word' }}>{d.description}</td>
+                      <td style={{ whiteSpace: 'nowrap' }} className="text-emerald-400">₺{(d.total || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                      <td style={{ whiteSpace: 'nowrap' }} className="text-blue-400">₺{(d.paid || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                      <td style={{ whiteSpace: 'nowrap' }} className="text-red-400 font-bold">₺{(d.remaining || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span className={`badge ${
+                          d.status === 'Ödendi' ? 'badge-green' :
+                          d.status === 'Beklemede' ? 'badge-yellow' :
+                          'badge-blue'
+                        }`}>{d.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [customerDebts, setCustomerDebts] = useState<Record<string, number>>({})
@@ -107,6 +248,7 @@ export default function CustomersPage() {
   const [customerDetails, setCustomerDetails] = useState<any>(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [whatsappModal, setWhatsappModal] = useState<{customer: any, debt: number} | null>(null)
+  const [debtDetailModal, setDebtDetailModal] = useState<{customer: any, debt: number} | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -117,18 +259,15 @@ export default function CustomersPage() {
       setCustomers(data)
       const debts: Record<string, number> = {}
       await Promise.all(data.map(async (c: any) => {
-        // 1. debts tablosundaki borçlar
         const { data: debtsData } = await supabase.from('debts').select('remaining_amount').eq('customer_id', c.id)
         const debtsTotal = (debtsData || []).reduce((s: number, d: any) => s + (d.remaining_amount || 0), 0)
         
-        // 2. devices tablosundaki ödenmemiş cihaz borçları
         const { data: devicesData } = await supabase.from('devices').select('final_cost, paid_amount').eq('customer_id', c.id)
         const devicesTotal = (devicesData || []).reduce((s: number, d: any) => {
           const remaining = (d.final_cost || 0) - (d.paid_amount || 0)
           return s + (remaining > 0 ? remaining : 0)
         }, 0)
 
-        // Toplam = debts + devices
         debts[c.id] = debtsTotal + devicesTotal
       }))
       setCustomerDebts(debts)
@@ -201,7 +340,6 @@ export default function CustomersPage() {
         supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
       ])
 
-      // devices'taki borçları debts tablosuna senkronize et
       const deviceDebts = (devicesRes.data || []).filter((d: any) => (d.final_cost || 0) > (d.paid_amount || 0))
       for (const device of deviceDebts) {
         const remaining = (device.final_cost || 0) - (device.paid_amount || 0)
@@ -226,7 +364,6 @@ export default function CustomersPage() {
         }
       }
 
-      // Güncellenmiş debts'i tekrar çek
       const { data: updatedDebts } = await supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
 
       const totalDebt = (updatedDebts || []).reduce((s: number, d: any) => s + (d.total_amount || 0), 0)
@@ -283,6 +420,15 @@ export default function CustomersPage() {
     setWhatsappModal({ customer, debt })
   }
 
+  const openDebtDetail = (customer: any) => {
+    const debt = customerDebts[customer.id] || 0
+    if (debt <= 0) {
+      setToast({ message: 'Bu müşterinin borcu yok!', type: 'error' })
+      return
+    }
+    setDebtDetailModal({ customer, debt })
+  }
+
   if (loading && customers.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
@@ -308,13 +454,15 @@ export default function CustomersPage() {
                   <td style={{ color: 'var(--text-muted)' }}>{c.address || '-'}</td>
                   <td>
                     <span 
-                      className="px-2 py-1 rounded-full text-xs font-bold"
+                      className="px-2 py-1 rounded-full text-xs font-bold cursor-pointer hover:opacity-80"
                       style={{ 
                         backgroundColor: hasDebt ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)',
                         color: hasDebt ? '#f87171' : '#4ade80',
                         border: `1px solid ${hasDebt ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
                         whiteSpace: 'nowrap'
                       }}
+                      onClick={() => hasDebt && openDebtDetail(c)}
+                      title={hasDebt ? 'Borç detaylarını gör' : 'Borç yok'}
                     >
                       {hasDebt ? `🔴 ₺${debt.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Borç` : '🟢 Borç Yok'}
                     </span>
@@ -425,6 +573,14 @@ export default function CustomersPage() {
           customer={whatsappModal.customer}
           debtAmount={whatsappModal.debt}
           onClose={() => setWhatsappModal(null)}
+        />
+      )}
+
+      {debtDetailModal && (
+        <DebtDetailModal
+          customer={debtDetailModal.customer}
+          debtAmount={debtDetailModal.debt}
+          onClose={() => setDebtDetailModal(null)}
         />
       )}
     </div>
