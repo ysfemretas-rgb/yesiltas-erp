@@ -115,7 +115,6 @@ export default function InventoryPage() {
     loadData()
   }
 
-  // Fix: Use forEach instead of Set spread
   const categories: string[] = []
   items.forEach((i: InventoryItem) => {
     if (!categories.includes(i.category)) categories.push(i.category)
@@ -153,16 +152,7 @@ export default function InventoryPage() {
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Urun</th>
-              <th>Kategori</th>
-              <th>Marka</th>
-              <th>Stok</th>
-              <th>Alis Fiyati</th>
-              <th>Satis Fiyati</th>
-              <th>Kar</th>
-              <th>Islemler</th>
-            </tr>
+            <tr><th>Urun</th><th>Kategori</th><th>Marka</th><th>Stok</th><th>Alis Fiyati</th><th>Satis Fiyati</th><th>Kar</th><th>Islemler</th></tr>
           </thead>
           <tbody>
             {filtered.map((item) => {
@@ -226,33 +216,15 @@ export default function InventoryPage() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Urun Adi *</label>
-                  <input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required />
-                </div>
+                <div className="form-group"><label>Urun Adi *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required /></div>
                 <div className="grid-2">
-                  <div className="form-group">
-                    <label>Kategori *</label>
-                    <input className="input" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})} required />
-                  </div>
-                  <div className="form-group">
-                    <label>Marka</label>
-                    <input className="input" value={form.brand} onChange={(e) => setForm({...form, brand: e.target.value})} />
-                  </div>
+                  <div className="form-group"><label>Kategori *</label><input className="input" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})} required /></div>
+                  <div className="form-group"><label>Marka</label><input className="input" value={form.brand} onChange={(e) => setForm({...form, brand: e.target.value})} /></div>
                 </div>
                 <div className="grid-3">
-                  <div className="form-group">
-                    <label>Stok *</label>
-                    <input className="input" type="number" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} required />
-                  </div>
-                  <div className="form-group">
-                    <label>Min Stok</label>
-                    <input className="input" type="number" value={form.min_stock} onChange={(e) => setForm({...form, min_stock: e.target.value})} />
-                  </div>
-                  <div className="form-group">
-                    <label>Max Stok</label>
-                    <input className="input" type="number" value={form.max_stock} onChange={(e) => setForm({...form, max_stock: e.target.value})} />
-                  </div>
+                  <div className="form-group"><label>Stok *</label><input className="input" type="number" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} required /></div>
+                  <div className="form-group"><label>Min Stok</label><input className="input" type="number" value={form.min_stock} onChange={(e) => setForm({...form, min_stock: e.target.value})} /></div>
+                  <div className="form-group"><label>Max Stok</label><input className="input" type="number" value={form.max_stock} onChange={(e) => setForm({...form, max_stock: e.target.value})} /></div>
                 </div>
                 <div className="form-group">
                   <label>Para Birimi</label>
@@ -263,25 +235,13 @@ export default function InventoryPage() {
                 </div>
                 {form.purchase_currency === 'USD' ? (
                   <div className="grid-2">
-                    <div className="form-group">
-                      <label>Alis Fiyati (USD) *</label>
-                      <input className="input" type="number" step="0.01" value={form.usd_purchase_price} onChange={(e) => setForm({...form, usd_purchase_price: e.target.value})} required />
-                    </div>
-                    <div className="form-group">
-                      <label>Alis Fiyati (TL Karsiligi)</label>
-                      <input className="input" type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({...form, purchase_price: e.target.value})} placeholder="Hesaplanacak..." />
-                    </div>
+                    <div className="form-group"><label>Alis Fiyati (USD) *</label><input className="input" type="number" step="0.01" value={form.usd_purchase_price} onChange={(e) => setForm({...form, usd_purchase_price: e.target.value})} required /></div>
+                    <div className="form-group"><label>Alis Fiyati (TL Karsiligi)</label><input className="input" type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({...form, purchase_price: e.target.value})} placeholder="Hesaplanacak..." /></div>
                   </div>
                 ) : (
-                  <div className="form-group">
-                    <label>Alis Fiyati (TL) *</label>
-                    <input className="input" type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({...form, purchase_price: e.target.value})} required />
-                  </div>
+                  <div className="form-group"><label>Alis Fiyati (TL) *</label><input className="input" type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({...form, purchase_price: e.target.value})} required /></div>
                 )}
-                <div className="form-group">
-                  <label>Satis Fiyati (TL) *</label>
-                  <input className="input" type="number" step="0.01" value={form.sale_price} onChange={(e) => setForm({...form, sale_price: e.target.value})} required />
-                </div>
+                <div className="form-group"><label>Satis Fiyati (TL) *</label><input className="input" type="number" step="0.01" value={form.sale_price} onChange={(e) => setForm({...form, sale_price: e.target.value})} required /></div>
                 <div className="form-group">
                   <label>Tedarikci</label>
                   <select className="select" value={form.supplier_id} onChange={(e) => setForm({...form, supplier_id: e.target.value})}>

@@ -21,8 +21,15 @@ export default function WarrantiesPage() {
   const [filtered, setFiltered] = useState<Warranty[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  const [form, setForm] = useState({
+    customer_name: '', item_name: '', imei: '', warranty_months: '12',
+    warranty_start: new Date().toISOString().split('T')[0],
+    notes: ''
+  })
 
   useEffect(() => { loadData() }, [])
 
@@ -45,6 +52,34 @@ export default function WarrantiesPage() {
     setLoading(false)
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const months = parseInt(form.warranty_months) || 12
+    const start = new Date(form.warranty_start)
+    const end = new Date(start)
+    end.setMonth(end.getMonth() + months)
+
+    const { error } = await supabase.from('warranties').insert([{
+      customer_name: form.customer_name.trim(),
+      item_name: form.item_name.trim(),
+      imei: form.imei.trim() || null,
+      warranty_start: form.warranty_start,
+      warranty_end: end.toISOString().split('T')[0],
+      warranty_months: months,
+      status: 'Aktif',
+      notes: form.notes.trim() || null
+    }])
+
+    if (error) {
+      showToast('Hata: ' + error.message, 'error')
+    } else {
+      showToast('Garanti kaydi eklendi!')
+      setShowModal(false)
+      setForm({ customer_name: '', item_name: '', imei: '', warranty_months: '12', warranty_start: new Date().toISOString().split('T')[0], notes: '' })
+      loadData()
+    }
+  }
+
   const isExpired = (endDate: string) => new Date(endDate) < new Date()
   const daysLeft = (endDate: string) => {
     const diff = new Date(endDate).getTime() - new Date().getTime()
@@ -54,6 +89,13 @@ export default function WarrantiesPage() {
   const handleStatusChange = async (id: string, status: string) => {
     await supabase.from('warranties').update({ status }).eq('id', id)
     showToast('Durum guncellendi')
+    loadData()
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu garanti kaydini silmek istediginize emin misiniz?')) return
+    await supabase.from('warranties').delete().eq('id', id)
+    showToast('Garanti kaydi silindi')
     loadData()
   }
 
@@ -75,6 +117,7 @@ export default function WarrantiesPage() {
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-white">Garantiler</h1>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-sm">+ Yeni Garanti</button>
       </div>
 
       <div className="flex gap-2">
@@ -90,16 +133,7 @@ export default function WarrantiesPage() {
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Musteri</th>
-              <th>Urun</th>
-              <th>IMEI</th>
-              <th>Baslangic</th>
-              <th>Bitis</th>
-              <th>Kalan Sure</th>
-              <th>Durum</th>
-              <th>Islemler</th>
-            </tr>
+            <tr><th>Musteri</th><th>Urun</th><th>IMEI</th><th>Baslangic</th><th>Bitis</th><th>Kalan Sure</th><th>Durum</th><th>Islemler</th></tr>
           </thead>
           <tbody>
             {filtered.map((w) => {
@@ -116,18 +150,17 @@ export default function WarrantiesPage() {
                     {expired ? 'Sona erdi' : `${days} gun`}
                   </td>
                   <td>
-                    <select
-                      className="select text-sm py-1"
-                      value={w.status}
-                      onChange={(e) => handleStatusChange(w.id, e.target.value)}
-                    >
+                    <select className="select text-sm py-1" value={w.status} onChange={(e) => handleStatusChange(w.id, e.target.value)}>
                       <option value="Aktif">Aktif</option>
                       <option value="Sona Erdi">Sona Erdi</option>
                       <option value="Iade Edildi">Iade Edildi</option>
                     </select>
                   </td>
                   <td>
-                    <button onClick={() => handleStatusChange(w.id, 'Iade Edildi')} className="btn btn-danger btn-sm">Iade</button>
+                    <div className="flex gap-1">
+                      <button onClick={() => handleStatusChange(w.id, 'Iade Edildi')} className="btn btn-danger btn-sm">Iade</button>
+                      <button onClick={() => handleDelete(w.id)} className="btn btn-danger btn-sm">Sil</button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -139,6 +172,34 @@ export default function WarrantiesPage() {
       {filtered.length === 0 && (
         <div className="empty-state">
           <p>Henuz garanti kaydi yok</p>
+        </div>
+      )}
+
+      {/* Yeni Garanti Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold text-white">Yeni Garanti Kaydi</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group"><label>Musteri Adi *</label><input className="input" value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required /></div>
+                <div className="form-group"><label>Urun Adi *</label><input className="input" value={form.item_name} onChange={(e) => setForm({...form, item_name: e.target.value})} required /></div>
+                <div className="form-group"><label>IMEI</label><input className="input" value={form.imei} onChange={(e) => setForm({...form, imei: e.target.value})} /></div>
+                <div className="grid-2">
+                  <div className="form-group"><label>Garanti Suresi (Ay) *</label><input className="input" type="number" min="1" value={form.warranty_months} onChange={(e) => setForm({...form, warranty_months: e.target.value})} required /></div>
+                  <div className="form-group"><label>Baslangic Tarihi *</label><input className="input" type="date" value={form.warranty_start} onChange={(e) => setForm({...form, warranty_start: e.target.value})} required /></div>
+                </div>
+                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} /></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
+                <button type="submit" className="btn btn-primary">Kaydet</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

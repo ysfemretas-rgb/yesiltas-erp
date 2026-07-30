@@ -17,12 +17,16 @@ export default function FinancePage() {
   const [filtered, setFiltered] = useState<Transaction[]>([])
   const [categoryFilter, setCategoryFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [balance, setBalance] = useState({ income: 0, expense: 0, net: 0, todayIncome: 0, todayExpense: 0 })
 
   const [form, setForm] = useState({ type: 'gelir', category: '', amount: '', description: '' })
+  const [editForm, setEditForm] = useState<any>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -30,8 +34,10 @@ export default function FinancePage() {
     let result = transactions
     if (categoryFilter) result = result.filter(t => t.category === categoryFilter)
     if (typeFilter) result = result.filter(t => t.type === typeFilter)
+    if (dateFrom) result = result.filter(t => t.created_at >= dateFrom + 'T00:00:00')
+    if (dateTo) result = result.filter(t => t.created_at <= dateTo + 'T23:59:59')
     setFiltered(result)
-  }, [categoryFilter, typeFilter, transactions])
+  }, [categoryFilter, typeFilter, dateFrom, dateTo, transactions])
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -68,6 +74,34 @@ export default function FinancePage() {
     loadData()
   }
 
+  const openEditModal = (t: Transaction) => {
+    setEditForm({
+      id: t.id,
+      type: t.type,
+      category: t.category,
+      amount: t.amount?.toString() || '',
+      description: t.description || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const { error } = await supabase.from('transactions').update({
+      type: editForm.type,
+      category: editForm.category,
+      amount: parseFloat(editForm.amount) || 0,
+      description: editForm.description
+    }).eq('id', editForm.id)
+    if (error) {
+      showToast('Hata: ' + error.message, 'error')
+    } else {
+      showToast('Islem guncellendi!')
+      setShowEditModal(false)
+      loadData()
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Silmek istediginize emin misiniz?')) return
     await supabase.from('transactions').delete().eq('id', id)
@@ -75,7 +109,6 @@ export default function FinancePage() {
     loadData()
   }
 
-  // Fix: Use Array.from instead of spread on Set
   const categories: string[] = []
   transactions.forEach((t: Transaction) => {
     if (!categories.includes(t.category)) categories.push(t.category)
@@ -104,26 +137,27 @@ export default function FinancePage() {
 
       {/* Balance Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="stat-card">
+        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
           <h3 className="text-sm text-slate-400">Toplam Gelir</h3>
           <p className="text-2xl font-bold text-emerald-400">{balance.income.toLocaleString('tr-TR')} TL</p>
         </div>
-        <div className="stat-card">
+        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
           <h3 className="text-sm text-slate-400">Toplam Gider</h3>
           <p className="text-2xl font-bold text-red-400">{balance.expense.toLocaleString('tr-TR')} TL</p>
         </div>
-        <div className="stat-card">
+        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
           <h3 className="text-sm text-slate-400">Net Bakiye</h3>
           <p className={`text-2xl font-bold ${balance.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{balance.net.toLocaleString('tr-TR')} TL</p>
         </div>
-        <div className="stat-card">
+        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
           <h3 className="text-sm text-slate-400">Bugun</h3>
           <p className="text-lg font-bold text-emerald-400">+{balance.todayIncome.toLocaleString('tr-TR')} TL</p>
           <p className="text-sm text-red-400">-{balance.todayExpense.toLocaleString('tr-TR')} TL</p>
         </div>
       </div>
 
-      <div className="flex gap-2">
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap">
         <select className="select w-40" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">Tum Turler</option>
           <option value="gelir">Gelir</option>
@@ -133,19 +167,15 @@ export default function FinancePage() {
           <option value="">Tum Kategoriler</option>
           {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>
+        <input type="date" className="input w-40" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        <input type="date" className="input w-40" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        <button onClick={() => { setTypeFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo('') }} className="btn btn-secondary btn-sm">Temizle</button>
       </div>
 
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Tur</th>
-              <th>Kategori</th>
-              <th>Tutar</th>
-              <th>Aciklama</th>
-              <th>Tarih</th>
-              <th>Islemler</th>
-            </tr>
+            <tr><th>Tur</th><th>Kategori</th><th>Tutar</th><th>Aciklama</th><th>Tarih</th><th>Islemler</th></tr>
           </thead>
           <tbody>
             {filtered.map((t: Transaction) => (
@@ -156,7 +186,10 @@ export default function FinancePage() {
                 <td className="text-slate-300 max-w-xs truncate">{t.description || '-'}</td>
                 <td className="text-slate-400 text-sm">{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
                 <td>
-                  <button onClick={() => handleDelete(t.id)} className="btn btn-danger btn-sm">Sil</button>
+                  <div className="flex gap-1">
+                    <button onClick={() => openEditModal(t)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️</button>
+                    <button onClick={() => handleDelete(t.id)} className="btn btn-danger btn-sm">Sil</button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -170,6 +203,7 @@ export default function FinancePage() {
         </div>
       )}
 
+      {/* Yeni Islem Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -202,6 +236,36 @@ export default function FinancePage() {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
                 <button type="submit" className="btn btn-primary">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Duzenle Modal */}
+      {showEditModal && editForm && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold text-white">Islem Duzenle</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label>Tur</label>
+                  <select className="select" value={editForm.type} onChange={(e) => setEditForm({...editForm, type: e.target.value})}>
+                    <option value="gelir">Gelir</option>
+                    <option value="gider">Gider</option>
+                  </select>
+                </div>
+                <div className="form-group"><label>Kategori *</label><input className="input" value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})} required /></div>
+                <div className="form-group"><label>Tutar (TL) *</label><input className="input" type="number" step="0.01" value={editForm.amount} onChange={(e) => setEditForm({...editForm, amount: e.target.value})} required /></div>
+                <div className="form-group"><label>Aciklama</label><textarea className="input" rows={2} value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} /></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">Iptal</button>
+                <button type="submit" className="btn btn-primary">Guncelle</button>
               </div>
             </form>
           </div>
