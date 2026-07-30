@@ -31,7 +31,7 @@ function PaymentStatusBadge({ device }: { device: any }) {
   const finalCost = device.final_cost || 0
   const paidAmount = device.paid_amount || 0
   const remaining = finalCost - paidAmount
-  
+
   if (finalCost === 0) {
     return <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8' }}>Ücretsiz</span>
   }
@@ -149,6 +149,7 @@ export default function DevicesPage() {
     setShowPaymentModal(true)
   }
 
+  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -183,26 +184,26 @@ export default function DevicesPage() {
         related_table: 'devices'
       }])
 
-      // 3. debts tablosunu güncelle
+      // 3. debts tablosunu güncelle - İNGİLİZCE SÜTUN ADLARI
       const remainingAmount = remaining > 0 ? remaining : 0
-      const { data: existing } = await supabase.from('debts').select('id').eq('kaynak_kimliği', paymentForm.device_id).eq('kaynak_türü', 'Teknik Servis')
+      const { data: existing } = await supabase.from('debts').select('id').eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
       if (!existing || existing.length === 0) {
         await supabase.from('debts').insert([{
-          müşteri_kimliği: device.customer_id,
-          kaynak_türü: 'Teknik Servis',
-          kaynak_kimliği: device.id,
-          toplam_miktar: finalCost,
-          ödenen_miktar: newPaid,
-          kalan_miktar: remainingAmount,
-          durum: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
+          customer_id: device.customer_id,
+          source_type: 'Teknik Servis',
+          source_id: device.id,
+          total_amount: finalCost,
+          paid_amount: newPaid,
+          remaining_amount: remainingAmount,
+          status: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
         }])
       } else {
         await supabase.from('debts').update({
-          toplam_miktar: finalCost,
-          ödenen_miktar: newPaid,
-          kalan_miktar: remainingAmount,
-          durum: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
-        }).eq('kaynak_kimliği', paymentForm.device_id).eq('kaynak_türü', 'Teknik Servis')
+          total_amount: finalCost,
+          paid_amount: newPaid,
+          remaining_amount: remainingAmount,
+          status: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
+        }).eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
       }
 
       setToast({ message: `₺${paymentAmount.toLocaleString('tr-TR')} ödeme alındı! Kasa kaydı oluşturuldu.`, type: 'success' })

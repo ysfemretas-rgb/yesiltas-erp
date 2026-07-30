@@ -58,15 +58,15 @@ export default function CustomersPage() {
     setFiltered(result)
   }, [search, customers])
 
+  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const loadData = async () => {
     setLoading(true)
     const { data } = await supabase.from('customers').select('*').order('name')
     if (data) {
-      // Her müşteri için borç durumunu hesapla
       const enriched = await Promise.all(data.map(async (c) => {
-        const { data: debts } = await supabase.from('debts').select('kalan_miktar, durum').eq('müşteri_kimliği', c.id)
-        const totalDebt = debts?.reduce((sum, d) => sum + (d.kalan_miktar || 0), 0) || 0
-        const hasOverdue = debts?.some((d: any) => d.durum === 'Gecikmiş') || false
+        const { data: debts } = await supabase.from('debts').select('remaining_amount, status').eq('customer_id', c.id)
+        const totalDebt = debts?.reduce((sum, d) => sum + (d.remaining_amount || 0), 0) || 0
+        const hasOverdue = debts?.some((d: any) => d.status === 'Gecikmiş') || false
         return { ...c, totalDebt, hasOverdue }
       }))
       setCustomers(enriched)
@@ -102,7 +102,7 @@ export default function CustomersPage() {
     // Önce bağlı kayıtları say
     const { data: salesCount } = await supabase.from('sales').select('id', { count: 'exact' }).eq('customer_id', customer.id)
     const { data: devicesCount } = await supabase.from('devices').select('id', { count: 'exact' }).eq('customer_id', customer.id)
-    const { data: debtsCount } = await supabase.from('debts').select('id', { count: 'exact' }).eq('müşteri_kimliği', customer.id)
+    const { data: debtsCount } = await supabase.from('debts').select('id', { count: 'exact' }).eq('customer_id', customer.id)
     const { data: warrantiesCount } = await supabase.from('warranties').select('id', { count: 'exact' }).eq('customer_id', customer.id)
 
     const sCount = salesCount?.length || 0
@@ -128,7 +128,7 @@ export default function CustomersPage() {
       // Cascade silme sırası
       await supabase.from('customer_payments').delete().eq('customer_id', customer.id)
       await supabase.from('warranties').delete().eq('customer_id', customer.id)
-      await supabase.from('debts').delete().eq('müşteri_kimliği', customer.id)
+      await supabase.from('debts').delete().eq('customer_id', customer.id)
       await supabase.from('sales').delete().eq('customer_id', customer.id)
 
       // Cihazlar önce device_history'yi temizle
@@ -153,17 +153,19 @@ export default function CustomersPage() {
     }
   }
 
+  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const openDebtModal = async (customer: any) => {
     setSelectedCustomer(customer)
-    const { data: debts } = await supabase.from('debts').select('*').eq('müşteri_kimliği', customer.id).order('created_at', { ascending: false })
+    const { data: debts } = await supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
     setCustomerDebts(debts || [])
     setShowDebtModal(true)
   }
 
+  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const openDetailModal = async (customer: any) => {
     setSelectedCustomer(customer)
     const [debts, sales, devices, payments] = await Promise.all([
-      supabase.from('debts').select('*').eq('müşteri_kimliği', customer.id).order('created_at', { ascending: false }),
+      supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
       supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
       supabase.from('devices').select('*, customers:customer_id(name)').eq('customer_id', customer.id).order('created_at', { ascending: false }),
       supabase.from('customer_payments').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
@@ -272,7 +274,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Borç Detay Modal */}
+      {/* Borç Detay Modal - DÜZELTİLMİŞ debts sütun adları İngilizce */}
       {showDebtModal && selectedCustomer && (
         <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowDebtModal(false)}>
           <div className="modal" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
@@ -289,15 +291,15 @@ export default function CustomersPage() {
                     <div key={debt.id} className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                       <div className="flex justify-between items-start">
                         <div>
-                          <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{debt.kaynak_türü}</div>
-                          <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Toplam: ₺{(debt.toplam_miktar || 0).toLocaleString('tr-TR')}</div>
+                          <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{debt.source_type}</div>
+                          <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Toplam: ₺{(debt.total_amount || 0).toLocaleString('tr-TR')}</div>
                         </div>
-                        {getDebtStatusBadge(debt.durum)}
+                        {getDebtStatusBadge(debt.status)}
                       </div>
                       <div className="grid grid-cols-3 gap-2 mt-2">
-                        <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Ödenen:</span> <span className="text-emerald-400">₺{(debt.ödenen_miktar || 0).toLocaleString('tr-TR')}</span></div>
-                        <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Kalan:</span> <span className="text-red-400">₺{(debt.kalan_miktar || 0).toLocaleString('tr-TR')}</span></div>
-                        <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Bitiş:</span> {debt.bitiş_tarihi ? new Date(debt.bitiş_tarihi).toLocaleDateString('tr-TR') : '-'}</div>
+                        <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Ödenen:</span> <span className="text-emerald-400">₺{(debt.paid_amount || 0).toLocaleString('tr-TR')}</span></div>
+                        <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Kalan:</span> <span className="text-red-400">₺{(debt.remaining_amount || 0).toLocaleString('tr-TR')}</span></div>
+                        <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Bitiş:</span> {debt.due_date ? new Date(debt.due_date).toLocaleDateString('tr-TR') : '-'}</div>
                       </div>
                     </div>
                   ))}
@@ -311,7 +313,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Müşteri Detay Modal */}
+      {/* Müşteri Detay Modal - DÜZELTİLMİŞ debts sütun adları İngilizce */}
       {showDetailModal && selectedCustomer && (
         <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowDetailModal(false)}>
           <div className="modal" style={{ maxWidth: '700px', maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
@@ -331,7 +333,7 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              {/* Borç Özeti */}
+              {/* Borç Özeti - DÜZELTİLMİŞ */}
               <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                 <h3 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>💳 Borç Durumu</h3>
                 <div className="text-2xl font-bold text-red-400">₺{selectedCustomer.totalDebt?.toLocaleString('tr-TR') || 0}</div>
@@ -339,8 +341,8 @@ export default function CustomersPage() {
                   <div className="mt-2 space-y-2">
                     {customerDebts.map(d => (
                       <div key={d.id} className="text-sm flex justify-between">
-                        <span style={{ color: 'var(--text-secondary)' }}>{d.kaynak_türü}</span>
-                        <span className="text-red-400">₺{(d.kalan_miktar || 0).toLocaleString('tr-TR')}</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{d.source_type}</span>
+                        <span className="text-red-400">₺{(d.remaining_amount || 0).toLocaleString('tr-TR')}</span>
                       </div>
                     ))}
                   </div>
