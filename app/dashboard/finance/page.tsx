@@ -110,7 +110,13 @@ export default function FinancePage() {
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0)
   const balance = totalIncome - totalExpense
 
-  const categories = [...new Set(transactions.map(t => t.category))]
+  // Set yerine normal array kullan
+  const categories: string[] = []
+  transactions.forEach(t => {
+    if (t.category && !categories.includes(t.category)) {
+      categories.push(t.category)
+    }
+  })
 
   let filtered = transactions
   if (search) {
@@ -131,7 +137,6 @@ export default function FinancePage() {
         <button onClick={() => setShowAddModal(true)} className="btn btn-primary">+ Yeni İşlem</button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
           <div className="text-2xl font-bold text-emerald-400">₺{totalIncome.toLocaleString('tr-TR')}</div>
@@ -147,7 +152,6 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-4 flex-wrap items-end">
         <div className="form-group">
           <label>Tarih</label>
@@ -200,7 +204,6 @@ export default function FinancePage() {
       </div>
       {filtered.length === 0 && <div className="empty-state"><p>İşlem bulunamadı</p></div>}
 
-      {/* Add Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -243,7 +246,6 @@ export default function FinancePage() {
         </div>
       )}
 
-      {/* Edit Modal */}
       {showEditModal && (
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
