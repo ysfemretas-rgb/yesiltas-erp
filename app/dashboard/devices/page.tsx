@@ -1,106 +1,58 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { toast } from "sonner"
-import { Search, Plus, Trash2, Edit, Phone, Wrench, DollarSign } from "lucide-react"
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
-interface Device {
-  id: string
-  customer_name: string
-  customer_phone: string
-  device_type: string
-  brand: string
-  model: string
-  serial_number: string
-  problem: string
-  status: string
-  estimated_cost: number
-  actual_cost: number
-  payment_status: string
-  notes: string
-  created_at: string
-}
-
-interface Customer {
-  id: string
-  name: string
-  phone: string
+function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+  return (
+    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+    }`}>
+      <div className="flex items-center gap-2">
+        <span>{type === 'success' ? '✅' : '❌'}</span>
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
+      </div>
+    </div>
+  )
 }
 
 export default function DevicesPage() {
-  const [devices, setDevices] = useState<Device[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [devices, setDevices] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("")
-  const [filtered, setFiltered] = useState<Device[]>([])
+  const [search, setSearch] = useState('')
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [paymentForm, setPaymentForm] = useState({ device_id: "", amount: "" })
 
   const [form, setForm] = useState({
-    customer_id: "",
-    customer_name: "",
-    customer_phone: "",
-    device_type: "Telefon",
-    brand: "",
-    model: "",
-    serial_number: "",
-    problem: "",
-    status: "Beklemede",
-    estimated_cost: "",
-    actual_cost: "",
-    payment_status: "Ödenmedi",
-    notes: ""
+    customer_id: '', customer_name: '', customer_phone: '', device_type: 'Telefon',
+    brand: '', model: '', serial_number: '', problem: '', status: 'Beklemede',
+    estimated_cost: '', actual_cost: '', payment_status: 'Ödenmedi', notes: ''
   })
 
   const [editForm, setEditForm] = useState({
-    id: "",
-    customer_name: "",
-    customer_phone: "",
-    device_type: "Telefon",
-    brand: "",
-    model: "",
-    serial_number: "",
-    problem: "",
-    status: "Beklemede",
-    estimated_cost: "",
-    actual_cost: "",
-    payment_status: "Ödenmedi",
-    notes: ""
+    id: '', customer_name: '', customer_phone: '', device_type: 'Telefon',
+    brand: '', model: '', serial_number: '', problem: '', status: 'Beklemede',
+    estimated_cost: '', actual_cost: '', payment_status: 'Ödenmedi', notes: ''
   })
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  const [paymentForm, setPaymentForm] = useState({ device_id: '', amount: '' })
 
-  useEffect(() => {
-    let result = devices
-    if (search) {
-      const term = search.toLowerCase()
-      result = result.filter(d =>
-        d.customer_name?.toLowerCase().includes(term) ||
-        d.device_type?.toLowerCase().includes(term) ||
-        d.brand?.toLowerCase().includes(term) ||
-        d.model?.toLowerCase().includes(term) ||
-        d.status?.toLowerCase().includes(term)
-      )
-    }
-    setFiltered(result)
-  }, [search, devices])
+  useEffect(() => { loadData() }, [])
 
-  async function loadData() {
+  const loadData = async () => {
     setLoading(true)
-    const { data: devicesData } = await supabase.from("devices").select("*").order("created_at", { ascending: false })
-    const { data: customersData } = await supabase.from("customers").select("id, name, phone")
+    const [{ data: devicesData }, { data: customersData }] = await Promise.all([
+      supabase.from('devices').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('id, name, phone').order('name')
+    ])
     if (devicesData) setDevices(devicesData)
     if (customersData) setCustomers(customersData)
     setLoading(false)
@@ -108,461 +60,426 @@ export default function DevicesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const estimated = parseFloat(form.estimated_cost) || 0
-    const actual = parseFloat(form.actual_cost) || 0
+    try {
+      const estimated = parseFloat(form.estimated_cost) || 0
+      const actual = parseFloat(form.actual_cost) || 0
 
-    const { error } = await supabase.from("devices").insert([{
-      customer_name: form.customer_name,
-      customer_phone: form.customer_phone,
-      device_type: form.device_type,
-      brand: form.brand,
-      model: form.model,
-      serial_number: form.serial_number,
-      problem: form.problem,
-      status: form.status,
-      estimated_cost: estimated,
-      actual_cost: actual,
-      payment_status: form.payment_status,
-      notes: form.notes
-    }])
+      const { error } = await supabase.from('devices').insert([{
+        customer_name: form.customer_name,
+        customer_phone: form.customer_phone,
+        device_type: form.device_type,
+        brand: form.brand,
+        model: form.model,
+        serial_number: form.serial_number,
+        problem: form.problem,
+        status: form.status,
+        estimated_cost: estimated,
+        actual_cost: actual,
+        payment_status: form.payment_status,
+        notes: form.notes
+      }])
 
-    if (error) {
-      toast.error("Cihaz eklenirken hata: " + error.message)
-      return
+      if (error) throw error
+      setToast({ message: 'Cihaz başarıyla eklendi!', type: 'success' })
+      setShowAddModal(false)
+      setForm({
+        customer_id: '', customer_name: '', customer_phone: '', device_type: 'Telefon',
+        brand: '', model: '', serial_number: '', problem: '', status: 'Beklemede',
+        estimated_cost: '', actual_cost: '', payment_status: 'Ödenmedi', notes: ''
+      })
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-
-    toast.success("Cihaz başarıyla eklendi")
-    setShowAddModal(false)
-    setForm({
-      customer_id: "", customer_name: "", customer_phone: "", device_type: "Telefon",
-      brand: "", model: "", serial_number: "", problem: "", status: "Beklemede",
-      estimated_cost: "", actual_cost: "", payment_status: "Ödenmedi", notes: ""
-    })
-    loadData()
   }
 
-  const openEditModal = (device: Device) => {
+  const openEditModal = (device: any) => {
     setEditForm({
       id: device.id,
-      customer_name: device.customer_name || "",
-      customer_phone: device.customer_phone || "",
-      device_type: device.device_type || "Telefon",
-      brand: device.brand || "",
-      model: device.model || "",
-      serial_number: device.serial_number || "",
-      problem: device.problem || "",
-      status: device.status || "Beklemede",
-      estimated_cost: device.estimated_cost?.toString() || "",
-      actual_cost: device.actual_cost?.toString() || "",
-      payment_status: device.payment_status || "Ödenmedi",
-      notes: device.notes || ""
+      customer_name: device.customer_name || '',
+      customer_phone: device.customer_phone || '',
+      device_type: device.device_type || 'Telefon',
+      brand: device.brand || '',
+      model: device.model || '',
+      serial_number: device.serial_number || '',
+      problem: device.problem || '',
+      status: device.status || 'Beklemede',
+      estimated_cost: device.estimated_cost?.toString() || '',
+      actual_cost: device.actual_cost?.toString() || '',
+      payment_status: device.payment_status || 'Ödenmedi',
+      notes: device.notes || ''
     })
     setShowEditModal(true)
   }
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const estimated = parseFloat(editForm.estimated_cost) || 0
-    const actual = parseFloat(editForm.actual_cost) || 0
+    try {
+      const estimated = parseFloat(editForm.estimated_cost) || 0
+      const actual = parseFloat(editForm.actual_cost) || 0
 
-    const { error } = await supabase.from("devices").update({
-      customer_name: editForm.customer_name,
-      customer_phone: editForm.customer_phone,
-      device_type: editForm.device_type,
-      brand: editForm.brand,
-      model: editForm.model,
-      serial_number: editForm.serial_number,
-      problem: editForm.problem,
-      status: editForm.status,
-      estimated_cost: estimated,
-      actual_cost: actual,
-      payment_status: editForm.payment_status,
-      notes: editForm.notes
-    }).eq("id", editForm.id)
+      const { error } = await supabase.from('devices').update({
+        customer_name: editForm.customer_name,
+        customer_phone: editForm.customer_phone,
+        device_type: editForm.device_type,
+        brand: editForm.brand,
+        model: editForm.model,
+        serial_number: editForm.serial_number,
+        problem: editForm.problem,
+        status: editForm.status,
+        estimated_cost: estimated,
+        actual_cost: actual,
+        payment_status: editForm.payment_status,
+        notes: editForm.notes
+      }).eq('id', editForm.id)
 
-    if (error) {
-      toast.error("Güncellenirken hata: " + error.message)
-      return
+      if (error) throw error
+      setToast({ message: 'Cihaz güncellendi!', type: 'success' })
+      setShowEditModal(false)
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-
-    toast.success("Cihaz güncellendi")
-    setShowEditModal(false)
-    loadData()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bu cihazı silmek istediğinize emin misiniz?")) return
-    const { error } = await supabase.from("devices").delete().eq("id", id)
-    if (error) {
-      toast.error("Silinirken hata: " + error.message)
-      return
+    if (!confirm('Bu cihazı silmek istediğinize emin misiniz?')) return
+    try {
+      const { error } = await supabase.from('devices').delete().eq('id', id)
+      if (error) throw error
+      setToast({ message: 'Cihaz silindi!', type: 'success' })
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-    toast.success("Cihaz silindi")
-    loadData()
   }
 
-  const openPaymentModal = (device: Device) => {
-    setPaymentForm({ device_id: device.id, amount: device.actual_cost?.toString() || "" })
+  const openPaymentModal = (device: any) => {
+    setPaymentForm({ device_id: device.id, amount: device.actual_cost?.toString() || '' })
     setShowPaymentModal(true)
   }
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault()
-    const amount = parseFloat(paymentForm.amount) || 0
-    if (amount <= 0) {
-      toast.error("Geçerli bir tutar girin")
-      return
+    try {
+      const amount = parseFloat(paymentForm.amount) || 0
+      if (amount <= 0) {
+        setToast({ message: 'Geçerli bir tutar girin', type: 'error' })
+        return
+      }
+
+      const device = devices.find(d => d.id === paymentForm.device_id)
+      if (!device) return
+
+      // Kasa kaydı ekle
+      const { error: transError } = await supabase.from('transactions').insert([{
+        type: 'income',
+        category: 'Teknik Servis',
+        amount: amount,
+        description: `${device.customer_name} - ${device.device_type} ${device.brand} ${device.model}`,
+        date: new Date().toISOString().split('T')[0]
+      }])
+
+      if (transError) throw transError
+
+      // Cihaz ödeme durumunu güncelle
+      const { error: updateError } = await supabase.from('devices').update({
+        payment_status: 'Ödendi'
+      }).eq('id', paymentForm.device_id)
+
+      if (updateError) throw updateError
+
+      setToast({ message: 'Ödeme alındı ve kasaya kaydedildi!', type: 'success' })
+      setShowPaymentModal(false)
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-
-    const device = devices.find(d => d.id === paymentForm.device_id)
-    if (!device) return
-
-    // Kasa kaydı ekle
-    const { error: transError } = await supabase.from("transactions").insert([{
-      type: "income",
-      category: "Teknik Servis",
-      amount: amount,
-      description: `${device.customer_name} - ${device.device_type} ${device.brand} ${device.model}`,
-      date: new Date().toISOString().split("T")[0]
-    }])
-
-    if (transError) {
-      toast.error("Kasa kaydı eklenirken hata: " + transError.message)
-      return
-    }
-
-    // Cihaz ödeme durumunu güncelle
-    const { error: updateError } = await supabase.from("devices").update({
-      payment_status: "Ödendi"
-    }).eq("id", paymentForm.device_id)
-
-    if (updateError) {
-      toast.error("Ödeme durumu güncellenirken hata: " + updateError.message)
-      return
-    }
-
-    toast.success("Ödeme alındı ve kasaya kaydedildi")
-    setShowPaymentModal(false)
-    loadData()
   }
 
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
     if (customer) {
-      setForm(prev => ({
-        ...prev,
-        customer_id: customerId,
-        customer_name: customer.name,
-        customer_phone: customer.phone || ""
-      }))
+      setForm(prev => ({ ...prev, customer_id: customerId, customer_name: customer.name, customer_phone: customer.phone || '' }))
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Tamamlandı": return "bg-green-100 text-green-800"
-      case "Beklemede": return "bg-yellow-100 text-yellow-800"
-      case "İşlemde": return "bg-blue-100 text-blue-800"
-      case "İptal": return "bg-red-100 text-red-800"
-      default: return "bg-gray-100 text-gray-800"
+      case 'Tamamlandı': return 'badge-green'
+      case 'Beklemede': return 'badge-yellow'
+      case 'İşlemde': return 'badge-blue'
+      case 'İptal': return 'badge-red'
+      default: return 'badge-gray'
     }
   }
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case "Ödendi": return "bg-green-100 text-green-800"
-      case "Kısmi": return "bg-yellow-100 text-yellow-800"
-      case "Ödenmedi": return "bg-red-100 text-red-800"
-      default: return "bg-gray-100 text-gray-800"
+      case 'Ödendi': return 'badge-green'
+      case 'Kısmi': return 'badge-yellow'
+      case 'Ödenmedi': return 'badge-red'
+      default: return 'badge-gray'
     }
   }
 
+  const filtered = devices.filter(d =>
+    d.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+    d.device_type?.toLowerCase().includes(search.toLowerCase()) ||
+    d.brand?.toLowerCase().includes(search.toLowerCase()) ||
+    d.model?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  if (loading && devices.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Teknik Servis</h1>
-        <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> Yeni Cihaz</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Yeni Cihaz Ekle</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Müşteri Seç</Label>
-                  <Select onValueChange={handleCustomerSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Müşteri seçin" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name} - {c.phone}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Müşteri Adı</Label>
-                  <Input value={form.customer_name} onChange={e => setForm({...form, customer_name: e.target.value})} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefon</Label>
-                  <Input value={form.customer_phone} onChange={e => setForm({...form, customer_phone: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cihaz Türü</Label>
-                  <Select value={form.device_type} onValueChange={v => setForm({...form, device_type: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Telefon">Telefon</SelectItem>
-                      <SelectItem value="Tablet">Tablet</SelectItem>
-                      <SelectItem value="Bilgisayar">Bilgisayar</SelectItem>
-                      <SelectItem value="Diğer">Diğer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Marka</Label>
-                  <Input value={form.brand} onChange={e => setForm({...form, brand: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Model</Label>
-                  <Input value={form.model} onChange={e => setForm({...form, model: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Seri No</Label>
-                  <Input value={form.serial_number} onChange={e => setForm({...form, serial_number: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tahmini Maliyet</Label>
-                  <Input type="number" value={form.estimated_cost} onChange={e => setForm({...form, estimated_cost: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Gerçek Maliyet</Label>
-                  <Input type="number" value={form.actual_cost} onChange={e => setForm({...form, actual_cost: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Durum</Label>
-                  <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Beklemede">Beklemede</SelectItem>
-                      <SelectItem value="İşlemde">İşlemde</SelectItem>
-                      <SelectItem value="Tamamlandı">Tamamlandı</SelectItem>
-                      <SelectItem value="İptal">İptal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Ödeme Durumu</Label>
-                  <Select value={form.payment_status} onValueChange={v => setForm({...form, payment_status: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Ödenmedi">Ödenmedi</SelectItem>
-                      <SelectItem value="Kısmi">Kısmi</SelectItem>
-                      <SelectItem value="Ödendi">Ödendi</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Sorun</Label>
-                <Input value={form.problem} onChange={e => setForm({...form, problem: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Notlar</Label>
-                <Input value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
-              </div>
-              <Button type="submit" className="w-full">Kaydet</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-4">
+      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Teknik Servis</h1>
+        <button onClick={() => setShowAddModal(true)} className="btn btn-primary">+ Yeni Cihaz</button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            <Input
-              placeholder="Ara..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8">Yükleniyor...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Müşteri</TableHead>
-                  <TableHead>Cihaz</TableHead>
-                  <TableHead>Marka/Model</TableHead>
-                  <TableHead>Sorun</TableHead>
-                  <TableHead>Durum</TableHead>
-                  <TableHead>Maliyet</TableHead>
-                  <TableHead>Ödeme</TableHead>
-                  <TableHead>İşlemler</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(device => (
-                  <TableRow key={device.id}>
-                    <TableCell>
-                      <div className="font-medium">{device.customer_name}</div>
-                      <div className="text-sm text-muted-foreground">{device.customer_phone}</div>
-                    </TableCell>
-                    <TableCell>{device.device_type}</TableCell>
-                    <TableCell>{device.brand} {device.model}</TableCell>
-                    <TableCell>{device.problem}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(device.status)}`}>
-                        {device.status}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">Tah: {device.estimated_cost?.toLocaleString("tr-TR")} ₺</div>
-                      <div className="text-sm font-medium">Ger: {device.actual_cost?.toLocaleString("tr-TR")} ₺</div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(device.payment_status)}`}>
-                        {device.payment_status}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(device)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {device.payment_status !== "Ödendi" && device.status === "Tamamlandı" && (
-                          <Button variant="outline" size="sm" onClick={() => openPaymentModal(device)}>
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(device.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Müşteri</th><th>Cihaz</th><th>Marka/Model</th><th>Sorun</th>
+              <th>Durum</th><th>Maliyet</th><th>Ödeme</th><th>İşlemler</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((device) => (
+              <tr key={device.id}>
+                <td>
+                  <div className="font-medium">{device.customer_name}</div>
+                  <div className="text-sm" style={{ color: 'var(--text-muted)' }}>{device.customer_phone}</div>
+                </td>
+                <td>{device.device_type}</td>
+                <td>{device.brand} {device.model}</td>
+                <td>{device.problem}</td>
+                <td><span className={`badge ${getStatusColor(device.status)}`}>{device.status}</span></td>
+                <td>
+                  <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Tah: ₺{device.estimated_cost?.toLocaleString('tr-TR')}</div>
+                  <div className="text-sm font-medium">Ger: ₺{device.actual_cost?.toLocaleString('tr-TR')}</div>
+                </td>
+                <td><span className={`badge ${getPaymentStatusColor(device.payment_status)}`}>{device.payment_status}</span></td>
+                <td>
+                  <div className="flex gap-1">
+                    <button onClick={() => openEditModal(device)} className="btn btn-sm btn-secondary">Düzenle</button>
+                    {device.payment_status !== 'Ödendi' && device.status === 'Tamamlandı' && (
+                      <button onClick={() => openPaymentModal(device)} className="btn btn-sm btn-primary">Ödeme Al</button>
+                    )}
+                    <button onClick={() => handleDelete(device.id)} className="btn btn-sm btn-danger">Sil</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {filtered.length === 0 && <div className="empty-state"><p>Cihaz bulunamadı</p></div>}
+
+      {/* Add Modal */}
+      {showAddModal && (
+        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Cihaz Ekle</h2>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label>Müşteri Seç</label>
+                    <select className="input" value={form.customer_id} onChange={(e) => handleCustomerSelect(e.target.value)}>
+                      <option value="">Seçin</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Müşteri Adı</label>
+                    <input className="input" value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Telefon</label>
+                    <input className="input" value={form.customer_phone} onChange={(e) => setForm({...form, customer_phone: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Cihaz Türü</label>
+                    <select className="input" value={form.device_type} onChange={(e) => setForm({...form, device_type: e.target.value})}>
+                      <option value="Telefon">Telefon</option>
+                      <option value="Tablet">Tablet</option>
+                      <option value="Bilgisayar">Bilgisayar</option>
+                      <option value="Diğer">Diğer</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Marka</label>
+                    <input className="input" value={form.brand} onChange={(e) => setForm({...form, brand: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Model</label>
+                    <input className="input" value={form.model} onChange={(e) => setForm({...form, model: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Seri No</label>
+                    <input className="input" value={form.serial_number} onChange={(e) => setForm({...form, serial_number: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Tahmini Maliyet</label>
+                    <input className="input" type="number" value={form.estimated_cost} onChange={(e) => setForm({...form, estimated_cost: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Gerçek Maliyet</label>
+                    <input className="input" type="number" value={form.actual_cost} onChange={(e) => setForm({...form, actual_cost: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Durum</label>
+                    <select className="input" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
+                      <option value="Beklemede">Beklemede</option>
+                      <option value="İşlemde">İşlemde</option>
+                      <option value="Tamamlandı">Tamamlandı</option>
+                      <option value="İptal">İptal</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Ödeme Durumu</label>
+                    <select className="input" value={form.payment_status} onChange={(e) => setForm({...form, payment_status: e.target.value})}>
+                      <option value="Ödenmedi">Ödenmedi</option>
+                      <option value="Kısmi">Kısmi</option>
+                      <option value="Ödendi">Ödendi</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Sorun</label>
+                  <input className="input" value={form.problem} onChange={(e) => setForm({...form, problem: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Notlar</label>
+                  <textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Cihaz Düzenle</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleEdit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Müşteri Adı</Label>
-                <Input value={editForm.customer_name} onChange={e => setEditForm({...editForm, customer_name: e.target.value})} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Telefon</Label>
-                <Input value={editForm.customer_phone} onChange={e => setEditForm({...editForm, customer_phone: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Cihaz Türü</Label>
-                <Select value={editForm.device_type} onValueChange={v => setEditForm({...editForm, device_type: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Telefon">Telefon</SelectItem>
-                    <SelectItem value="Tablet">Tablet</SelectItem>
-                    <SelectItem value="Bilgisayar">Bilgisayar</SelectItem>
-                    <SelectItem value="Diğer">Diğer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Marka</Label>
-                <Input value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Model</Label>
-                <Input value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Seri No</Label>
-                <Input value={editForm.serial_number} onChange={e => setEditForm({...editForm, serial_number: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Tahmini Maliyet</Label>
-                <Input type="number" value={editForm.estimated_cost} onChange={e => setEditForm({...editForm, estimated_cost: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Gerçek Maliyet</Label>
-                <Input type="number" value={editForm.actual_cost} onChange={e => setEditForm({...editForm, actual_cost: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Durum</Label>
-                <Select value={editForm.status} onValueChange={v => setEditForm({...editForm, status: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Beklemede">Beklemede</SelectItem>
-                    <SelectItem value="İşlemde">İşlemde</SelectItem>
-                    <SelectItem value="Tamamlandı">Tamamlandı</SelectItem>
-                    <SelectItem value="İptal">İptal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Ödeme Durumu</Label>
-                <Select value={editForm.payment_status} onValueChange={v => setEditForm({...editForm, payment_status: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Ödenmedi">Ödenmedi</SelectItem>
-                    <SelectItem value="Kısmi">Kısmi</SelectItem>
-                    <SelectItem value="Ödendi">Ödendi</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Cihaz Düzenle</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <div className="space-y-2">
-              <Label>Sorun</Label>
-              <Input value={editForm.problem} onChange={e => setEditForm({...editForm, problem: e.target.value})} />
-            </div>
-            <div className="space-y-2">
-              <Label>Notlar</Label>
-              <Input value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} />
-            </div>
-            <Button type="submit" className="w-full">Güncelle</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <form onSubmit={handleEdit}>
+              <div className="modal-body space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label>Müşteri Adı</label>
+                    <input className="input" value={editForm.customer_name} onChange={(e) => setEditForm({...editForm, customer_name: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Telefon</label>
+                    <input className="input" value={editForm.customer_phone} onChange={(e) => setEditForm({...editForm, customer_phone: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Cihaz Türü</label>
+                    <select className="input" value={editForm.device_type} onChange={(e) => setEditForm({...editForm, device_type: e.target.value})}>
+                      <option value="Telefon">Telefon</option>
+                      <option value="Tablet">Tablet</option>
+                      <option value="Bilgisayar">Bilgisayar</option>
+                      <option value="Diğer">Diğer</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Marka</label>
+                    <input className="input" value={editForm.brand} onChange={(e) => setEditForm({...editForm, brand: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Model</label>
+                    <input className="input" value={editForm.model} onChange={(e) => setEditForm({...editForm, model: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Seri No</label>
+                    <input className="input" value={editForm.serial_number} onChange={(e) => setEditForm({...editForm, serial_number: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Tahmini Maliyet</label>
+                    <input className="input" type="number" value={editForm.estimated_cost} onChange={(e) => setEditForm({...editForm, estimated_cost: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Gerçek Maliyet</label>
+                    <input className="input" type="number" value={editForm.actual_cost} onChange={(e) => setEditForm({...editForm, actual_cost: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Durum</label>
+                    <select className="input" value={editForm.status} onChange={(e) => setEditForm({...editForm, status: e.target.value})}>
+                      <option value="Beklemede">Beklemede</option>
+                      <option value="İşlemde">İşlemde</option>
+                      <option value="Tamamlandı">Tamamlandı</option>
+                      <option value="İptal">İptal</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Ödeme Durumu</label>
+                    <select className="input" value={editForm.payment_status} onChange={(e) => setEditForm({...editForm, payment_status: e.target.value})}>
+                      <option value="Ödenmedi">Ödenmedi</option>
+                      <option value="Kısmi">Kısmi</option>
+                      <option value="Ödendi">Ödendi</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Sorun</label>
+                  <input className="input" value={editForm.problem} onChange={(e) => setEditForm({...editForm, problem: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Notlar</label>
+                  <textarea className="input" rows={2} value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Güncelle</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
-      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ödeme Al</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handlePayment} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Ödeme Tutarı</Label>
-              <Input
-                type="number"
-                value={paymentForm.amount}
-                onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})}
-                required
-              />
+      {showPaymentModal && (
+        <div className="modal-overlay" onClick={() => setShowPaymentModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Ödeme Al</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <Button type="submit" className="w-full">Ödeme Al</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <form onSubmit={handlePayment}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label>Ödeme Tutarı</label>
+                  <input className="input" type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})} required />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Ödeme Al</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,112 +1,61 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { toast } from "sonner"
-import { Search, Plus, Trash2, Edit, DollarSign, Package, Smartphone } from "lucide-react"
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
-interface Sale {
-  id: string
-  customer_id: string
-  customer_name: string
-  item_name: string
-  item_type: string
-  quantity: number
-  unit_price: number
-  total_price: number
-  payment_method: string
-  installments: number
-  remaining_amount: number
-  warranty_months: number
-  warranty_end_date: string
-  cash: boolean
-  created_at: string
-}
-
-interface Customer {
-  id: string
-  name: string
-  phone: string
-}
-
-interface Inventory {
-  id: string
-  name: string
-  quantity: number
-  unit_price: number
+function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+  return (
+    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+    }`}>
+      <div className="flex items-center gap-2">
+        <span>{type === 'success' ? '✅' : '❌'}</span>
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
+      </div>
+    </div>
+  )
 }
 
 export default function SalesPage() {
-  const [sales, setSales] = useState<Sale[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [inventory, setInventory] = useState<Inventory[]>([])
+  const [sales, setSales] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
+  const [inventory, setInventory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("")
-  const [filtered, setFiltered] = useState<Sale[]>([])
+  const [search, setSearch] = useState('')
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [paymentForm, setPaymentForm] = useState({ sale_id: "", payment_amount: "" })
-  const [activeTab, setActiveTab] = useState<"sales" | "sold">("sales")
+  const [activeTab, setActiveTab] = useState<'sales' | 'sold'>('sales')
 
   const [form, setForm] = useState({
-    customer_id: "",
-    customer_name: "",
-    item_name: "",
-    item_type: "Cihaz",
-    quantity: "1",
-    unit_price: "",
-    payment_method: "Nakit",
-    installments: "1",
-    warranty_months: "12",
-    selected_inventory: "",
-    cash: true
+    customer_id: '', customer_name: '', item_name: '', item_type: 'Cihaz',
+    quantity: '1', unit_price: '', payment_method: 'Nakit', installments: '1',
+    warranty_months: '12', selected_inventory: '', cash: true
   })
 
   const [editForm, setEditForm] = useState({
-    id: "",
-    customer_id: "",
-    customer_name: "",
-    item_name: "",
-    item_type: "Cihaz",
-    quantity: "1",
-    unit_price: "",
-    payment_method: "Nakit",
-    installments: "1",
-    remaining_amount: "",
-    warranty_months: "12",
-    cash: true
+    id: '', customer_id: '', customer_name: '', item_name: '', item_type: 'Cihaz',
+    quantity: '1', unit_price: '', payment_method: 'Nakit', installments: '1',
+    remaining_amount: '', warranty_months: '12', cash: true
   })
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  const [paymentForm, setPaymentForm] = useState({ sale_id: '', payment_amount: '' })
 
-  useEffect(() => {
-    let result = sales
-    if (search) {
-      const term = search.toLowerCase()
-      result = result.filter(s =>
-        s.item_name?.toLowerCase().includes(term) ||
-        s.customer_name?.toLowerCase().includes(term) ||
-        s.item_type?.toLowerCase().includes(term)
-      )
-    }
-    setFiltered(result)
-  }, [search, sales])
+  useEffect(() => { loadData() }, [])
 
-  async function loadData() {
+  const loadData = async () => {
     setLoading(true)
-    const { data: salesData } = await supabase.from("sales").select("*").order("created_at", { ascending: false })
-    const { data: customersData } = await supabase.from("customers").select("id, name, phone")
-    const { data: inventoryData } = await supabase.from("inventory").select("id, name, quantity, unit_price")
+    const [{ data: salesData }, { data: customersData }, { data: inventoryData }] = await Promise.all([
+      supabase.from('sales').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('id, name, phone').order('name'),
+      supabase.from('inventory').select('id, name, quantity, unit_price')
+    ])
     if (salesData) setSales(salesData)
     if (customersData) setCustomers(customersData)
     if (inventoryData) setInventory(inventoryData)
@@ -115,105 +64,106 @@ export default function SalesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const qty = parseInt(form.quantity) || 1
-    const price = parseFloat(form.unit_price) || 0
-    const total = qty * price
-    const installments = parseInt(form.installments) || 1
-    const warrantyMonths = parseInt(form.warranty_months) || 12
-    const cash = form.cash
-    const remaining = !cash ? total : 0
+    try {
+      const qty = parseInt(form.quantity) || 1
+      const price = parseFloat(form.unit_price) || 0
+      const total = qty * price
+      const installments = parseInt(form.installments) || 1
+      const warrantyMonths = parseInt(form.warranty_months) || 12
+      const cash = form.cash
+      const remaining = !cash ? total : 0
 
-    const warrantyEnd = new Date()
-    warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
+      const warrantyEnd = new Date()
+      warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
-    const { data: saleData, error } = await supabase.from("sales").insert([{
-      customer_id: form.customer_id || null,
-      customer_name: form.customer_name,
-      item_name: form.item_name,
-      item_type: form.item_type,
-      quantity: qty,
-      unit_price: price,
-      total_price: total,
-      payment_method: form.payment_method,
-      installments,
-      remaining_amount: remaining,
-      warranty_months: warrantyMonths,
-      warranty_end_date: warrantyEnd.toISOString().split("T")[0],
-      cash
-    }]).select()
-
-    if (error) {
-      toast.error("Satış eklenirken hata: " + error.message)
-      return
-    }
-
-    // Stok düş
-    if (form.selected_inventory) {
-      const inv = inventory.find(i => i.id === form.selected_inventory)
-      if (inv) {
-        const newQty = inv.quantity - qty
-        if (newQty >= 0) {
-          await supabase.from("inventory").update({ quantity: newQty }).eq("id", form.selected_inventory)
-        }
-      }
-    }
-
-    // Kasa kaydı (peşin ise)
-    if (cash) {
-      await supabase.from("transactions").insert([{
-        type: "income",
-        category: "Satış",
-        amount: total,
-        description: `${form.customer_name} - ${form.item_name}`,
-        date: new Date().toISOString().split("T")[0]
-      }])
-    } else {
-      // Taksitli ise debts tablosuna kaydet
-      await supabase.from("debts").insert([{
+      const { data: saleData, error } = await supabase.from('sales').insert([{
         customer_id: form.customer_id || null,
         customer_name: form.customer_name,
-        amount: total,
-        remaining: remaining,
+        item_name: form.item_name,
+        item_type: form.item_type,
+        quantity: qty,
+        unit_price: price,
+        total_price: total,
+        payment_method: form.payment_method,
         installments,
-        paid_installments: 0,
+        remaining_amount: remaining,
+        warranty_months: warrantyMonths,
+        warranty_end_date: warrantyEnd.toISOString().split('T')[0],
+        cash
+      }]).select()
+
+      if (error) throw error
+
+      // Stok düş
+      if (form.selected_inventory) {
+        const inv = inventory.find(i => i.id === form.selected_inventory)
+        if (inv) {
+          const newQty = inv.quantity - qty
+          if (newQty >= 0) {
+            await supabase.from('inventory').update({ quantity: newQty }).eq('id', form.selected_inventory)
+          }
+        }
+      }
+
+      // Kasa kaydı (peşin ise)
+      if (cash) {
+        await supabase.from('transactions').insert([{
+          type: 'income',
+          category: 'Satış',
+          amount: total,
+          description: `${form.customer_name} - ${form.item_name}`,
+          date: new Date().toISOString().split('T')[0]
+        }])
+      } else {
+        // Taksitli ise debts tablosuna kaydet
+        await supabase.from('debts').insert([{
+          customer_id: form.customer_id || null,
+          customer_name: form.customer_name,
+          amount: total,
+          remaining: remaining,
+          installments,
+          paid_installments: 0,
+          sale_id: saleData?.[0]?.id,
+          type: 'sale'
+        }])
+      }
+
+      // Garanti kaydı
+      await supabase.from('warranties').insert([{
         sale_id: saleData?.[0]?.id,
-        type: "sale"
+        customer_name: form.customer_name,
+        item_name: form.item_name,
+        warranty_months: warrantyMonths,
+        warranty_end_date: warrantyEnd.toISOString().split('T')[0],
+        status: 'Aktif'
       }])
+
+      setToast({ message: 'Satış başarıyla eklendi!', type: 'success' })
+      setShowAddModal(false)
+      setForm({
+        customer_id: '', customer_name: '', item_name: '', item_type: 'Cihaz',
+        quantity: '1', unit_price: '', payment_method: 'Nakit', installments: '1',
+        warranty_months: '12', selected_inventory: '', cash: true
+      })
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-
-    // Garanti kaydı
-    await supabase.from("warranties").insert([{
-      sale_id: saleData?.[0]?.id,
-      customer_name: form.customer_name,
-      item_name: form.item_name,
-      warranty_months: warrantyMonths,
-      warranty_end_date: warrantyEnd.toISOString().split("T")[0],
-      status: "Aktif"
-    }])
-
-    toast.success("Satış başarıyla eklendi")
-    setShowAddModal(false)
-    setForm({
-      customer_id: "", customer_name: "", item_name: "", item_type: "Cihaz",
-      quantity: "1", unit_price: "", payment_method: "Nakit", installments: "1",
-      warranty_months: "12", selected_inventory: "", cash: true
-    })
-    loadData()
   }
 
-  const openEditModal = (sale: Sale) => {
+  const openEditModal = (sale: any) => {
     setEditForm({
       id: sale.id,
-      customer_id: sale.customer_id || "",
-      customer_name: sale.customer_name || "",
-      item_name: sale.item_name || "",
-      item_type: sale.item_type || "Cihaz",
-      quantity: sale.quantity?.toString() || "1",
-      unit_price: sale.unit_price?.toString() || "",
-      payment_method: sale.payment_method || "Nakit",
-      installments: sale.installments?.toString() || "1",
-      remaining_amount: sale.remaining_amount?.toString() || "",
-      warranty_months: sale.warranty_months?.toString() || "12",
+      customer_id: sale.customer_id || '',
+      customer_name: sale.customer_name || '',
+      item_name: sale.item_name || '',
+      item_type: sale.item_type || 'Cihaz',
+      quantity: sale.quantity?.toString() || '1',
+      unit_price: sale.unit_price?.toString() || '',
+      payment_method: sale.payment_method || 'Nakit',
+      installments: sale.installments?.toString() || '1',
+      remaining_amount: sale.remaining_amount?.toString() || '',
+      warranty_months: sale.warranty_months?.toString() || '12',
       cash: sale.cash ?? true
     })
     setShowEditModal(true)
@@ -221,450 +171,386 @@ export default function SalesPage() {
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const qty = parseInt(editForm.quantity) || 1
-    const price = parseFloat(editForm.unit_price) || 0
-    const total = qty * price
-    const installments = parseInt(editForm.installments) || 1
-    const warrantyMonths = parseInt(editForm.warranty_months) || 12
-    const cash = editForm.cash
-    const remaining = !cash ? total : 0
+    try {
+      const qty = parseInt(editForm.quantity) || 1
+      const price = parseFloat(editForm.unit_price) || 0
+      const total = qty * price
+      const installments = parseInt(editForm.installments) || 1
+      const warrantyMonths = parseInt(editForm.warranty_months) || 12
+      const cash = editForm.cash
+      const remaining = !cash ? total : 0
 
-    const warrantyEnd = new Date()
-    warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
+      const warrantyEnd = new Date()
+      warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
-    const { error } = await supabase.from("sales").update({
-      customer_id: editForm.customer_id || null,
-      customer_name: editForm.customer_name,
-      item_name: editForm.item_name,
-      item_type: editForm.item_type,
-      quantity: qty,
-      unit_price: price,
-      total_price: total,
-      payment_method: editForm.payment_method,
-      installments,
-      remaining_amount: remaining,
-      warranty_months: warrantyMonths,
-      warranty_end_date: warrantyEnd.toISOString().split("T")[0],
-      cash
-    }).eq("id", editForm.id)
+      const { error } = await supabase.from('sales').update({
+        customer_id: editForm.customer_id || null,
+        customer_name: editForm.customer_name,
+        item_name: editForm.item_name,
+        item_type: editForm.item_type,
+        quantity: qty,
+        unit_price: price,
+        total_price: total,
+        payment_method: editForm.payment_method,
+        installments,
+        remaining_amount: remaining,
+        warranty_months: warrantyMonths,
+        warranty_end_date: warrantyEnd.toISOString().split('T')[0],
+        cash
+      }).eq('id', editForm.id)
 
-    if (error) {
-      toast.error("Güncellenirken hata: " + error.message)
-      return
+      if (error) throw error
+      setToast({ message: 'Satış güncellendi!', type: 'success' })
+      setShowEditModal(false)
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-
-    toast.success("Satış güncellendi")
-    setShowEditModal(false)
-    loadData()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bu satışı silmek istediğinize emin misiniz?")) return
-    const { error } = await supabase.from("sales").delete().eq("id", id)
-    if (error) {
-      toast.error("Silinirken hata: " + error.message)
-      return
+    if (!confirm('Bu satışı silmek istediğinize emin misiniz?')) return
+    try {
+      const { error } = await supabase.from('sales').delete().eq('id', id)
+      if (error) throw error
+      setToast({ message: 'Satış silindi!', type: 'success' })
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-    toast.success("Satış silindi")
-    loadData()
   }
 
-  const openPaymentModal = (sale: Sale) => {
-    setPaymentForm({ sale_id: sale.id, payment_amount: sale.remaining_amount?.toString() || "" })
+  const openPaymentModal = (sale: any) => {
+    setPaymentForm({ sale_id: sale.id, payment_amount: sale.remaining_amount?.toString() || '' })
     setShowPaymentModal(true)
   }
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault()
-    const amount = parseFloat(paymentForm.payment_amount) || 0
-    if (amount <= 0) {
-      toast.error("Geçerli bir tutar girin")
-      return
+    try {
+      const amount = parseFloat(paymentForm.payment_amount) || 0
+      if (amount <= 0) {
+        setToast({ message: 'Geçerli bir tutar girin', type: 'error' })
+        return
+      }
+
+      const sale = sales.find(s => s.id === paymentForm.sale_id)
+      if (!sale) return
+
+      const newRemaining = Math.max(0, (sale.remaining_amount || 0) - amount)
+
+      // Kasa kaydı
+      const { error: transError } = await supabase.from('transactions').insert([{
+        type: 'income',
+        category: 'Taksit Ödeme',
+        amount: amount,
+        description: `${sale.customer_name} - ${sale.item_name} taksit ödemesi`,
+        date: new Date().toISOString().split('T')[0]
+      }])
+
+      if (transError) throw transError
+
+      // Satış güncelle
+      const { error: updateError } = await supabase.from('sales').update({
+        remaining_amount: newRemaining
+      }).eq('id', paymentForm.sale_id)
+
+      if (updateError) throw updateError
+
+      // Debts güncelle
+      const { data: debtData } = await supabase.from('debts').select('*').eq('sale_id', paymentForm.sale_id).single()
+      if (debtData) {
+        const paidInst = (debtData.paid_installments || 0) + 1
+        await supabase.from('debts').update({
+          remaining: newRemaining,
+          paid_installments: paidInst
+        }).eq('id', debtData.id)
+      }
+
+      setToast({ message: 'Ödeme alındı ve kasaya kaydedildi!', type: 'success' })
+      setShowPaymentModal(false)
+      loadData()
+    } catch (err: any) {
+      setToast({ message: `HATA: ${err.message}`, type: 'error' })
     }
-
-    const sale = sales.find(s => s.id === paymentForm.sale_id)
-    if (!sale) return
-
-    const newRemaining = Math.max(0, (sale.remaining_amount || 0) - amount)
-
-    // Kasa kaydı
-    const { error: transError } = await supabase.from("transactions").insert([{
-      type: "income",
-      category: "Taksit Ödeme",
-      amount: amount,
-      description: `${sale.customer_name} - ${sale.item_name} taksit ödemesi`,
-      date: new Date().toISOString().split("T")[0]
-    }])
-
-    if (transError) {
-      toast.error("Kasa kaydı eklenirken hata: " + transError.message)
-      return
-    }
-
-    // Satış güncelle
-    const { error: updateError } = await supabase.from("sales").update({
-      remaining_amount: newRemaining
-    }).eq("id", paymentForm.sale_id)
-
-    if (updateError) {
-      toast.error("Ödeme güncellenirken hata: " + updateError.message)
-      return
-    }
-
-    // Debts güncelle
-    const { data: debtData } = await supabase.from("debts").select("*").eq("sale_id", paymentForm.sale_id).single()
-    if (debtData) {
-      const paidInst = (debtData.paid_installments || 0) + 1
-      await supabase.from("debts").update({
-        remaining: newRemaining,
-        paid_installments: paidInst
-      }).eq("id", debtData.id)
-    }
-
-    toast.success("Ödeme alındı ve kasaya kaydedildi")
-    setShowPaymentModal(false)
-    loadData()
   }
 
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
     if (customer) {
-      setForm(prev => ({
-        ...prev,
-        customer_id: customerId,
-        customer_name: customer.name
-      }))
+      setForm(prev => ({ ...prev, customer_id: customerId, customer_name: customer.name }))
     }
   }
 
   const handleInventorySelect = (inventoryId: string) => {
     const inv = inventory.find(i => i.id === inventoryId)
     if (inv) {
-      setForm(prev => ({
-        ...prev,
-        selected_inventory: inventoryId,
-        item_name: inv.name,
-        unit_price: inv.unit_price?.toString() || ""
-      }))
+      setForm(prev => ({ ...prev, selected_inventory: inventoryId, item_name: inv.name, unit_price: inv.unit_price?.toString() || '' }))
     }
   }
 
-  const soldDevices = sales.filter(s => s.item_type === "Cihaz")
+  const filtered = sales.filter(s =>
+    s.item_name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.customer_name?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const displayData = activeTab === 'sales' ? filtered : filtered.filter(s => s.item_type === 'Cihaz')
+
+  if (loading && sales.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Satış & Satılan Cihazlar</h1>
-        <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> Yeni Satış</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Yeni Satış Ekle</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Müşteri Seç</Label>
-                  <Select onValueChange={handleCustomerSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Müşteri seçin" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name} - {c.phone}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Müşteri Adı</Label>
-                  <Input value={form.customer_name} onChange={e => setForm({...form, customer_name: e.target.value})} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Stoktan Seç</Label>
-                  <Select onValueChange={handleInventorySelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Stoktan ürün seçin" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {inventory.map(i => (
-                        <SelectItem key={i.id} value={i.id}>{i.name} ({i.quantity} adet) - {i.unit_price?.toLocaleString("tr-TR")} ₺</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Ürün Adı</Label>
-                  <Input value={form.item_name} onChange={e => setForm({...form, item_name: e.target.value})} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Ürün Türü</Label>
-                  <Select value={form.item_type} onValueChange={v => setForm({...form, item_type: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cihaz">Cihaz</SelectItem>
-                      <SelectItem value="Aksesuar">Aksesuar</SelectItem>
-                      <SelectItem value="Yedek Parça">Yedek Parça</SelectItem>
-                      <SelectItem value="Diğer">Diğer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Adet</Label>
-                  <Input type="number" min="1" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Birim Fiyat</Label>
-                  <Input type="number" value={form.unit_price} onChange={e => setForm({...form, unit_price: e.target.value})} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Ödeme Şekli</Label>
-                  <Select value={form.payment_method} onValueChange={v => setForm({...form, payment_method: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Nakit">Nakit</SelectItem>
-                      <SelectItem value="Kredi Kartı">Kredi Kartı</SelectItem>
-                      <SelectItem value="Havale">Havale</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Peşin / Taksitli</Label>
-                  <Select value={form.cash ? "pesin" : "taksitli"} onValueChange={v => setForm({...form, cash: v === "pesin"})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pesin">Peşin</SelectItem>
-                      <SelectItem value="taksitli">Taksitli</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {!form.cash && (
-                  <div className="space-y-2">
-                    <Label>Taksit Sayısı</Label>
-                    <Input type="number" min="2" value={form.installments} onChange={e => setForm({...form, installments: e.target.value})} />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label>Garanti (Ay)</Label>
-                  <Input type="number" value={form.warranty_months} onChange={e => setForm({...form, warranty_months: e.target.value})} />
-                </div>
-              </div>
-              <div className="rounded-lg bg-muted p-4">
-                <div className="text-lg font-semibold">
-                  Toplam: {(parseInt(form.quantity || "0") * parseFloat(form.unit_price || "0")).toLocaleString("tr-TR")} ₺
-                </div>
-                {!form.cash && (
-                  <div className="text-sm text-muted-foreground">
-                    Aylık Taksit: {((parseInt(form.quantity || "0") * parseFloat(form.unit_price || "0")) / (parseInt(form.installments) || 1)).toLocaleString("tr-TR")} ₺
-                  </div>
-                )}
-              </div>
-              <Button type="submit" className="w-full">Satış Yap</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-4">
+      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Satış & Satılan Cihazlar</h1>
+        <button onClick={() => setShowAddModal(true)} className="btn btn-primary">+ Yeni Satış</button>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2">
-        <Button
-          variant={activeTab === "sales" ? "default" : "outline"}
-          onClick={() => setActiveTab("sales")}
-          className="gap-2"
-        >
-          <DollarSign className="h-4 w-4" />
-          Tüm Satışlar
-        </Button>
-        <Button
-          variant={activeTab === "sold" ? "default" : "outline"}
-          onClick={() => setActiveTab("sold")}
-          className="gap-2"
-        >
-          <Smartphone className="h-4 w-4" />
-          Satılan Cihazlar
-        </Button>
+        <button onClick={() => setActiveTab('sales')} className={`btn btn-sm ${activeTab === 'sales' ? 'btn-primary' : 'btn-secondary'}`}>Tüm Satışlar</button>
+        <button onClick={() => setActiveTab('sold')} className={`btn btn-sm ${activeTab === 'sold' ? 'btn-primary' : 'btn-secondary'}`}>Satılan Cihazlar</button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            <Input
-              placeholder="Ara..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8">Yükleniyor...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tarih</TableHead>
-                  <TableHead>Müşteri</TableHead>
-                  <TableHead>Ürün</TableHead>
-                  <TableHead>Tür</TableHead>
-                  <TableHead>Adet</TableHead>
-                  <TableHead>Fiyat</TableHead>
-                  <TableHead>Toplam</TableHead>
-                  <TableHead>Ödeme</TableHead>
-                  <TableHead>Kalan</TableHead>
-                  <TableHead>Garanti</TableHead>
-                  <TableHead>İşlemler</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(activeTab === "sales" ? filtered : filtered.filter(s => s.item_type === "Cihaz")).map(sale => (
-                  <TableRow key={sale.id}>
-                    <TableCell>{new Date(sale.created_at).toLocaleDateString("tr-TR")}</TableCell>
-                    <TableCell>
-                      <div className="font-medium">{sale.customer_name}</div>
-                    </TableCell>
-                    <TableCell>{sale.item_name}</TableCell>
-                    <TableCell>{sale.item_type}</TableCell>
-                    <TableCell>{sale.quantity}</TableCell>
-                    <TableCell>{sale.unit_price?.toLocaleString("tr-TR")} ₺</TableCell>
-                    <TableCell className="font-medium">{sale.total_price?.toLocaleString("tr-TR")} ₺</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${sale.cash ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
-                        {sale.cash ? "Peşin" : `Taksit (${sale.installments})`}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {sale.remaining_amount > 0 ? (
-                        <span className="text-red-600 font-medium">{sale.remaining_amount?.toLocaleString("tr-TR")} ₺</span>
-                      ) : (
-                        <span className="text-green-600">Ödendi</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {sale.warranty_months} ay
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(sale.warranty_end_date).toLocaleDateString("tr-TR")}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(sale)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {sale.remaining_amount > 0 && (
-                          <Button variant="outline" size="sm" onClick={() => openPaymentModal(sale)}>
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(sale.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Tarih</th><th>Müşteri</th><th>Ürün</th><th>Tür</th><th>Adet</th>
+              <th>Fiyat</th><th>Toplam</th><th>Ödeme</th><th>Kalan</th><th>Garanti</th><th>İşlemler</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayData.map((sale) => (
+              <tr key={sale.id}>
+                <td>{new Date(sale.created_at).toLocaleDateString('tr-TR')}</td>
+                <td className="font-medium">{sale.customer_name}</td>
+                <td>{sale.item_name}</td>
+                <td>{sale.item_type}</td>
+                <td>{sale.quantity}</td>
+                <td>₺{sale.unit_price?.toLocaleString('tr-TR')}</td>
+                <td className="font-medium">₺{sale.total_price?.toLocaleString('tr-TR')}</td>
+                <td>
+                  <span className={`badge ${sale.cash ? 'badge-green' : 'badge-yellow'}`}>
+                    {sale.cash ? 'Peşin' : `Taksit (${sale.installments})`}
+                  </span>
+                </td>
+                <td>
+                  {sale.remaining_amount > 0 ? (
+                    <span className="text-red-400 font-medium">₺{sale.remaining_amount?.toLocaleString('tr-TR')}</span>
+                  ) : (
+                    <span className="text-emerald-400">Ödendi</span>
+                  )}
+                </td>
+                <td>{sale.warranty_months} ay</td>
+                <td>
+                  <div className="flex gap-1">
+                    <button onClick={() => openEditModal(sale)} className="btn btn-sm btn-secondary">Düzenle</button>
+                    {sale.remaining_amount > 0 && (
+                      <button onClick={() => openPaymentModal(sale)} className="btn btn-sm btn-primary">Ödeme Al</button>
+                    )}
+                    <button onClick={() => handleDelete(sale.id)} className="btn btn-sm btn-danger">Sil</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {displayData.length === 0 && <div className="empty-state"><p>Satış bulunamadı</p></div>}
+
+      {/* Add Modal */}
+      {showAddModal && (
+        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Satış Ekle</h2>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label>Müşteri Seç</label>
+                    <select className="input" value={form.customer_id} onChange={(e) => handleCustomerSelect(e.target.value)}>
+                      <option value="">Seçin</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Müşteri Adı *</label>
+                    <input className="input" value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Stoktan Seç</label>
+                    <select className="input" value={form.selected_inventory} onChange={(e) => handleInventorySelect(e.target.value)}>
+                      <option value="">Seçin</option>
+                      {inventory.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} adet)</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Ürün Adı *</label>
+                    <input className="input" value={form.item_name} onChange={(e) => setForm({...form, item_name: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Ürün Türü</label>
+                    <select className="input" value={form.item_type} onChange={(e) => setForm({...form, item_type: e.target.value})}>
+                      <option value="Cihaz">Cihaz</option>
+                      <option value="Aksesuar">Aksesuar</option>
+                      <option value="Yedek Parça">Yedek Parça</option>
+                      <option value="Diğer">Diğer</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Adet</label>
+                    <input className="input" type="number" min="1" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Birim Fiyat *</label>
+                    <input className="input" type="number" value={form.unit_price} onChange={(e) => setForm({...form, unit_price: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Ödeme Şekli</label>
+                    <select className="input" value={form.payment_method} onChange={(e) => setForm({...form, payment_method: e.target.value})}>
+                      <option value="Nakit">Nakit</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                      <option value="Havale">Havale</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Peşin / Taksitli</label>
+                    <select className="input" value={form.cash ? 'pesin' : 'taksitli'} onChange={(e) => setForm({...form, cash: e.target.value === 'pesin'})}>
+                      <option value="pesin">Peşin</option>
+                      <option value="taksitli">Taksitli</option>
+                    </select>
+                  </div>
+                  {!form.cash && (
+                    <div className="form-group">
+                      <label>Taksit Sayısı</label>
+                      <input className="input" type="number" min="2" value={form.installments} onChange={(e) => setForm({...form, installments: e.target.value})} />
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label>Garanti (Ay)</label>
+                    <input className="input" type="number" value={form.warranty_months} onChange={(e) => setForm({...form, warranty_months: e.target.value})} />
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                  <div className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    Toplam: ₺{(parseInt(form.quantity || '0') * parseFloat(form.unit_price || '0')).toLocaleString('tr-TR')}
+                  </div>
+                  {!form.cash && (
+                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Aylık Taksit: ₺{((parseInt(form.quantity || '0') * parseFloat(form.unit_price || '0')) / (parseInt(form.installments) || 1)).toLocaleString('tr-TR')}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Satış Yap</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Satış Düzenle</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleEdit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Müşteri Adı</Label>
-                <Input value={editForm.customer_name} onChange={e => setEditForm({...editForm, customer_name: e.target.value})} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Ürün Adı</Label>
-                <Input value={editForm.item_name} onChange={e => setEditForm({...editForm, item_name: e.target.value})} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Ürün Türü</Label>
-                <Select value={editForm.item_type} onValueChange={v => setEditForm({...editForm, item_type: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cihaz">Cihaz</SelectItem>
-                    <SelectItem value="Aksesuar">Aksesuar</SelectItem>
-                    <SelectItem value="Yedek Parça">Yedek Parça</SelectItem>
-                    <SelectItem value="Diğer">Diğer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Adet</Label>
-                <Input type="number" min="1" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Birim Fiyat</Label>
-                <Input type="number" value={editForm.unit_price} onChange={e => setEditForm({...editForm, unit_price: e.target.value})} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Ödeme Şekli</Label>
-                <Select value={editForm.payment_method} onValueChange={v => setEditForm({...editForm, payment_method: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Nakit">Nakit</SelectItem>
-                    <SelectItem value="Kredi Kartı">Kredi Kartı</SelectItem>
-                    <SelectItem value="Havale">Havale</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Peşin / Taksitli</Label>
-                <Select value={editForm.cash ? "pesin" : "taksitli"} onValueChange={v => setEditForm({...editForm, cash: v === "pesin"})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pesin">Peşin</SelectItem>
-                    <SelectItem value="taksitli">Taksitli</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {!editForm.cash && (
-                <div className="space-y-2">
-                  <Label>Taksit Sayısı</Label>
-                  <Input type="number" min="2" value={editForm.installments} onChange={e => setEditForm({...editForm, installments: e.target.value})} />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Garanti (Ay)</Label>
-                <Input type="number" value={editForm.warranty_months} onChange={e => setEditForm({...editForm, warranty_months: e.target.value})} />
-              </div>
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Satış Düzenle</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <Button type="submit" className="w-full">Güncelle</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <form onSubmit={handleEdit}>
+              <div className="modal-body space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label>Müşteri Adı *</label>
+                    <input className="input" value={editForm.customer_name} onChange={(e) => setEditForm({...editForm, customer_name: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Ürün Adı *</label>
+                    <input className="input" value={editForm.item_name} onChange={(e) => setEditForm({...editForm, item_name: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Ürün Türü</label>
+                    <select className="input" value={editForm.item_type} onChange={(e) => setEditForm({...editForm, item_type: e.target.value})}>
+                      <option value="Cihaz">Cihaz</option>
+                      <option value="Aksesuar">Aksesuar</option>
+                      <option value="Yedek Parça">Yedek Parça</option>
+                      <option value="Diğer">Diğer</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Adet</label>
+                    <input className="input" type="number" min="1" value={editForm.quantity} onChange={(e) => setEditForm({...editForm, quantity: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Birim Fiyat *</label>
+                    <input className="input" type="number" value={editForm.unit_price} onChange={(e) => setEditForm({...editForm, unit_price: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Ödeme Şekli</label>
+                    <select className="input" value={editForm.payment_method} onChange={(e) => setEditForm({...editForm, payment_method: e.target.value})}>
+                      <option value="Nakit">Nakit</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                      <option value="Havale">Havale</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Peşin / Taksitli</label>
+                    <select className="input" value={editForm.cash ? 'pesin' : 'taksitli'} onChange={(e) => setEditForm({...editForm, cash: e.target.value === 'pesin'})}>
+                      <option value="pesin">Peşin</option>
+                      <option value="taksitli">Taksitli</option>
+                    </select>
+                  </div>
+                  {!editForm.cash && (
+                    <div className="form-group">
+                      <label>Taksit Sayısı</label>
+                      <input className="input" type="number" min="2" value={editForm.installments} onChange={(e) => setEditForm({...editForm, installments: e.target.value})} />
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label>Garanti (Ay)</label>
+                    <input className="input" type="number" value={editForm.warranty_months} onChange={(e) => setEditForm({...editForm, warranty_months: e.target.value})} />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Güncelle</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
-      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Taksit Ödeme Al</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handlePayment} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Ödeme Tutarı</Label>
-              <Input
-                type="number"
-                value={paymentForm.payment_amount}
-                onChange={e => setPaymentForm({...paymentForm, payment_amount: e.target.value})}
-                required
-              />
+      {showPaymentModal && (
+        <div className="modal-overlay" onClick={() => setShowPaymentModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Taksit Ödeme Al</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <Button type="submit" className="w-full">Ödeme Al</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <form onSubmit={handlePayment}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label>Ödeme Tutarı</label>
+                  <input className="input" type="number" value={paymentForm.payment_amount} onChange={(e) => setPaymentForm({...paymentForm, payment_amount: e.target.value})} required />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Ödeme Al</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
