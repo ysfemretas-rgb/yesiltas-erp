@@ -148,7 +148,8 @@ export default function DevicesPage() {
     })
     setShowPaymentModal(true)
   }
-const handlePaymentSubmit = async (e: React.FormEvent) => {
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       const device = devices.find(d => d.id === paymentForm.device_id)
@@ -159,7 +160,7 @@ const handlePaymentSubmit = async (e: React.FormEvent) => {
       const finalCost = device.final_cost || 0
       const currentPaid = device.paid_amount || 0
       const paymentAmount = parseFloat(paymentForm.paid_amount) || 0
-      const newPaid = currentPaid + paymentAmount  // Toplam ödenen (ekleme mantığı)
+      const newPaid = currentPaid + paymentAmount
       const remaining = finalCost - newPaid
 
       // 1. devices tablosunu güncelle
@@ -172,7 +173,7 @@ const handlePaymentSubmit = async (e: React.FormEvent) => {
         return
       }
 
-      // 2. KASAYA GELİR KAYDI EKLE (YENİ)
+      // 2. KASAYA GELİR KAYDI EKLE
       await supabase.from('transactions').insert([{
         type: 'gelir',
         category: 'Teknik Servis',
@@ -207,41 +208,6 @@ const handlePaymentSubmit = async (e: React.FormEvent) => {
       setToast({ message: `₺${paymentAmount.toLocaleString('tr-TR')} ödeme alındı! Kasa kaydı oluşturuldu.`, type: 'success' })
       setShowPaymentModal(false)
       loadData()
-    } catch (err: any) {
-      setToast({ message: `Hata: ${err.message}`, type: 'error' })
-    }
-  }
-
-      if (error) {
-        setToast({ message: `Hata: ${error.message}`, type: 'error' })
-      } else {
-        // debts tablosuna da kaydet
-        const remaining = finalCost - newPaid
-        if (finalCost > 0) {
-          const { data: existing } = await supabase.from('debts').select('id').eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
-          if (!existing || existing.length === 0) {
-            await supabase.from('debts').insert([{
-              customer_id: device.customer_id,
-              source_type: 'Teknik Servis',
-              source_id: device.id,
-              total_amount: finalCost,
-              paid_amount: newPaid,
-              remaining_amount: remaining > 0 ? remaining : 0,
-              status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
-            }])
-          } else {
-            await supabase.from('debts').update({
-              total_amount: finalCost,
-              paid_amount: newPaid,
-              remaining_amount: remaining > 0 ? remaining : 0,
-              status: remaining <= 0 ? 'Ödendi' : 'Beklemede'
-            }).eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
-          }
-        }
-        setToast({ message: 'Ödeme bilgisi güncellendi!', type: 'success' })
-        setShowPaymentModal(false)
-        loadData()
-      }
     } catch (err: any) {
       setToast({ message: `Hata: ${err.message}`, type: 'error' })
     }
