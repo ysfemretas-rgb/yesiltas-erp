@@ -34,14 +34,21 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [showDebtModal, setShowDebtModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [selectedDebt, setSelectedDebt] = useState<any>(null)
   const [customerDebts, setCustomerDebts] = useState<any[]>([])
   const [customerSales, setCustomerSales] = useState<any[]>([])
   const [customerDevices, setCustomerDevices] = useState<any[]>([])
   const [customerPayments, setCustomerPayments] = useState<any[]>([])
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
+  const [editForm, setEditForm] = useState({ id: '', name: '', phone: '', email: '', address: '', notes: '' })
+  const [whatsAppForm, setWhatsAppForm] = useState({ iban: '', alici: '', banka: '', tutar: '', not: '' })
+  const [paymentForm, setPaymentForm] = useState({ debt_id: '', amount: '', payment_method: 'Nakit', notes: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -58,7 +65,6 @@ export default function CustomersPage() {
     setFiltered(result)
   }, [search, customers])
 
-  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const loadData = async () => {
     setLoading(true)
     const { data } = await supabase.from('customers').select('*').order('name')
@@ -97,9 +103,42 @@ export default function CustomersPage() {
     }
   }
 
-  // DÜZELTİLMİŞ - 4. Kritik Hata: Müşteri silme çok agresif, detaylı uyarı eklendi
+  // YENİ - Müşteri düzenleme
+  const openEditModal = (customer: any) => {
+    setEditForm({
+      id: customer.id,
+      name: customer.name || '',
+      phone: customer.phone || '',
+      email: customer.email || '',
+      address: customer.address || '',
+      notes: customer.notes || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const { error } = await supabase.from('customers').update({
+        name: editForm.name.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim() || null,
+        address: editForm.address.trim() || null,
+        notes: editForm.notes.trim() || null
+      }).eq('id', editForm.id)
+      if (error) {
+        setToast({ message: `Hata: ${error.message}`, type: 'error' })
+      } else {
+        setToast({ message: 'Müşteri güncellendi!', type: 'success' })
+        setShowEditModal(false)
+        loadData()
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
+  }
+
   const handleDelete = async (customer: any) => {
-    // Önce bağlı kayıtları say
     const { data: salesCount } = await supabase.from('sales').select('id', { count: 'exact' }).eq('customer_id', customer.id)
     const { data: devicesCount } = await supabase.from('devices').select('id', { count: 'exact' }).eq('customer_id', customer.id)
     const { data: debtsCount } = await supabase.from('debts').select('id', { count: 'exact' }).eq('customer_id', customer.id)
@@ -125,13 +164,11 @@ export default function CustomersPage() {
     if (!confirm(confirmMessage)) return
 
     try {
-      // Cascade silme sırası
       await supabase.from('customer_payments').delete().eq('customer_id', customer.id)
       await supabase.from('warranties').delete().eq('customer_id', customer.id)
       await supabase.from('debts').delete().eq('customer_id', customer.id)
       await supabase.from('sales').delete().eq('customer_id', customer.id)
 
-      // Cihazlar önce device_history'yi temizle
       const { data: customerDevices } = await supabase.from('devices').select('id').eq('customer_id', customer.id)
       if (customerDevices && customerDevices.length > 0) {
         for (const dev of customerDevices) {
@@ -140,7 +177,6 @@ export default function CustomersPage() {
         await supabase.from('devices').delete().eq('customer_id', customer.id)
       }
 
-      // Son olarak müşteriyi sil
       const { error } = await supabase.from('customers').delete().eq('id', customer.id)
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
@@ -153,7 +189,6 @@ export default function CustomersPage() {
     }
   }
 
-  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const openDebtModal = async (customer: any) => {
     setSelectedCustomer(customer)
     const { data: debts } = await supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
@@ -161,7 +196,6 @@ export default function CustomersPage() {
     setShowDebtModal(true)
   }
 
-  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const openDetailModal = async (customer: any) => {
     setSelectedCustomer(customer)
     const [debts, sales, devices, payments] = await Promise.all([
@@ -177,11 +211,85 @@ export default function CustomersPage() {
     setShowDetailModal(true)
   }
 
-  const sendWhatsAppDebt = (customer: any) => {
-    const iban = prompt('IBAN numarasını girin:')
-    if (!iban) return
-    const message = `Merhaba ${customer.name},\n\nToplam borcunuz: ₺${(customer.totalDebt || 0).toLocaleString('tr-TR')}\n\nÖdeme için IBAN:\n${iban}\n\nYeşiltaş Teknoloji`
-    window.open(getWhatsAppLink(customer.phone, message), '_blank')
+  // YENİ - WhatsApp IBAN modalı (prompt yerine)
+  const openWhatsAppModal = (customer: any) => {
+    setSelectedCustomer(customer)
+    setWhatsAppForm({ iban: '', alici: '', banka: '', tutar: customer.totalDebt?.toString() || '', not: '' })
+    setShowWhatsAppModal(true)
+  }
+
+  const handleWhatsAppSend = () => {
+    if (!selectedCustomer) return
+    const message = `Merhaba ${selectedCustomer.name},\n\nToplam borcunuz: ₺${(selectedCustomer.totalDebt || 0).toLocaleString('tr-TR')}\n\nÖdeme için:\nIBAN: ${whatsAppForm.iban}\nAlıcı: ${whatsAppForm.alici}\nBanka: ${whatsAppForm.banka}${whatsAppForm.tutar ? `\nTutar: ₺${parseFloat(whatsAppForm.tutar).toLocaleString('tr-TR')}` : ''}${whatsAppForm.not ? `\n\nNot: ${whatsAppForm.not}` : ''}\n\nYeşiltaş Teknoloji`
+    window.open(getWhatsAppLink(selectedCustomer.phone, message), '_blank')
+    setShowWhatsAppModal(false)
+  }
+
+  // YENİ - Borç ödeme modalı (otomatik tutar)
+  const openPaymentModal = (customer: any, debt: any) => {
+    setSelectedCustomer(customer)
+    setSelectedDebt(debt)
+    // Taksitliyse aylık taksit, değilse kalan borç
+    const isInstallment = debt.source_type === 'satış' && debt.total_amount > 0
+    let autoAmount = debt.remaining_amount || 0
+    if (isInstallment && debt.total_amount && debt.total_amount > 0) {
+      // Eğer sales tablosundan taksit bilgisi varsa aylık tutar hesaplanabilir
+      // Şimdilik kalan borç yazıyoruz
+      autoAmount = debt.remaining_amount || 0
+    }
+    setPaymentForm({
+      debt_id: debt.id,
+      amount: autoAmount.toString(),
+      payment_method: 'Nakit',
+      notes: ''
+    })
+    setShowPaymentModal(true)
+  }
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedDebt || !selectedCustomer) return
+    try {
+      const amount = parseFloat(paymentForm.amount) || 0
+      const newRemaining = Math.max(0, (selectedDebt.remaining_amount || 0) - amount)
+      const newPaid = (selectedDebt.paid_amount || 0) + amount
+
+      // debts güncelle
+      await supabase.from('debts').update({
+        paid_amount: newPaid,
+        remaining_amount: newRemaining,
+        status: newRemaining <= 0 ? 'Ödendi' : 'Beklemede'
+      }).eq('id', selectedDebt.id)
+
+      // customer_payments ekle
+      await supabase.from('customer_payments').insert([{
+        customer_id: selectedCustomer.id,
+        amount: amount,
+        payment_method: paymentForm.payment_method,
+        notes: paymentForm.notes || `Borç ödemesi - ${selectedDebt.source_type}`
+      }])
+
+      // Kasa kaydı
+      await supabase.from('transactions').insert([{
+        type: 'gelir',
+        category: 'Borç Tahsilatı',
+        amount: amount,
+        description: `${selectedCustomer.name} - ${selectedDebt.source_type} ödemesi`,
+        related_id: selectedDebt.id,
+        related_table: 'debts'
+      }])
+
+      setToast({ message: `₺${amount.toLocaleString('tr-TR')} ödeme kaydedildi!`, type: 'success' })
+      setShowPaymentModal(false)
+      loadData()
+      // Modal açıksa borç listesini yenile
+      if (showDebtModal) {
+        const { data: debts } = await supabase.from('debts').select('*').eq('customer_id', selectedCustomer.id).order('created_at', { ascending: false })
+        setCustomerDebts(debts || [])
+      }
+    } catch (err: any) {
+      setToast({ message: `Hata: ${err.message}`, type: 'error' })
+    }
   }
 
   const getDebtStatusBadge = (status: string) => {
@@ -232,11 +340,12 @@ export default function CustomersPage() {
                 </td>
                 <td>
                   <div className="flex gap-1 flex-wrap">
-                    <button onClick={() => openDetailModal(c)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>👁️</button>
+                    <button onClick={() => openDetailModal(c)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="Detay">👁️</button>
+                    <button onClick={() => openEditModal(c)} className="btn btn-sm" style={{ backgroundColor: '#8b5cf6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="Düzenle">✏️</button>
                     {c.totalDebt > 0 && (
                       <>
-                        <button onClick={() => openDebtModal(c)} className="btn btn-sm" style={{ backgroundColor: '#f59e0b', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>💳</button>
-                        <button onClick={() => sendWhatsAppDebt(c)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>📱</button>
+                        <button onClick={() => openDebtModal(c)} className="btn btn-sm" style={{ backgroundColor: '#f59e0b', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="Borçlar">💳</button>
+                        <button onClick={() => openWhatsAppModal(c)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="WhatsApp">📱</button>
                       </>
                     )}
                     <button onClick={() => handleDelete(c)} className="btn btn-danger btn-sm">Sil</button>
@@ -274,10 +383,35 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Borç Detay Modal - DÜZELTİLMİŞ debts sütun adları İngilizce */}
+      {/* YENİ - Müşteri Düzenle Modal */}
+      {showEditModal && (
+        <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowEditModal(false)}>
+          <div className="modal" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Müşteri Düzenle</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group"><label>Ad *</label><input className="input" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} required /></div>
+                <div className="form-group"><label>Telefon *</label><input className="input" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} required /></div>
+                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} /></div>
+                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} /></div>
+                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})} /></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary">Güncelle</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Borç Detay Modal */}
       {showDebtModal && selectedCustomer && (
         <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowDebtModal(false)}>
-          <div className="modal" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedCustomer.name} - Borç Detayı</h2>
               <button onClick={() => setShowDebtModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
@@ -289,18 +423,21 @@ export default function CustomersPage() {
                 <div className="space-y-3">
                   {customerDebts.map((debt) => (
                     <div key={debt.id} className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-start mb-2">
                         <div>
                           <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{debt.source_type}</div>
                           <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Toplam: ₺{(debt.total_amount || 0).toLocaleString('tr-TR')}</div>
                         </div>
                         {getDebtStatusBadge(debt.status)}
                       </div>
-                      <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div className="grid grid-cols-3 gap-2 mb-2">
                         <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Ödenen:</span> <span className="text-emerald-400">₺{(debt.paid_amount || 0).toLocaleString('tr-TR')}</span></div>
                         <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Kalan:</span> <span className="text-red-400">₺{(debt.remaining_amount || 0).toLocaleString('tr-TR')}</span></div>
                         <div className="text-sm"><span style={{ color: 'var(--text-muted)' }}>Bitiş:</span> {debt.due_date ? new Date(debt.due_date).toLocaleDateString('tr-TR') : '-'}</div>
                       </div>
+                      {(debt.remaining_amount || 0) > 0 && (
+                        <button onClick={() => openPaymentModal(selectedCustomer, debt)} className="btn btn-sm w-full" style={{ backgroundColor: '#f59e0b', color: 'white', border: 'none' }}>💰 Ödeme Al</button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -313,7 +450,100 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Müşteri Detay Modal - DÜZELTİLMİŞ debts sütun adları İngilizce */}
+      {/* YENİ - Borç Ödeme Modal */}
+      {showPaymentModal && selectedCustomer && selectedDebt && (
+        <div className="modal-overlay" style={{ zIndex: 110 }} onClick={() => setShowPaymentModal(false)}>
+          <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>💰 Ödeme Al</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <form onSubmit={handlePaymentSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                  <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Müşteri</div>
+                  <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{selectedCustomer.name}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Borç</div>
+                    <div className="font-bold text-emerald-400">₺{(selectedDebt.total_amount || 0).toLocaleString('tr-TR')}</div>
+                  </div>
+                  <div className="p-2 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Kalan</div>
+                    <div className="font-bold text-red-400">₺{(selectedDebt.remaining_amount || 0).toLocaleString('tr-TR')}</div>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Ödeme Tutarı (TL) *</label>
+                  <input className="input" type="number" step="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})} required />
+                </div>
+                <div className="form-group">
+                  <label>Ödeme Yöntemi</label>
+                  <select className="select" value={paymentForm.payment_method} onChange={(e) => setPaymentForm({...paymentForm, payment_method: e.target.value})}>
+                    <option>Nakit</option>
+                    <option>Kredi Kartı</option>
+                    <option>Havale</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Not</label>
+                  <textarea className="input" rows={2} value={paymentForm.notes} onChange={(e) => setPaymentForm({...paymentForm, notes: e.target.value})} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary">İptal</button>
+                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}>💰 Ödemeyi Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* YENİ - WhatsApp IBAN Modal */}
+      {showWhatsAppModal && selectedCustomer && (
+        <div className="modal-overlay" style={{ zIndex: 110 }} onClick={() => setShowWhatsAppModal(false)}>
+          <div className="modal" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>📱 WhatsApp Borç Bildirimi</h2>
+              <button onClick={() => setShowWhatsAppModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div className="modal-body space-y-4">
+              <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Müşteri</div>
+                <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{selectedCustomer.name}</div>
+                <div className="text-sm text-red-400 font-bold mt-1">Borç: ₺{(selectedCustomer.totalDebt || 0).toLocaleString('tr-TR')}</div>
+              </div>
+              <div className="form-group">
+                <label>IBAN *</label>
+                <input className="input" value={whatsAppForm.iban} onChange={(e) => setWhatsAppForm({...whatsAppForm, iban: e.target.value})} placeholder="TR00 0000 0000 0000 0000 0000 00" required />
+              </div>
+              <div className="form-group">
+                <label>Alıcı Adı *</label>
+                <input className="input" value={whatsAppForm.alici} onChange={(e) => setWhatsAppForm({...whatsAppForm, alici: e.target.value})} placeholder="Yeşiltaş Teknoloji" required />
+              </div>
+              <div className="form-group">
+                <label>Banka</label>
+                <input className="input" value={whatsAppForm.banka} onChange={(e) => setWhatsAppForm({...whatsAppForm, banka: e.target.value})} placeholder="Ziraat Bankası" />
+              </div>
+              <div className="form-group">
+                <label>Tutar (TL)</label>
+                <input className="input" type="number" step="0.01" value={whatsAppForm.tutar} onChange={(e) => setWhatsAppForm({...whatsAppForm, tutar: e.target.value})} placeholder={`${(selectedCustomer.totalDebt || 0).toLocaleString('tr-TR')}`} />
+              </div>
+              <div className="form-group">
+                <label>Ek Not</label>
+                <textarea className="input" rows={2} value={whatsAppForm.not} onChange={(e) => setWhatsAppForm({...whatsAppForm, not: e.target.value})} placeholder="Son ödeme tarihi vb." />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" onClick={() => setShowWhatsAppModal(false)} className="btn btn-secondary">İptal</button>
+              <button onClick={handleWhatsAppSend} className="btn btn-primary" style={{ backgroundColor: '#25D366', borderColor: '#25D366' }}>📱 WhatsApp'tan Gönder</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Müşteri Detay Modal */}
       {showDetailModal && selectedCustomer && (
         <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowDetailModal(false)}>
           <div className="modal" style={{ maxWidth: '700px', maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
@@ -322,7 +552,6 @@ export default function CustomersPage() {
               <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
             <div className="modal-body space-y-4">
-              {/* İletişim Bilgileri */}
               <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                 <h3 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>📇 İletişim</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -333,7 +562,6 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              {/* Borç Özeti - DÜZELTİLMİŞ */}
               <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                 <h3 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>💳 Borç Durumu</h3>
                 <div className="text-2xl font-bold text-red-400">₺{selectedCustomer.totalDebt?.toLocaleString('tr-TR') || 0}</div>
@@ -349,7 +577,6 @@ export default function CustomersPage() {
                 )}
               </div>
 
-              {/* Satış Geçmişi */}
               {customerSales.length > 0 && (
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                   <h3 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>🛒 Satış Geçmişi ({customerSales.length})</h3>
@@ -364,7 +591,6 @@ export default function CustomersPage() {
                 </div>
               )}
 
-              {/* Cihaz Geçmişi */}
               {customerDevices.length > 0 && (
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                   <h3 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>🔧 Teknik Servis ({customerDevices.length})</h3>
@@ -379,7 +605,6 @@ export default function CustomersPage() {
                 </div>
               )}
 
-              {/* Ödeme Geçmişi */}
               {customerPayments.length > 0 && (
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                   <h3 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>💰 Ödemeler ({customerPayments.length})</h3>
