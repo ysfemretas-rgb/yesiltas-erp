@@ -28,8 +28,8 @@ function getWhatsAppLink(phone: string, message: string): string {
 }
 
 function PaymentStatusBadge({ device }: { device: any }) {
-  const finalCost = device.final_cost || 0
-  const paidAmount = device.paid_amount || 0
+  const finalCost = device.son_maliyet || 0
+  const paidAmount = device.ödenen_miktar || 0
   const remaining = finalCost - paidAmount
 
   if (finalCost === 0) {
@@ -55,18 +55,18 @@ export default function DevicesPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [form, setForm] = useState({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
-  const [editForm, setEditForm] = useState({ id: '', customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', paid_amount: '', status: 'Beklemede', technician: '' })
-  const [paymentForm, setPaymentForm] = useState({ device_id: '', paid_amount: '' })
-  const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
+  const [form, setForm] = useState({ müşteri_kimliği: '', marka: '', model: '', imei: '', şikayet: '', son_maliyet: '', durum: 'Beklemede', teknisyen: '' })
+  const [editForm, setEditForm] = useState({ id: '', müşteri_kimliği: '', marka: '', model: '', imei: '', şikayet: '', son_maliyet: '', ödenen_miktar: '', durum: 'Beklemede', teknisyen: '' })
+  const [paymentForm, setPaymentForm] = useState({ cihaz_kimliği: '', ödeme_miktarı: '' })
+  const [customerForm, setCustomerForm] = useState({ ad: '', telefon: '', email: '', adres: '', notlar: '' })
 
   useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     setLoading(true)
     const [{ data: devicesData }, { data: customersData }] = await Promise.all([
-      supabase.from('devices').select('*, customers:customer_id(name, phone)').order('created_at', { ascending: false }),
-      supabase.from('customers').select('id, name, phone').order('name')
+      supabase.from('devices').select('*, customers:müşteri_kimliği(ad, telefon)').order('oluşturulma_tarihi', { ascending: false }),
+      supabase.from('customers').select('id, ad, telefon').order('ad')
     ])
     if (devicesData) setDevices(devicesData)
     if (customersData) setCustomers(customersData)
@@ -77,22 +77,22 @@ export default function DevicesPage() {
     e.preventDefault()
     try {
       const { error } = await supabase.from('devices').insert([{
-        customer_id: form.customer_id,
-        brand: form.brand.trim(),
+        müşteri_kimliği: form.müşteri_kimliği,
+        marka: form.marka.trim(),
         model: form.model.trim(),
         imei: form.imei.trim() || null,
-        complaint: form.complaint.trim(),
-        final_cost: parseFloat(form.final_cost) || 0,
-        status: form.status,
-        technician: form.technician.trim() || null,
-        paid_amount: 0
+        şikayet: form.şikayet.trim(),
+        son_maliyet: parseFloat(form.son_maliyet) || 0,
+        durum: form.durum,
+        teknisyen: form.teknisyen.trim() || null,
+        ödenen_miktar: 0
       }])
       if (error) {
         setToast({ message: `Hata: ${error.message} (Kod: ${error.code})`, type: 'error' })
       } else {
         setToast({ message: 'Cihaz kaydı eklendi!', type: 'success' })
         setShowModal(false)
-        setForm({ customer_id: '', brand: '', model: '', imei: '', complaint: '', final_cost: '', status: 'Beklemede', technician: '' })
+        setForm({ müşteri_kimliği: '', marka: '', model: '', imei: '', şikayet: '', son_maliyet: '', durum: 'Beklemede', teknisyen: '' })
         loadData()
       }
     } catch (err: any) {
@@ -103,15 +103,15 @@ export default function DevicesPage() {
   const openEditModal = (d: any) => {
     setEditForm({
       id: d.id,
-      customer_id: d.customer_id,
-      brand: d.brand || '',
+      müşteri_kimliği: d.müşteri_kimliği,
+      marka: d.marka || '',
       model: d.model || '',
       imei: d.imei || '',
-      complaint: d.complaint || '',
-      final_cost: d.final_cost?.toString() || '',
-      paid_amount: d.paid_amount?.toString() || '',
-      status: d.status || 'Beklemede',
-      technician: d.technician || ''
+      şikayet: d.şikayet || '',
+      son_maliyet: d.son_maliyet?.toString() || '',
+      ödenen_miktar: d.ödenen_miktar?.toString() || '',
+      durum: d.durum || 'Beklemede',
+      teknisyen: d.teknisyen || ''
     })
     setShowEditModal(true)
   }
@@ -120,14 +120,14 @@ export default function DevicesPage() {
     e.preventDefault()
     try {
       const { error } = await supabase.from('devices').update({
-        customer_id: editForm.customer_id,
-        brand: editForm.brand.trim(),
+        müşteri_kimliği: editForm.müşteri_kimliği,
+        marka: editForm.marka.trim(),
         model: editForm.model.trim(),
         imei: editForm.imei.trim() || null,
-        complaint: editForm.complaint.trim(),
-        final_cost: parseFloat(editForm.final_cost) || 0,
-        status: editForm.status,
-        technician: editForm.technician.trim() || null
+        şikayet: editForm.şikayet.trim(),
+        son_maliyet: parseFloat(editForm.son_maliyet) || 0,
+        durum: editForm.durum,
+        teknisyen: editForm.teknisyen.trim() || null
       }).eq('id', editForm.id)
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
@@ -143,67 +143,63 @@ export default function DevicesPage() {
 
   const openPaymentModal = (d: any) => {
     setPaymentForm({
-      device_id: d.id,
-      paid_amount: (d.paid_amount || 0).toString()
+      cihaz_kimliği: d.id,
+      ödeme_miktarı: ''
     })
     setShowPaymentModal(true)
   }
 
-  // DÜZELTİLMİŞ - debts sütun adları İngilizce'ye çevrildi
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const device = devices.find(d => d.id === paymentForm.device_id)
+      const device = devices.find(d => d.id === paymentForm.cihaz_kimliği)
       if (!device) {
         setToast({ message: 'Cihaz bulunamadı!', type: 'error' })
         return
       }
-      const finalCost = device.final_cost || 0
-      const currentPaid = device.paid_amount || 0
-      const paymentAmount = parseFloat(paymentForm.paid_amount) || 0
+      const finalCost = device.son_maliyet || 0
+      const currentPaid = device.ödenen_miktar || 0
+      const paymentAmount = parseFloat(paymentForm.ödeme_miktarı) || 0
       const newPaid = currentPaid + paymentAmount
       const remaining = finalCost - newPaid
 
-      // 1. devices tablosunu güncelle
       const { error: deviceError } = await supabase.from('devices').update({
-        paid_amount: newPaid
-      }).eq('id', paymentForm.device_id)
+        ödenen_miktar: newPaid
+      }).eq('id', paymentForm.cihaz_kimliği)
 
       if (deviceError) {
         setToast({ message: `Hata: ${deviceError.message}`, type: 'error' })
         return
       }
 
-      // 2. KASAYA GELİR KAYDI EKLE
       await supabase.from('transactions').insert([{
-        type: 'gelir',
-        category: 'Teknik Servis',
-        amount: paymentAmount,
-        description: `${device.brand} ${device.model} - Teknik Servis Ödemesi (${device.customers?.name || 'Müşteri'})`,
-        related_id: device.id,
-        related_table: 'devices'
+        tip: 'gelir',
+        kategori: 'Teknik Servis',
+        miktar: paymentAmount,
+        Tanım: `${device.marka} ${device.model} - Teknik Servis Ödemesi (${device.customers?.ad || 'Müşteri'})`,
+        ilgili_kimlik: device.id,
+        ilgili_tablo: 'devices'
       }])
 
-      // 3. debts tablosunu güncelle - İNGİLİZCE SÜTUN ADLARI
       const remainingAmount = remaining > 0 ? remaining : 0
-      const { data: existing } = await supabase.from('debts').select('id').eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
+      const { data: existing } = await supabase.from('debts').select('id').eq('kaynak_kimliği', paymentForm.cihaz_kimliği).eq('kaynak_türü', 'Teknik Servis')
       if (!existing || existing.length === 0) {
         await supabase.from('debts').insert([{
-          customer_id: device.customer_id,
-          source_type: 'Teknik Servis',
-          source_id: device.id,
-          total_amount: finalCost,
-          paid_amount: newPaid,
-          remaining_amount: remainingAmount,
-          status: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
+          müşteri_kimliği: device.müşteri_kimliği,
+          kaynak_türü: 'Teknik Servis',
+          kaynak_kimliği: device.id,
+          toplam_miktar: finalCost,
+          ödenen_miktar: newPaid,
+          kalan_miktar: remainingAmount,
+          durum: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
         }])
       } else {
         await supabase.from('debts').update({
-          total_amount: finalCost,
-          paid_amount: newPaid,
-          remaining_amount: remainingAmount,
-          status: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
-        }).eq('source_id', paymentForm.device_id).eq('source_type', 'Teknik Servis')
+          toplam_miktar: finalCost,
+          ödenen_miktar: newPaid,
+          kalan_miktar: remainingAmount,
+          durum: remainingAmount <= 0 ? 'Ödendi' : 'Beklemede'
+        }).eq('kaynak_kimliği', paymentForm.cihaz_kimliği).eq('kaynak_türü', 'Teknik Servis')
       }
 
       setToast({ message: `₺${paymentAmount.toLocaleString('tr-TR')} ödeme alındı! Kasa kaydı oluşturuldu.`, type: 'success' })
@@ -216,26 +212,26 @@ export default function DevicesPage() {
 
   const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!customerForm.phone.trim()) {
+    if (!customerForm.telefon.trim()) {
       setToast({ message: 'Telefon numarası zorunludur!', type: 'error' })
       return
     }
     try {
       const { data, error } = await supabase.from('customers').insert([{
-        name: customerForm.name.trim(),
-        phone: customerForm.phone.trim(),
+        ad: customerForm.ad.trim(),
+        telefon: customerForm.telefon.trim(),
         email: customerForm.email.trim() || null,
-        address: customerForm.address.trim() || null,
-        notes: customerForm.notes.trim() || null
+        adres: customerForm.adres.trim() || null,
+        notlar: customerForm.notlar.trim() || null
       }]).select()
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
       } else {
         setToast({ message: 'Müşteri eklendi!', type: 'success' })
         setShowCustomerModal(false)
-        setCustomerForm({ name: '', phone: '', email: '', address: '', notes: '' })
+        setCustomerForm({ ad: '', telefon: '', email: '', adres: '', notlar: '' })
         if (data && data[0]) {
-          setForm(prev => ({ ...prev, customer_id: data[0].id }))
+          setForm(prev => ({ ...prev, müşteri_kimliği: data[0].id }))
         }
         loadData()
       }
@@ -246,7 +242,7 @@ export default function DevicesPage() {
 
   const updateStatus = async (id: string, newStatus: string) => {
     try {
-      const { error } = await supabase.from('devices').update({ status: newStatus }).eq('id', id).select()
+      const { error } = await supabase.from('devices').update({ durum: newStatus }).eq('id', id).select()
       if (error) {
         setToast({ message: `Hata: ${error.message}`, type: 'error' })
       } else {
@@ -260,28 +256,28 @@ export default function DevicesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Silmek istediğinize emin misiniz?')) return
-    await supabase.from('device_history').delete().eq('device_id', id)
+    await supabase.from('device_history').delete().eq('cihaz_kimliği', id)
     await supabase.from('devices').delete().eq('id', id)
     setToast({ message: 'Cihaz silindi!', type: 'success' })
     loadData()
   }
 
   const sendWhatsAppReady = (device: any) => {
-    const phone = device.customers?.phone
+    const phone = device.customers?.telefon
     if (!phone) {
       setToast({ message: 'HATA: Müşteri telefon numarası bulunamadı!', type: 'error' })
       return
     }
-    const remaining = (device.final_cost || 0) - (device.paid_amount || 0)
-    const message = `Merhaba ${device.customers?.name || 'Sayın Müşterimiz'},\n\n${device.brand} ${device.model} cihazınızın tamir işlemi tamamlanmıştır. Cihazınızı servisimizden teslim alabilirsiniz.\n\nToplam Ücret: ₺${(device.final_cost || 0).toLocaleString('tr-TR')}\nÖdenen: ₺${(device.paid_amount || 0).toLocaleString('tr-TR')}\nKalan: ₺${remaining.toLocaleString('tr-TR')}\nSorun: ${device.complaint}\n\nYeşiltaş Teknoloji`
+    const remaining = (device.son_maliyet || 0) - (device.ödenen_miktar || 0)
+    const message = `Merhaba ${device.customers?.ad || 'Sayın Müşterimiz'},\n\n${device.marka} ${device.model} cihazınızın tamir işlemi tamamlanmıştır. Cihazınızı servisimizden teslim alabilirsiniz.\n\nToplam Ücret: ₺${(device.son_maliyet || 0).toLocaleString('tr-TR')}\nÖdenen: ₺${(device.ödenen_miktar || 0).toLocaleString('tr-TR')}\nKalan: ₺${remaining.toLocaleString('tr-TR')}\nSorun: ${device.şikayet}\n\nYeşiltaş Teknoloji`
     window.open(getWhatsAppLink(phone, message), '_blank')
   }
 
   const filtered = devices.filter(d => {
-    const matchesSearch = (d.brand + ' ' + d.model)?.toLowerCase().includes(search.toLowerCase()) ||
-      d.customers?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = (d.marka + ' ' + d.model)?.toLowerCase().includes(search.toLowerCase()) ||
+      d.customers?.ad?.toLowerCase().includes(search.toLowerCase()) ||
       d.imei?.includes(search)
-    const matchesStatus = statusFilter === 'Tümü' || d.status === statusFilter
+    const matchesStatus = statusFilter === 'Tümü' || d.durum === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -311,24 +307,24 @@ export default function DevicesPage() {
           </thead>
           <tbody>
             {filtered.map((d) => {
-              const remaining = (d.final_cost || 0) - (d.paid_amount || 0)
+              const remaining = (d.son_maliyet || 0) - (d.ödenen_miktar || 0)
               return (
                 <tr key={d.id}>
-                  <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(d.created_at).toLocaleDateString('tr-TR')}</td>
-                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{d.customers?.name || '-'}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{d.brand} {d.model}</td>
+                  <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(d.oluşturulma_tarihi).toLocaleDateString('tr-TR')}</td>
+                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{d.customers?.ad || '-'}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{d.marka} {d.model}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{d.imei || '-'}</td>
-                  <td style={{ color: 'var(--text-secondary)', maxWidth: '200px' }} className="truncate">{d.complaint}</td>
-                  <td className="text-emerald-400">₺{(d.final_cost || 0).toLocaleString('tr-TR')}</td>
+                  <td style={{ color: 'var(--text-secondary)', maxWidth: '200px' }} className="truncate">{d.şikayet}</td>
+                  <td className="text-emerald-400">₺{(d.son_maliyet || 0).toLocaleString('tr-TR')}</td>
                   <td>
                     <div className="flex flex-col gap-1">
                       <PaymentStatusBadge device={d} />
                       {remaining > 0 && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Kalan: ₺{remaining.toLocaleString('tr-TR')}</span>}
                     </div>
                   </td>
-                  <td style={{ color: 'var(--text-muted)' }}>{d.technician || '-'}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{d.teknisyen || '-'}</td>
                   <td>
-                    <select className="select text-xs py-1" value={d.status || 'Beklemede'} onChange={(e) => updateStatus(d.id, e.target.value)}>
+                    <select className="select text-xs py-1" value={d.durum || 'Beklemede'} onChange={(e) => updateStatus(d.id, e.target.value)}>
                       <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                     </select>
                   </td>
@@ -336,7 +332,7 @@ export default function DevicesPage() {
                     <div className="flex gap-1 flex-wrap">
                       <button onClick={() => openEditModal(d)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️</button>
                       <button onClick={() => openPaymentModal(d)} className="btn btn-sm" style={{ backgroundColor: '#f59e0b', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} title="Ödeme Al">💰</button>
-                      {d.status === 'Tamamlandı' && d.customers?.phone && (
+                      {d.durum === 'Tamamlandı' && d.customers?.telefon && (
                         <button onClick={() => sendWhatsAppReady(d)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>📱</button>
                       )}
                       <button onClick={() => handleDelete(d.id)} className="btn btn-danger btn-sm">Sil</button>
@@ -363,22 +359,22 @@ export default function DevicesPage() {
                 <div className="form-group">
                   <label>Müşteri *</label>
                   <div className="flex gap-2">
-                    <select className="select flex-1" value={form.customer_id} onChange={(e) => setForm({...form, customer_id: e.target.value})} required>
+                    <select className="select flex-1" value={form.müşteri_kimliği} onChange={(e) => setForm({...form, müşteri_kimliği: e.target.value})} required>
                       <option value="">Seçin</option>
-                      {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
+                      {customers.map((c) => <option key={c.id} value={c.id}>{c.ad} {c.telefon ? `(${c.telefon})` : ''}</option>)}
                     </select>
                     <button type="button" onClick={() => setShowCustomerModal(true)} className="btn btn-primary" style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}>+ Yeni Müşteri</button>
                   </div>
                 </div>
-                <div className="form-group"><label>Marka *</label><input className="input" value={form.brand} onChange={(e) => setForm({...form, brand: e.target.value})} required /></div>
+                <div className="form-group"><label>Marka *</label><input className="input" value={form.marka} onChange={(e) => setForm({...form, marka: e.target.value})} required /></div>
                 <div className="form-group"><label>Model *</label><input className="input" value={form.model} onChange={(e) => setForm({...form, model: e.target.value})} required /></div>
                 <div className="form-group"><label>IMEI</label><input className="input" value={form.imei} onChange={(e) => setForm({...form, imei: e.target.value})} /></div>
-                <div className="form-group"><label>Şikayet *</label><textarea className="input" rows={2} value={form.complaint} onChange={(e) => setForm({...form, complaint: e.target.value})} required /></div>
-                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={form.final_cost} onChange={(e) => setForm({...form, final_cost: e.target.value})} /></div>
-                <div className="form-group"><label>Teknisyen</label><input className="input" value={form.technician} onChange={(e) => setForm({...form, technician: e.target.value})} /></div>
+                <div className="form-group"><label>Şikayet *</label><textarea className="input" rows={2} value={form.şikayet} onChange={(e) => setForm({...form, şikayet: e.target.value})} required /></div>
+                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={form.son_maliyet} onChange={(e) => setForm({...form, son_maliyet: e.target.value})} /></div>
+                <div className="form-group"><label>Teknisyen</label><input className="input" value={form.teknisyen} onChange={(e) => setForm({...form, teknisyen: e.target.value})} /></div>
                 <div className="form-group">
                   <label>Durum</label>
-                  <select className="select" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
+                  <select className="select" value={form.durum} onChange={(e) => setForm({...form, durum: e.target.value})}>
                     <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                   </select>
                 </div>
@@ -404,20 +400,20 @@ export default function DevicesPage() {
               <div className="modal-body space-y-4">
                 <div className="form-group">
                   <label>Müşteri *</label>
-                  <select className="select" value={editForm.customer_id} onChange={(e) => setEditForm({...editForm, customer_id: e.target.value})} required>
+                  <select className="select" value={editForm.müşteri_kimliği} onChange={(e) => setEditForm({...editForm, müşteri_kimliği: e.target.value})} required>
                     <option value="">Seçin</option>
-                    {customers.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}
+                    {customers.map((c) => <option key={c.id} value={c.id}>{c.ad} {c.telefon ? `(${c.telefon})` : ''}</option>)}
                   </select>
                 </div>
-                <div className="form-group"><label>Marka *</label><input className="input" value={editForm.brand} onChange={(e) => setEditForm({...editForm, brand: e.target.value})} required /></div>
+                <div className="form-group"><label>Marka *</label><input className="input" value={editForm.marka} onChange={(e) => setEditForm({...editForm, marka: e.target.value})} required /></div>
                 <div className="form-group"><label>Model *</label><input className="input" value={editForm.model} onChange={(e) => setEditForm({...editForm, model: e.target.value})} required /></div>
                 <div className="form-group"><label>IMEI</label><input className="input" value={editForm.imei} onChange={(e) => setEditForm({...editForm, imei: e.target.value})} /></div>
-                <div className="form-group"><label>Şikayet *</label><textarea className="input" rows={2} value={editForm.complaint} onChange={(e) => setEditForm({...editForm, complaint: e.target.value})} required /></div>
-                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={editForm.final_cost} onChange={(e) => setEditForm({...editForm, final_cost: e.target.value})} /></div>
-                <div className="form-group"><label>Teknisyen</label><input className="input" value={editForm.technician} onChange={(e) => setEditForm({...editForm, technician: e.target.value})} /></div>
+                <div className="form-group"><label>Şikayet *</label><textarea className="input" rows={2} value={editForm.şikayet} onChange={(e) => setEditForm({...editForm, şikayet: e.target.value})} required /></div>
+                <div className="form-group"><label>Ücret (TL)</label><input className="input" type="number" step="0.01" value={editForm.son_maliyet} onChange={(e) => setEditForm({...editForm, son_maliyet: e.target.value})} /></div>
+                <div className="form-group"><label>Teknisyen</label><input className="input" value={editForm.teknisyen} onChange={(e) => setEditForm({...editForm, teknisyen: e.target.value})} /></div>
                 <div className="form-group">
                   <label>Durum</label>
-                  <select className="select" value={editForm.status} onChange={(e) => setEditForm({...editForm, status: e.target.value})}>
+                  <select className="select" value={editForm.durum} onChange={(e) => setEditForm({...editForm, durum: e.target.value})}>
                     <option>Beklemede</option><option>İşlemde</option><option>Tamamlandı</option><option>Teslim Edildi</option><option>İptal</option>
                   </select>
                 </div>
@@ -442,15 +438,15 @@ export default function DevicesPage() {
             <form onSubmit={handlePaymentSubmit}>
               <div className="modal-body space-y-4">
                 {(() => {
-                  const device = devices.find(d => d.id === paymentForm.device_id)
-                  const finalCost = device?.final_cost || 0
-                  const currentPaid = device?.paid_amount || 0
+                  const device = devices.find(d => d.id === paymentForm.cihaz_kimliği)
+                  const finalCost = device?.son_maliyet || 0
+                  const currentPaid = device?.ödenen_miktar || 0
                   const remaining = finalCost - currentPaid
                   return (
                     <>
                       <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                         <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Cihaz</div>
-                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{device?.brand} {device?.model}</div>
+                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{device?.marka} {device?.model}</div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="p-2 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -464,7 +460,7 @@ export default function DevicesPage() {
                       </div>
                       <div className="form-group">
                         <label>Ödenen Tutar (TL) *</label>
-                        <input className="input" type="number" step="0.01" value={paymentForm.paid_amount} onChange={(e) => setPaymentForm({...paymentForm, paid_amount: e.target.value})} required />
+                        <input className="input" type="number" step="0.01" value={paymentForm.ödeme_miktarı} onChange={(e) => setPaymentForm({...paymentForm, ödeme_miktarı: e.target.value})} required />
                       </div>
                     </>
                   )
@@ -489,11 +485,11 @@ export default function DevicesPage() {
             </div>
             <form onSubmit={handleCustomerSubmit}>
               <div className="modal-body space-y-4">
-                <div className="form-group"><label>Ad *</label><input className="input" value={customerForm.name} onChange={(e) => setCustomerForm({...customerForm, name: e.target.value})} required autoComplete="off" /></div>
-                <div className="form-group"><label>Telefon *</label><input className="input" value={customerForm.phone} onChange={(e) => setCustomerForm({...customerForm, phone: e.target.value})} required autoComplete="off" /></div>
+                <div className="form-group"><label>Ad *</label><input className="input" value={customerForm.ad} onChange={(e) => setCustomerForm({...customerForm, ad: e.target.value})} required autoComplete="off" /></div>
+                <div className="form-group"><label>Telefon *</label><input className="input" value={customerForm.telefon} onChange={(e) => setCustomerForm({...customerForm, telefon: e.target.value})} required autoComplete="off" /></div>
                 <div className="form-group"><label>E-posta</label><input className="input" type="email" value={customerForm.email} onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})} autoComplete="off" /></div>
-                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={customerForm.address} onChange={(e) => setCustomerForm({...customerForm, address: e.target.value})} autoComplete="off" /></div>
-                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={customerForm.notes} onChange={(e) => setCustomerForm({...customerForm, notes: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={customerForm.adres} onChange={(e) => setCustomerForm({...customerForm, adres: e.target.value})} autoComplete="off" /></div>
+                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={customerForm.notlar} onChange={(e) => setCustomerForm({...customerForm, notlar: e.target.value})} autoComplete="off" /></div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowCustomerModal(false)} className="btn btn-secondary">İptal</button>

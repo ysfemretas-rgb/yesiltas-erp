@@ -44,37 +44,29 @@ interface Customer {
   telefon: string
 }
 
-interface InventoryItem {
-  id: string
-  ad: string
-  kategori: string
-  satış_fiyatı: number
-  miktar: number
-}
-
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [filtered, setFiltered] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [inventory, setInventory] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  
+
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState({
     müşteri_kimliği: '', ürün_adı: '', ürün_türü: 'Cihaz', miktar: '1',
     birim_fiyatı: '', ödeme_yöntemi: 'Nakit', taksitler: '1',
     garanti_ayları: '12', selected_inventory: '', peşin: true
   })
-  
+
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({
     id: '', müşteri_kimliği: '', ürün_adı: '', birim_fiyatı: '', miktar: '1',
     ödeme_yöntemi: 'Nakit', taksitler: '1', kalan_miktar: '',
     garanti_ayları: '12', oluşturulma_tarihi: '', peşin: true
   })
-  
+
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ satış_kimliği: '', ödeme_miktarı: '' })
 
@@ -105,12 +97,12 @@ export default function SalesPage() {
     ])
     if (salesRes.data) setSales(salesRes.data)
     if (customersRes.data) setCustomers(customersRes.data)
-if (inventoryRes.data) setInventory(inventoryRes.data as any[])
+    if (inventoryRes.data) setInventory(inventoryRes.data as any[])
     setLoading(false)
   }
 
   const handleInventorySelect = (inventoryId: string) => {
-    const item = inventory.find(i => i.id === inventoryId)
+    const item = inventory.find((i: any) => i.id === inventoryId)
     if (item) {
       setForm({
         ...form,
@@ -156,7 +148,7 @@ if (inventoryRes.data) setInventory(inventoryRes.data as any[])
     }
 
     if (form.selected_inventory) {
-      const item = inventory.find(i => i.id === form.selected_inventory)
+      const item = inventory.find((i: any) => i.id === form.selected_inventory)
       if (item) {
         await supabase.from('inventory').update({ miktar: item.miktar - qty }).eq('id', form.selected_inventory)
       }
@@ -225,7 +217,7 @@ if (inventoryRes.data) setInventory(inventoryRes.data as any[])
     try {
       const total = parseFloat(editForm.birim_fiyatı) * parseInt(editForm.miktar)
       const months = parseInt(editForm.garanti_ayları) || 12
-      
+
       const startDate = editForm.oluşturulma_tarihi ? new Date(editForm.oluşturulma_tarihi) : new Date()
       const endDate = new Date(startDate)
       endDate.setMonth(endDate.getMonth() + months)
@@ -290,7 +282,7 @@ if (inventoryRes.data) setInventory(inventoryRes.data as any[])
         const debt = existingDebts[0]
         const newPaid = (debt.ödenen_miktar || 0) + paymentAmount
         const newRemainingDebt = Math.max(0, (debt.kalan_miktar || 0) - paymentAmount)
-        
+
         await supabase.from('debts').update({
           ödenen_miktar: newPaid,
           kalan_miktar: newRemainingDebt,
@@ -498,7 +490,7 @@ if (inventoryRes.data) setInventory(inventoryRes.data as any[])
                   <label>Stoktan Seç (Opsiyonel)</label>
                   <select className="select" value={form.selected_inventory} onChange={(e) => handleInventorySelect(e.target.value)}>
                     <option value="">Stoktan seçin...</option>
-                    {inventory.map(i => <option key={i.id} value={i.id}>{i.ad} - {i.satış_fiyatı?.toLocaleString('tr-TR')} TL ({i.miktar} adet)</option>)}
+                    {inventory.map((i: any) => <option key={i.id} value={i.id}>{i.ad} - {i.satış_fiyatı?.toLocaleString('tr-TR')} TL ({i.miktar} adet)</option>)}
                   </select>
                 </div>
                 <div className="form-group">
@@ -531,7 +523,6 @@ if (inventoryRes.data) setInventory(inventoryRes.data as any[])
                     {form.miktar} adet × ₺{parseFloat(form.birim_fiyatı || '0').toLocaleString('tr-TR')} = ₺{calculatedTotal.toLocaleString('tr-TR')}
                   </div>
                 </div>
-                {/* YENİ - Peşin Ödeme Seçeneği */}
                 <div className="form-group">
                   <label>Ödeme Şekli</label>
                   <div className="flex gap-3">
