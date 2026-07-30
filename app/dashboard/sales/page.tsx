@@ -105,7 +105,7 @@ export default function SalesPage() {
     ])
     if (salesRes.data) setSales(salesRes.data)
     if (customersRes.data) setCustomers(customersRes.data)
-    if (inventoryRes.data) setInventory(inventoryRes.data)
+if (inventoryRes.data) setInventory(inventoryRes.data as any[])
     setLoading(false)
   }
 
