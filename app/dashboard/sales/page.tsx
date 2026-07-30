@@ -59,7 +59,7 @@ export default function SalesPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  
+
   // Satış yapma modal
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState({
@@ -67,7 +67,7 @@ export default function SalesPage() {
     unit_price: '', payment_method: 'Nakit', installments: '1',
     warranty_months: '12', selected_inventory: ''
   })
-  
+
   // Düzenleme modal
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({
@@ -75,7 +75,7 @@ export default function SalesPage() {
     payment_method: 'Nakit', installments: '1', remaining_amount: '',
     warranty_months: '12', created_at: ''
   })
-  
+
   // Taksit ödeme modal
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ sale_id: '', payment_amount: '' })
@@ -230,7 +230,7 @@ export default function SalesPage() {
     try {
       const total = parseFloat(editForm.unit_price) * parseInt(editForm.quantity)
       const months = parseInt(editForm.warranty_months) || 12
-      
+
       const startDate = editForm.created_at ? new Date(editForm.created_at) : new Date()
       const endDate = new Date(startDate)
       endDate.setMonth(endDate.getMonth() + months)
@@ -261,7 +261,7 @@ export default function SalesPage() {
     }
   }
 
-  // TAKSİT ÖDEME
+  // TAKSİT ÖDEME - DÜZELTİLMİŞ (3. Kritik Hata dahil)
   const openPaymentModal = (sale: Sale) => {
     setPaymentForm({ sale_id: sale.id, payment_amount: '' })
     setShowPaymentModal(true)
@@ -276,43 +276,75 @@ export default function SalesPage() {
       const paymentAmount = parseFloat(paymentForm.payment_amount) || 0
       const newRemaining = Math.max(0, (sale.remaining_amount || 0) - paymentAmount)
 
+      // 1. sales tablosunu güncelle
       const { error } = await supabase.from('sales').update({
         remaining_amount: newRemaining
       }).eq('id', paymentForm.sale_id)
 
       if (error) {
         showToast('Hata: ' + error.message, 'error')
-      } else {
-        await supabase.from('customer_payments').insert([{
-          customer_id: sale.customer_id,
-          amount: paymentAmount,
-          payment_method: sale.payment_method,
-          notes: `Taksit ödemesi - ${sale.item_name}`
-        }])
-
-        showToast(`₺${paymentAmount.toLocaleString('tr-TR')} ödeme kaydedildi! Kalan: ₺${newRemaining.toLocaleString('tr-TR')}`)
-        setShowPaymentModal(false)
-        loadData()
+        return
       }
+
+      // 2. DEBTS TABLOSUNU GÜNCELLE (YENİ - 3. Kritik Hata düzeltmesi)
+      const { data: existingDebts } = await supabase
+        .from('debts')
+        .select('*')
+        .eq('kaynak_kimliği', paymentForm.sale_id)
+        .eq('kaynak_türü', 'satış')
+
+      if (existingDebts && existingDebts.length > 0) {
+        const debt = existingDebts[0]
+        const newPaid = (debt.ödenen_miktar || 0) + paymentAmount
+        const newRemainingDebt = Math.max(0, (debt.kalan_miktar || 0) - paymentAmount)
+
+        await supabase.from('debts').update({
+          ödenen_miktar: newPaid,
+          kalan_miktar: newRemainingDebt,
+          durum: newRemainingDebt <= 0 ? 'Ödendi' : 'Beklemede'
+        }).eq('id', debt.id)
+      }
+
+      // 3. Kasa kaydı ekle (YENİ)
+      await supabase.from('transactions').insert([{
+        type: 'gelir',
+        category: 'Taksit Ödemesi',
+        amount: paymentAmount,
+        description: `${sale.item_name} - Taksit Ödemesi`,
+        related_id: sale.id,
+        related_table: 'sales'
+      }])
+
+      // 4. customer_payments kaydı
+      await supabase.from('customer_payments').insert([{
+        customer_id: sale.customer_id,
+        amount: paymentAmount,
+        payment_method: sale.payment_method,
+        notes: `Taksit ödemesi - ${sale.item_name}`
+      }])
+
+      showToast(`₺${paymentAmount.toLocaleString('tr-TR')} ödeme kaydedildi! Kalan: ₺${newRemaining.toLocaleString('tr-TR')}`)
+      setShowPaymentModal(false)
+      loadData()
     } catch (err: any) {
       showToast('Hata: ' + err.message, 'error')
     }
   }
 
-  // SİLME (Stok geri ekleme ile)
+  // SİLME - DÜZELTİLMİŞ (2. Kritik Hata düzeltmesi)
   const handleDelete = async (sale: Sale) => {
     if (!confirm('Bu satış kaydını silmek istediğinize emin misiniz?')) return
     try {
       // 1. Stok geri ekle (eğer stoktan düşülmüşse)
-      // Önce inventory'de aynı isimde ürün var mı kontrol et
-      const { data: invItem } = await supabase
+      // .single() yerine .select() kullan, aynı isimde birden fazla ürün olabilir
+      const { data: invItems } = await supabase
         .from('inventory')
         .select('*')
         .eq('name', sale.item_name)
-        .single()
 
-      if (invItem) {
-        // Stokta varsa miktarı geri ekle
+      if (invItems && invItems.length > 0) {
+        // İlk eşleşen ürünü al
+        const invItem = invItems[0]
         await supabase.from('inventory').update({
           quantity: (invItem.quantity || 0) + (sale.quantity || 1)
         }).eq('id', invItem.id)
