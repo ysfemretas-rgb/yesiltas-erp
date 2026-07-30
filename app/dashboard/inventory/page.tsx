@@ -1,263 +1,302 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { toast } from "sonner"
+import { Search, Plus, Trash2, Edit, AlertTriangle, Package } from "lucide-react"
 
 interface InventoryItem {
   id: string
   name: string
   category: string
-  brand: string
   quantity: number
+  unit_price: number
   min_stock: number
-  max_stock: number
-  purchase_price: number
-  sale_price: number
-  purchase_currency: string
-  usd_purchase_price: number
-  supplier_id: string
   created_at: string
-}
-
-interface Supplier {
-  id: string
-  name: string
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
-  const [filtered, setFiltered] = useState<InventoryItem[]>([])
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dollarRate, setDollarRate] = useState(34.5)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [search, setSearch] = useState("")
+  const [filtered, setFiltered] = useState<InventoryItem[]>([])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const [form, setForm] = useState({
-    name: '', category: '', brand: '', quantity: '', min_stock: '5', max_stock: '100',
-    purchase_price: '', sale_price: '', purchase_currency: 'TRY', usd_purchase_price: '', supplier_id: ''
+    name: "",
+    category: "",
+    quantity: "",
+    unit_price: "",
+    min_stock: "5"
   })
 
-  useEffect(() => { loadData() }, [])
+  const [editForm, setEditForm] = useState({
+    id: "",
+    name: "",
+    category: "",
+    quantity: "",
+    unit_price: "",
+    min_stock: ""
+  })
+
+  useEffect(() => {
+    loadData()
+  }, [])
 
   useEffect(() => {
     let result = items
-    if (search) result = result.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
-    if (categoryFilter) result = result.filter(i => i.category === categoryFilter)
-    setFiltered(result)
-  }, [search, categoryFilter, items])
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  const loadData = async () => {
-    setLoading(true)
-    const [itemsRes, suppliersRes] = await Promise.all([
-      supabase.from('inventory').select('*').order('created_at', { ascending: false }),
-      supabase.from('suppliers').select('id, name')
-    ])
-    if (itemsRes.data) setItems(itemsRes.data)
-    if (suppliersRes.data) setSuppliers(suppliersRes.data)
-    try {
-      const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
-      const data = await res.json()
-      setDollarRate(data.rates.TRY || 34.5)
-    } catch {}
-    setLoading(false)
-  }
-
-  const openModal = (item?: InventoryItem) => {
-    if (item) {
-      setForm({
-        name: item.name, category: item.category, brand: item.brand || '', quantity: item.quantity.toString(),
-        min_stock: item.min_stock.toString(), max_stock: item.max_stock.toString(),
-        purchase_price: item.purchase_price.toString(), sale_price: item.sale_price.toString(),
-        purchase_currency: item.purchase_currency || 'TRY', usd_purchase_price: item.usd_purchase_price?.toString() || '',
-        supplier_id: item.supplier_id || ''
-      })
-      setEditingId(item.id)
-    } else {
-      setForm({ name: '', category: '', brand: '', quantity: '', min_stock: '5', max_stock: '100', purchase_price: '', sale_price: '', purchase_currency: 'TRY', usd_purchase_price: '', supplier_id: '' })
-      setEditingId(null)
+    if (search) {
+      const term = search.toLowerCase()
+      result = result.filter(i =>
+        i.name?.toLowerCase().includes(term) ||
+        i.category?.toLowerCase().includes(term)
+      )
     }
-    setShowModal(true)
+    setFiltered(result)
+  }, [search, items])
+
+  async function loadData() {
+    setLoading(true)
+    const { data } = await supabase.from("inventory").select("*").order("created_at", { ascending: false })
+    if (data) setItems(data)
+    setLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const payload = {
-      name: form.name, category: form.category, brand: form.brand || null,
-      quantity: parseInt(form.quantity) || 0, min_stock: parseInt(form.min_stock) || 5, max_stock: parseInt(form.max_stock) || 100,
-      purchase_price: parseFloat(form.purchase_price) || 0, sale_price: parseFloat(form.sale_price) || 0,
-      purchase_currency: form.purchase_currency, usd_purchase_price: parseFloat(form.usd_purchase_price) || 0,
-      supplier_id: form.supplier_id || null
+    const qty = parseInt(form.quantity) || 0
+    const price = parseFloat(form.unit_price) || 0
+    const minStock = parseInt(form.min_stock) || 5
+
+    const { error } = await supabase.from("inventory").insert([{
+      name: form.name,
+      category: form.category,
+      quantity: qty,
+      unit_price: price,
+      min_stock: minStock
+    }])
+
+    if (error) {
+      toast.error("Ürün eklenirken hata: " + error.message)
+      return
     }
-    if (editingId) {
-      await supabase.from('inventory').update(payload).eq('id', editingId)
-      showToast('Stok guncellendi')
-    } else {
-      await supabase.from('inventory').insert([payload])
-      showToast('Stok eklendi')
+
+    toast.success("Ürün başarıyla eklendi")
+    setShowAddModal(false)
+    setForm({ name: "", category: "", quantity: "", unit_price: "", min_stock: "5" })
+    loadData()
+  }
+
+  const openEditModal = (item: InventoryItem) => {
+    setEditForm({
+      id: item.id,
+      name: item.name || "",
+      category: item.category || "",
+      quantity: item.quantity?.toString() || "",
+      unit_price: item.unit_price?.toString() || "",
+      min_stock: item.min_stock?.toString() || "5"
+    })
+    setShowEditModal(true)
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const qty = parseInt(editForm.quantity) || 0
+    const price = parseFloat(editForm.unit_price) || 0
+    const minStock = parseInt(editForm.min_stock) || 5
+
+    const { error } = await supabase.from("inventory").update({
+      name: editForm.name,
+      category: editForm.category,
+      quantity: qty,
+      unit_price: price,
+      min_stock: minStock
+    }).eq("id", editForm.id)
+
+    if (error) {
+      toast.error("Güncellenirken hata: " + error.message)
+      return
     }
-    setShowModal(false)
+
+    toast.success("Ürün güncellendi")
+    setShowEditModal(false)
     loadData()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bu urunu silmek istediginize emin misiniz?')) return
-    await supabase.from('inventory').delete().eq('id', id)
-    showToast('Stok silindi')
+    if (!confirm("Bu ürünü silmek istediğinize emin misiniz?")) return
+    const { error } = await supabase.from("inventory").delete().eq("id", id)
+    if (error) {
+      toast.error("Silinirken hata: " + error.message)
+      return
+    }
+    toast.success("Ürün silindi")
     loadData()
   }
 
-  const categories: string[] = []
-  items.forEach((i: InventoryItem) => {
-    if (!categories.includes(i.category)) categories.push(i.category)
-  })
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner" />
-      </div>
-    )
-  }
+  const lowStockItems = items.filter(i => i.quantity <= (i.min_stock || 5))
 
   return (
-    <div className="space-y-4">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg`}>
-          {toast.message}
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-white">Stok</h1>
-        <button onClick={() => openModal()} className="btn btn-primary btn-sm">Yeni Urun</button>
-      </div>
-
-      <div className="flex gap-2">
-        <input type="text" className="input flex-1" placeholder="Urun ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select className="select w-40" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-          <option value="">Tum Kategoriler</option>
-          {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr><th>Urun</th><th>Kategori</th><th>Marka</th><th>Stok</th><th>Alis Fiyati</th><th>Satis Fiyati</th><th>Kar</th><th>Islemler</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((item) => {
-              const isLow = item.quantity <= item.min_stock
-              const profit = item.sale_price - item.purchase_price
-              const profitPct = item.purchase_price > 0 ? ((profit / item.purchase_price) * 100).toFixed(1) : '0'
-              const tryPrice = item.purchase_currency === 'USD' && item.usd_purchase_price > 0
-                ? item.usd_purchase_price * dollarRate
-                : item.purchase_price
-              return (
-                <tr key={item.id}>
-                  <td className="font-medium text-white">{item.name}</td>
-                  <td><span className="badge badge-blue">{item.category}</span></td>
-                  <td className="text-slate-300">{item.brand || '-'}</td>
-                  <td>
-                    <span className={`font-medium ${isLow ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {item.quantity}
-                    </span>
-                    {isLow && <span className="badge badge-red ml-2">Kritik</span>}
-                  </td>
-                  <td className="text-slate-300">
-                    {item.purchase_currency === 'USD' && item.usd_purchase_price > 0 ? (
-                      <div>
-                        <div>${item.usd_purchase_price}</div>
-                        <div className="text-xs text-slate-500">{tryPrice.toLocaleString('tr-TR')} TL</div>
-                      </div>
-                    ) : (
-                      <div>{item.purchase_price?.toLocaleString('tr-TR')} TL</div>
-                    )}
-                  </td>
-                  <td className="text-slate-300">{item.sale_price?.toLocaleString('tr-TR')} TL</td>
-                  <td>
-                    <span className="text-emerald-400">+{profit.toLocaleString('tr-TR')} TL</span>
-                    <span className="text-xs text-slate-500 ml-1">(%{profitPct})</span>
-                  </td>
-                  <td>
-                    <div className="flex gap-1">
-                      <button onClick={() => openModal(item)} className="btn btn-secondary btn-sm">Duzenle</button>
-                      <button onClick={() => handleDelete(item.id)} className="btn btn-danger btn-sm">Sil</button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="empty-state">
-          <p>Henuz stok kaydi yok</p>
-        </div>
-      )}
-
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal max-w-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">{editingId ? 'Stok Duzenle' : 'Yeni Urun'}</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group"><label>Urun Adi *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required /></div>
-                <div className="grid-2">
-                  <div className="form-group"><label>Kategori *</label><input className="input" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})} required /></div>
-                  <div className="form-group"><label>Marka</label><input className="input" value={form.brand} onChange={(e) => setForm({...form, brand: e.target.value})} /></div>
-                </div>
-                <div className="grid-3">
-                  <div className="form-group"><label>Stok *</label><input className="input" type="number" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} required /></div>
-                  <div className="form-group"><label>Min Stok</label><input className="input" type="number" value={form.min_stock} onChange={(e) => setForm({...form, min_stock: e.target.value})} /></div>
-                  <div className="form-group"><label>Max Stok</label><input className="input" type="number" value={form.max_stock} onChange={(e) => setForm({...form, max_stock: e.target.value})} /></div>
-                </div>
-                <div className="form-group">
-                  <label>Para Birimi</label>
-                  <select className="select" value={form.purchase_currency} onChange={(e) => setForm({...form, purchase_currency: e.target.value})}>
-                    <option value="TRY">Turk Lirasi (TL)</option>
-                    <option value="USD">Dolar (USD)</option>
-                  </select>
-                </div>
-                {form.purchase_currency === 'USD' ? (
-                  <div className="grid-2">
-                    <div className="form-group"><label>Alis Fiyati (USD) *</label><input className="input" type="number" step="0.01" value={form.usd_purchase_price} onChange={(e) => setForm({...form, usd_purchase_price: e.target.value})} required /></div>
-                    <div className="form-group"><label>Alis Fiyati (TL Karsiligi)</label><input className="input" type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({...form, purchase_price: e.target.value})} placeholder="Hesaplanacak..." /></div>
-                  </div>
-                ) : (
-                  <div className="form-group"><label>Alis Fiyati (TL) *</label><input className="input" type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({...form, purchase_price: e.target.value})} required /></div>
-                )}
-                <div className="form-group"><label>Satis Fiyati (TL) *</label><input className="input" type="number" step="0.01" value={form.sale_price} onChange={(e) => setForm({...form, sale_price: e.target.value})} required /></div>
-                <div className="form-group">
-                  <label>Tedarikci</label>
-                  <select className="select" value={form.supplier_id} onChange={(e) => setForm({...form, supplier_id: e.target.value})}>
-                    <option value="">Secin...</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Stok</h1>
+        <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+          <DialogTrigger asChild>
+            <Button><Plus className="mr-2 h-4 w-4" /> Yeni Ürün</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Yeni Ürün Ekle</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Ürün Adı</Label>
+                <Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
               </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">{editingId ? 'Guncelle' : 'Kaydet'}</button>
+              <div className="space-y-2">
+                <Label>Kategori</Label>
+                <Input value={form.category} onChange={e => setForm({...form, category: e.target.value})} />
               </div>
+              <div className="space-y-2">
+                <Label>Adet</Label>
+                <Input type="number" min="0" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Birim Fiyat</Label>
+                <Input type="number" value={form.unit_price} onChange={e => setForm({...form, unit_price: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Min. Stok</Label>
+                <Input type="number" value={form.min_stock} onChange={e => setForm({...form, min_stock: e.target.value})} />
+              </div>
+              <Button type="submit" className="w-full">Kaydet</Button>
             </form>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Low Stock Alert */}
+      {lowStockItems.length > 0 && (
+        <Card className="border-yellow-500 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-800">
+              <AlertTriangle className="h-5 w-5" />
+              Düşük Stok Uyarısı ({lowStockItems.length} ürün)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2 flex-wrap">
+              {lowStockItems.map(item => (
+                <span key={item.id} className="px-3 py-1 bg-yellow-200 text-yellow-800 rounded-full text-sm">
+                  {item.name} ({item.quantity} adet)
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            <Input
+              placeholder="Ara..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-8">Yükleniyor...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ürün</TableHead>
+                  <TableHead>Kategori</TableHead>
+                  <TableHead>Adet</TableHead>
+                  <TableHead>Birim Fiyat</TableHead>
+                  <TableHead>Değer</TableHead>
+                  <TableHead>Min. Stok</TableHead>
+                  <TableHead>İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(item => {
+                  const isLow = item.quantity <= (item.min_stock || 5)
+                  return (
+                    <TableRow key={item.id} className={isLow ? "bg-yellow-50" : ""}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {isLow && <AlertTriangle className="h-4 w-4 text-yellow-600" />}
+                          {item.name}
+                        </div>
+                      </TableCell>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell className={isLow ? "text-yellow-700 font-bold" : ""}>{item.quantity}</TableCell>
+                      <TableCell>{item.unit_price?.toLocaleString("tr-TR")} ₺</TableCell>
+                      <TableCell>{(item.quantity * item.unit_price)?.toLocaleString("tr-TR")} ₺</TableCell>
+                      <TableCell>{item.min_stock || 5}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditModal(item)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(item.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ürün Düzenle</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Ürün Adı</Label>
+              <Input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Kategori</Label>
+              <Input value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Adet</Label>
+              <Input type="number" min="0" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Birim Fiyat</Label>
+              <Input type="number" value={editForm.unit_price} onChange={e => setEditForm({...editForm, unit_price: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Min. Stok</Label>
+              <Input type="number" value={editForm.min_stock} onChange={e => setEditForm({...editForm, min_stock: e.target.value})} />
+            </div>
+            <Button type="submit" className="w-full">Güncelle</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

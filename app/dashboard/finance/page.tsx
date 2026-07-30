@@ -1,7 +1,16 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { toast } from "sonner"
+import { Search, Plus, Trash2, Edit, ArrowDown, ArrowUp, Filter } from "lucide-react"
 
 interface Transaction {
   id: string
@@ -9,268 +18,363 @@ interface Transaction {
   category: string
   amount: number
   description: string
+  date: string
   created_at: string
 }
 
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [filtered, setFiltered] = useState<Transaction[]>([])
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const [balance, setBalance] = useState({ income: 0, expense: 0, net: 0, todayIncome: 0, todayExpense: 0 })
+  const [search, setSearch] = useState("")
+  const [filtered, setFiltered] = useState<Transaction[]>([])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [dateFilter, setDateFilter] = useState("")
+  const [typeFilter, setTypeFilter] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("")
 
-  const [form, setForm] = useState({ type: 'gelir', category: '', amount: '', description: '' })
-  const [editForm, setEditForm] = useState<any>(null)
+  const [form, setForm] = useState({
+    type: "income",
+    category: "Satış",
+    amount: "",
+    description: "",
+    date: new Date().toISOString().split("T")[0]
+  })
 
-  useEffect(() => { loadData() }, [])
+  const [editForm, setEditForm] = useState({
+    id: "",
+    type: "income",
+    category: "Satış",
+    amount: "",
+    description: "",
+    date: ""
+  })
+
+  useEffect(() => {
+    loadData()
+  }, [])
 
   useEffect(() => {
     let result = transactions
-    if (categoryFilter) result = result.filter(t => t.category === categoryFilter)
-    if (typeFilter) result = result.filter(t => t.type === typeFilter)
-    if (dateFrom) result = result.filter(t => t.created_at >= dateFrom + 'T00:00:00')
-    if (dateTo) result = result.filter(t => t.created_at <= dateTo + 'T23:59:59')
-    setFiltered(result)
-  }, [categoryFilter, typeFilter, dateFrom, dateTo, transactions])
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  const loadData = async () => {
-    setLoading(true)
-    const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false })
-    if (data) {
-      setTransactions(data)
-      setFiltered(data)
-      const income = data.filter((t: Transaction) => t.type === 'gelir').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
-      const expense = data.filter((t: Transaction) => t.type === 'gider').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
-      const todayIncome = data.filter((t: Transaction) => t.type === 'gelir' && t.created_at >= today + 'T00:00:00').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
-      const todayExpense = data.filter((t: Transaction) => t.type === 'gider' && t.created_at >= today + 'T00:00:00').reduce((s: number, t: Transaction) => s + (t.amount || 0), 0)
-      setBalance({ income, expense, net: income - expense, todayIncome, todayExpense })
+    if (search) {
+      const term = search.toLowerCase()
+      result = result.filter(t =>
+        t.description?.toLowerCase().includes(term) ||
+        t.category?.toLowerCase().includes(term)
+      )
     }
+    if (dateFilter) {
+      result = result.filter(t => t.date === dateFilter)
+    }
+    if (typeFilter) {
+      result = result.filter(t => t.type === typeFilter)
+    }
+    if (categoryFilter) {
+      result = result.filter(t => t.category === categoryFilter)
+    }
+    setFiltered(result)
+  }, [search, dateFilter, typeFilter, categoryFilter, transactions])
+
+  async function loadData() {
+    setLoading(true)
+    const { data } = await supabase.from("transactions").select("*").order("created_at", { ascending: false })
+    if (data) setTransactions(data)
     setLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await supabase.from('transactions').insert([{
+    const amount = parseFloat(form.amount) || 0
+
+    const { error } = await supabase.from("transactions").insert([{
       type: form.type,
       category: form.category,
-      amount: parseFloat(form.amount) || 0,
-      description: form.description
+      amount: amount,
+      description: form.description,
+      date: form.date
     }])
-    showToast('Islem kaydedildi')
-    setShowModal(false)
-    setForm({ type: 'gelir', category: '', amount: '', description: '' })
+
+    if (error) {
+      toast.error("İşlem eklenirken hata: " + error.message)
+      return
+    }
+
+    toast.success("İşlem başarıyla eklendi")
+    setShowAddModal(false)
+    setForm({ type: "income", category: "Satış", amount: "", description: "", date: new Date().toISOString().split("T")[0] })
     loadData()
   }
 
-  const openEditModal = (t: Transaction) => {
+  const openEditModal = (transaction: Transaction) => {
     setEditForm({
-      id: t.id,
-      type: t.type,
-      category: t.category,
-      amount: t.amount?.toString() || '',
-      description: t.description || ''
+      id: transaction.id,
+      type: transaction.type || "income",
+      category: transaction.category || "Satış",
+      amount: transaction.amount?.toString() || "",
+      description: transaction.description || "",
+      date: transaction.date || ""
     })
     setShowEditModal(true)
   }
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
+  const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const { error } = await supabase.from('transactions').update({
+    const amount = parseFloat(editForm.amount) || 0
+
+    const { error } = await supabase.from("transactions").update({
       type: editForm.type,
       category: editForm.category,
-      amount: parseFloat(editForm.amount) || 0,
-      description: editForm.description
-    }).eq('id', editForm.id)
-    if (error) {
-      showToast('Hata: ' + error.message, 'error')
-    } else {
-      showToast('Islem guncellendi!')
-      setShowEditModal(false)
-      loadData()
-    }
-  }
+      amount: amount,
+      description: editForm.description,
+      date: editForm.date
+    }).eq("id", editForm.id)
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Silmek istediginize emin misiniz?')) return
-    await supabase.from('transactions').delete().eq('id', id)
-    showToast('Silindi')
+    if (error) {
+      toast.error("Güncellenirken hata: " + error.message)
+      return
+    }
+
+    toast.success("İşlem güncellendi")
+    setShowEditModal(false)
     loadData()
   }
 
-  const categories: string[] = []
-  transactions.forEach((t: Transaction) => {
-    if (!categories.includes(t.category)) categories.push(t.category)
-  })
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner" />
-      </div>
-    )
+  const handleDelete = async (id: string) => {
+    if (!confirm("Bu işlemi silmek istediğinize emin misiniz?")) return
+    const { error } = await supabase.from("transactions").delete().eq("id", id)
+    if (error) {
+      toast.error("Silinirken hata: " + error.message)
+      return
+    }
+    toast.success("İşlem silindi")
+    loadData()
   }
 
-  return (
-    <div className="space-y-4">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg`}>
-          {toast.message}
-        </div>
-      )}
+  const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + (t.amount || 0), 0)
+  const totalExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + (t.amount || 0), 0)
+  const balance = totalIncome - totalExpense
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-white">Kasa</h1>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-sm">Yeni Islem</button>
+  const categories = [...new Set(transactions.map(t => t.category))]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Kasa</h1>
+        <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+          <DialogTrigger asChild>
+            <Button><Plus className="mr-2 h-4 w-4" /> Yeni İşlem</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Yeni İşlem Ekle</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Tip</Label>
+                <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="income">Gelir</SelectItem>
+                    <SelectItem value="expense">Gider</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Kategori</Label>
+                <Input value={form.category} onChange={e => setForm({...form, category: e.target.value})} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Tutar</Label>
+                <Input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Açıklama</Label>
+                <Input value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Tarih</Label>
+                <Input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
+              </div>
+              <Button type="submit" className="w-full">Kaydet</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Balance Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
-          <h3 className="text-sm text-slate-400">Toplam Gelir</h3>
-          <p className="text-2xl font-bold text-emerald-400">{balance.income.toLocaleString('tr-TR')} TL</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
-          <h3 className="text-sm text-slate-400">Toplam Gider</h3>
-          <p className="text-2xl font-bold text-red-400">{balance.expense.toLocaleString('tr-TR')} TL</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
-          <h3 className="text-sm text-slate-400">Net Bakiye</h3>
-          <p className={`text-2xl font-bold ${balance.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{balance.net.toLocaleString('tr-TR')} TL</p>
-        </div>
-        <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155]">
-          <h3 className="text-sm text-slate-400">Bugun</h3>
-          <p className="text-lg font-bold text-emerald-400">+{balance.todayIncome.toLocaleString('tr-TR')} TL</p>
-          <p className="text-sm text-red-400">-{balance.todayExpense.toLocaleString('tr-TR')} TL</p>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Gelir</CardTitle>
+            <ArrowUp className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{totalIncome.toLocaleString("tr-TR")} ₺</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Gider</CardTitle>
+            <ArrowDown className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{totalExpense.toLocaleString("tr-TR")} ₺</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Bakiye</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {balance.toLocaleString("tr-TR")} ₺
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        <select className="select w-40" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          <option value="">Tum Turler</option>
-          <option value="gelir">Gelir</option>
-          <option value="gider">Gider</option>
-        </select>
-        <select className="select w-40" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-          <option value="">Tum Kategoriler</option>
-          {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <input type="date" className="input w-40" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-        <input type="date" className="input w-40" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-        <button onClick={() => { setTypeFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo('') }} className="btn btn-secondary btn-sm">Temizle</button>
-      </div>
-
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr><th>Tur</th><th>Kategori</th><th>Tutar</th><th>Aciklama</th><th>Tarih</th><th>Islemler</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((t: Transaction) => (
-              <tr key={t.id}>
-                <td><span className={`badge ${t.type === 'gelir' ? 'badge-green' : 'badge-red'}`}>{t.type === 'gelir' ? 'Gelir' : 'Gider'}</span></td>
-                <td className="text-slate-300">{t.category}</td>
-                <td className={`font-medium ${t.type === 'gelir' ? 'text-emerald-400' : 'text-red-400'}`}>{t.amount?.toLocaleString('tr-TR')} TL</td>
-                <td className="text-slate-300 max-w-xs truncate">{t.description || '-'}</td>
-                <td className="text-slate-400 text-sm">{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
-                <td>
-                  <div className="flex gap-1">
-                    <button onClick={() => openEditModal(t)} className="btn btn-sm" style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️</button>
-                    <button onClick={() => handleDelete(t.id)} className="btn btn-danger btn-sm">Sil</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="empty-state">
-          <p>Henuz islem kaydi yok</p>
-        </div>
-      )}
-
-      {/* Yeni Islem Modal */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">Yeni Islem</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filtreler
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 flex-wrap">
+            <div className="space-y-2">
+              <Label>Tarih</Label>
+              <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Tur</label>
-                  <select className="select" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
-                    <option value="gelir">Gelir</option>
-                    <option value="gider">Gider</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Kategori *</label>
-                  <input className="input" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})} required placeholder="Orn: Teknik Servis, Sarf Malzeme..." />
-                </div>
-                <div className="form-group">
-                  <label>Tutar (TL) *</label>
-                  <input className="input" type="number" step="0.01" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Aciklama</label>
-                  <textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Duzenle Modal */}
-      {showEditModal && editForm && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">Islem Duzenle</h2>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+            <div className="space-y-2">
+              <Label>Tip</Label>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Tümü" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Tümü</SelectItem>
+                  <SelectItem value="income">Gelir</SelectItem>
+                  <SelectItem value="expense">Gider</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <form onSubmit={handleEditSubmit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Tur</label>
-                  <select className="select" value={editForm.type} onChange={(e) => setEditForm({...editForm, type: e.target.value})}>
-                    <option value="gelir">Gelir</option>
-                    <option value="gider">Gider</option>
-                  </select>
-                </div>
-                <div className="form-group"><label>Kategori *</label><input className="input" value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})} required /></div>
-                <div className="form-group"><label>Tutar (TL) *</label><input className="input" type="number" step="0.01" value={editForm.amount} onChange={(e) => setEditForm({...editForm, amount: e.target.value})} required /></div>
-                <div className="form-group"><label>Aciklama</label><textarea className="input" rows={2} value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} /></div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">Guncelle</button>
-              </div>
-            </form>
+            <div className="space-y-2">
+              <Label>Kategori</Label>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Tümü" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Tümü</SelectItem>
+                  {categories.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Ara</Label>
+              <Input
+                placeholder="Ara..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-[200px]"
+              />
+            </div>
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="pt-6">
+          {loading ? (
+            <div className="text-center py-8">Yükleniyor...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tarih</TableHead>
+                  <TableHead>Tip</TableHead>
+                  <TableHead>Kategori</TableHead>
+                  <TableHead>Tutar</TableHead>
+                  <TableHead>Açıklama</TableHead>
+                  <TableHead>İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(transaction => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>{new Date(transaction.date).toLocaleDateString("tr-TR")}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        transaction.type === "income" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                      }`}>
+                        {transaction.type === "income" ? "Gelir" : "Gider"}
+                      </span>
+                    </TableCell>
+                    <TableCell>{transaction.category}</TableCell>
+                    <TableCell className={`font-medium ${transaction.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                      {transaction.amount?.toLocaleString("tr-TR")} ₺
+                    </TableCell>
+                    <TableCell>{transaction.description}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openEditModal(transaction)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(transaction.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>İşlem Düzenle</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tip</Label>
+              <Select value={editForm.type} onValueChange={v => setEditForm({...editForm, type: v})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="income">Gelir</SelectItem>
+                  <SelectItem value="expense">Gider</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Kategori</Label>
+              <Input value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Tutar</Label>
+              <Input type="number" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: e.target.value})} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Açıklama</Label>
+              <Input value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Tarih</Label>
+              <Input type="date" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} />
+            </div>
+            <Button type="submit" className="w-full">Güncelle</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
