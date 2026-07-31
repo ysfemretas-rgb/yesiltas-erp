@@ -3,8 +3,8 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-export default function HomePage() {
-  const router = useRouter()
+export default function AnaSayfa() {
+  var router = useRouter()
   useEffect(function() {
     router.replace("/dashboard")
   }, [router])

@@ -2,135 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  /* Button */
-  .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer border-0;
-  }
-  .btn-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-700;
-  }
-  .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
-  }
-  .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700;
-  }
-  .btn-success {
-    @apply bg-green-600 text-white hover:bg-green-700;
-  }
-  .btn-warning {
-    @apply bg-yellow-500 text-white hover:bg-yellow-600;
-  }
-  .btn-sm {
-    @apply px-2 py-1 text-sm;
-  }
-
-  /* Input */
-  .input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
-  }
-
-  /* Label */
-  .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
-  }
-
-  /* Form Group */
-  .form-group {
-    @apply mb-0;
-  }
-
-  /* Table */
-  .table-container {
-    @apply overflow-x-auto;
-  }
-  .table {
-    @apply w-full border-collapse;
-  }
-  .table thead {
-    @apply bg-gray-50;
-  }
-  .table th {
-    @apply px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b;
-  }
-  .table td {
-    @apply px-4 py-3 border-b border-gray-100 text-sm text-gray-800;
-  }
-  .table tbody tr:hover {
-    @apply bg-gray-50;
-  }
-
-  /* Card */
-  .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200;
-  }
-  .card-header {
-    @apply px-6 py-4 border-b border-gray-100;
-  }
-  .card-title {
-    @apply text-sm font-medium text-gray-600;
-  }
-  .card-content {
-    @apply px-6 py-4;
-  }
-
-  /* Modal */
-  .modal-overlay {
-    @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4;
-  }
-  .modal {
-    @apply bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto;
-  }
-  .modal-header {
-    @apply flex justify-between items-center px-6 py-4 border-b border-gray-100 sticky top-0 bg-white;
-  }
-  .modal-title {
-    @apply text-lg font-semibold;
-  }
-  .modal-close {
-    @apply text-2xl text-gray-400 hover:text-gray-600 cursor-pointer bg-transparent border-0;
-  }
-  .modal-body {
-    @apply p-6;
-  }
-  .modal-footer {
-    @apply flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100;
-  }
-
-  /* Badge */
-  .badge {
-    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
-  }
-  .badge-green {
-    @apply bg-green-100 text-green-800;
-  }
-  .badge-red {
-    @apply bg-red-100 text-red-800;
-  }
-  .badge-yellow {
-    @apply bg-yellow-100 text-yellow-800;
-  }
-  .badge-blue {
-    @apply bg-blue-100 text-blue-800;
-  }
-  .badge-gray {
-    @apply bg-gray-100 text-gray-800;
-  }
-
-  /* Spinner */
-  .spinner {
-    @apply w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mt-8;
-  }
-
-  /* Empty State */
-  .empty-state {
-    @apply text-center py-12 text-gray-500;
-  }
+:root {
+  --bg-primary: #0f172a;
+  --bg-card: #1e293b;
+  --border-color: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent: #10b981;
 }
 
-@layer base {
-  body {
-    @apply bg-gray-50 text-gray-900;
-  }
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
+
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+.btn-primary { background-color: #10b981; color: white; border-color: #10b981; }
+.btn-primary:hover { background-color: #059669; }
+.btn-secondary { background-color: #334155; color: var(--text-secondary); border-color: #334155; }
+.btn-secondary:hover { background-color: #475569; color: white; }
+.btn-danger { background-color: #ef4444; color: white; border-color: #ef4444; }
+.btn-danger:hover { background-color: #dc2626; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+.input, .select, textarea.input {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input:focus, .select:focus, textarea.input:focus { border-color: #10b981; }
+
+.table-container { overflow-x: auto; border-radius: 0.75rem; border: 1px solid #334155; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.table th { background-color: #1e293b; color: #94a3b8; font-weight: 600; text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid #334155; white-space: nowrap; }
+.table td { padding: 0.75rem 1rem; border-bottom: 1px solid #334155; color: var(--text-secondary); }
+.table tbody tr:hover { background-color: rgba(16, 185, 129, 0.05); }
+.table tbody tr:last-child td { border-bottom: none; }
+
+.badge { display: inline-flex; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+.badge-green { background-color: rgba(16, 185, 129, 0.15); color: #34d399; }
+.badge-red { background-color: rgba(239, 68, 68, 0.15); color: #f87171; }
+.badge-yellow { background-color: rgba(234, 179, 8, 0.15); color: #facc15; }
+.badge-blue { background-color: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.modal { background-color: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; width: 100%; max-width: 32rem; max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #334155; }
+.modal-body { padding: 1rem; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem; border-top: 1px solid #334155; }
+
+.form-group label { display: block; font-size: 0.875rem; font-weight: 500; color: #94a3b8; margin-bottom: 0.25rem; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+.spinner { width: 2rem; height: 2rem; border: 3px solid #334155; border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state { text-align: center; padding: 3rem; color: #64748b; }
+.stat-card { background-color: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1rem; }
+.card { background-color: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1rem; }
