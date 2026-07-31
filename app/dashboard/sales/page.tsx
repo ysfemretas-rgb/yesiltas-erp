@@ -1,432 +1,550 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-
-interface Sale {
-  id: string
-  customer_id: string
-  item_name: string
-  item_type: string
-  quantity: number
-  unit_price: number
-  total_price: number
-  payment_method: string
-  installments: number
-  remaining_amount: number
-  warranty_months: number
-  warranty_end_date: string
-  created_at: string
-}
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { 
+  ShoppingCart, 
+  Plus, 
+  Trash2, 
+  Edit3, 
+  Search, 
+  UserPlus,
+  X,
+  Save,
+  Minus,
+  Package
+} from "lucide-react"
 
 interface Customer {
-  id: string
+  id: number
   name: string
   phone: string
+  phone2?: string
+  email?: string
 }
 
-interface InventoryItem {
-  id: string
-  name: string
-  category: string
-  sale_price: number
+interface SaleItem {
+  id: number
+  productName: string
   quantity: number
+  unitPrice: number
+  totalPrice: number
 }
+
+interface Sale {
+  id: number
+  customerId: number
+  customerName: string
+  items: SaleItem[]
+  totalAmount: number
+  date: string
+  status: "completed" | "cancelled"
+}
+
+const initialCustomers: Customer[] = [
+  { id: 1, name: "Ahmet Yilmaz", phone: "0555 123 4567", phone2: "0532 987 6543" },
+  { id: 2, name: "Mehmet Kaya", phone: "0555 234 5678" },
+  { id: 3, name: "Ayse Demir", phone: "0555 345 6789", phone2: "0543 111 2222" },
+]
+
+const initialSales: Sale[] = [
+  {
+    id: 1,
+    customerId: 1,
+    customerName: "Ahmet Yilmaz",
+    items: [
+      { id: 1, productName: "iPhone 14 Pro Kilif", quantity: 1, unitPrice: 250, totalPrice: 250 },
+      { id: 2, productName: "Ekran Koruyucu", quantity: 2, unitPrice: 150, totalPrice: 300 }
+    ],
+    totalAmount: 550,
+    date: "2024-08-01",
+    status: "completed"
+  },
+  {
+    id: 2,
+    customerId: 2,
+    customerName: "Mehmet Kaya",
+    items: [
+      { id: 3, productName: "Samsung S23 Kilif", quantity: 1, unitPrice: 200, totalPrice: 200 }
+    ],
+    totalAmount: 200,
+    date: "2024-08-01",
+    status: "completed"
+  }
+]
+
+const initialStock = [
+  { id: 1, name: "iPhone 14 Pro Kilif", quantity: 15, unitPrice: 150 },
+  { id: 2, name: "Samsung S23 Kilif", quantity: 10, unitPrice: 120 },
+  { id: 3, name: "Ekran Koruyucu", quantity: 50, unitPrice: 80 },
+  { id: 4, name: "Sarj Aleti", quantity: 20, unitPrice: 200 },
+  { id: 5, name: "Kulaklik", quantity: 8, unitPrice: 350 },
+]
 
 export default function SalesPage() {
-  const [sales, setSales] = useState<Sale[]>([])
-  const [filteredSales, setFilteredSales] = useState<Sale[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [inventory, setInventory] = useState<InventoryItem[]>([])
-  const [showModal, setShowModal] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const router = useRouter()
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
+  const [sales, setSales] = useState<Sale[]>(initialSales)
+  const [stock, setStock] = useState(initialStock)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isNewSaleOpen, setIsNewSaleOpen] = useState(false)
+  const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false)
+  const [editingSale, setEditingSale] = useState<Sale | null>(null)
   
-  const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState('Tumu')
-  const [warrantyFilter, setWarrantyFilter] = useState('Tumu')
-  const [activeTab, setActiveTab] = useState<'sales' | 'devices'>('sales')
-
-  const [form, setForm] = useState({
-    customer_id: '', item_name: '', item_type: 'Cihaz', quantity: '1',
-    unit_price: '', payment_method: 'Nakit', installments: '1',
-    warranty_months: '12', selected_inventory: ''
+  const [selectedCustomer, setSelectedCustomer] = useState<string>("")
+  const [cartItems, setCartItems] = useState<SaleItem[]>([])
+  
+  const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({
+    name: "",
+    phone: "",
+    phone2: "",
+    email: ""
   })
 
-  useEffect(() => { loadData() }, [])
+  const filteredSales = sales.filter(s => 
+    s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.items.some(i => i.productName.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
 
-  useEffect(() => {
-    var result = sales
-    if (search) {
-      var term = search.toLowerCase()
-      result = result.filter(function(s) {
-        return s.item_name.toLowerCase().indexOf(term) !== -1
+  const totalRevenue = sales.filter(s => s.status === "completed").reduce((sum, s) => sum + s.totalAmount, 0)
+  const totalSales = sales.filter(s => s.status === "completed").length
+  const cancelledSales = sales.filter(s => s.status === "cancelled")
+
+  const addToCart = (productName: string, unitPrice: number) => {
+    const existing = cartItems.find(item => item.productName === productName)
+    if (existing) {
+      setCartItems(cartItems.map(item => 
+        item.productName === productName 
+          ? { ...item, quantity: item.quantity + 1, totalPrice: (item.quantity + 1) * item.unitPrice }
+          : item
+      ))
+    } else {
+      setCartItems([...cartItems, {
+        id: Date.now(),
+        productName,
+        quantity: 1,
+        unitPrice,
+        totalPrice: unitPrice
+      }])
+    }
+    
+    setStock(stock.map(s => 
+      s.name === productName ? { ...s, quantity: s.quantity - 1 } : s
+    ))
+  }
+
+  const removeFromCart = (productName: string) => {
+    const item = cartItems.find(i => i.productName === productName)
+    if (item && item.quantity > 1) {
+      setCartItems(cartItems.map(i => 
+        i.productName === productName 
+          ? { ...i, quantity: i.quantity - 1, totalPrice: (i.quantity - 1) * i.unitPrice }
+          : i
+      ))
+    } else {
+      setCartItems(cartItems.filter(i => i.productName !== productName))
+    }
+    
+    setStock(stock.map(s => 
+      s.name === productName ? { ...s, quantity: s.quantity + 1 } : s
+    ))
+  }
+
+  const handleCompleteSale = () => {
+    if (!selectedCustomer || cartItems.length === 0) return
+    
+    const customer = customers.find(c => c.id === Number(selectedCustomer))
+    if (!customer) return
+
+    const total = cartItems.reduce((sum, item) => sum + item.totalPrice, 0)
+    
+    const newSale: Sale = {
+      id: Date.now(),
+      customerId: customer.id,
+      customerName: customer.name,
+      items: [...cartItems],
+      totalAmount: total,
+      date: new Date().toISOString().split("T")[0],
+      status: "completed"
+    }
+
+    setSales([newSale, ...sales])
+    setCartItems([])
+    setSelectedCustomer("")
+    setIsNewSaleOpen(false)
+  }
+
+  const handleCancelSale = (saleId: number) => {
+    const sale = sales.find(s => s.id === saleId)
+    if (!sale) return
+
+    sale.items.forEach(item => {
+      setStock(prev => prev.map(s => 
+        s.name === item.productName ? { ...s, quantity: s.quantity + item.quantity } : s
+      ))
+    })
+
+    setSales(sales.map(s => 
+      s.id === saleId ? { ...s, status: "cancelled" } : s
+    ))
+  }
+
+  const handleDeleteSale = (saleId: number) => {
+    const sale = sales.find(s => s.id === saleId)
+    if (sale && sale.status === "completed") {
+      sale.items.forEach(item => {
+        setStock(prev => prev.map(s => 
+          s.name === item.productName ? { ...s, quantity: s.quantity + item.quantity } : s
+        ))
       })
     }
-    if (typeFilter !== 'Tumu') {
-      result = result.filter(function(s) { return s.item_type === typeFilter })
-    }
-    if (warrantyFilter !== 'Tumu') {
-      result = result.filter(function(s) {
-        if (warrantyFilter === 'Aktif') return s.warranty_end_date && new Date(s.warranty_end_date) > new Date()
-        if (warrantyFilter === 'Sona Erdi') return !s.warranty_end_date || new Date(s.warranty_end_date) <= new Date()
-        return true
-      })
-    }
-    setFilteredSales(result)
-  }, [search, typeFilter, warrantyFilter, sales])
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-    setTimeout(function() { setToast(null) }, 3000)
+    setSales(sales.filter(s => s.id !== saleId))
   }
 
-  const loadData = async () => {
-    setLoading(true)
-    const [salesRes, customersRes, inventoryRes] = await Promise.all([
-      supabase.from('sales').select('*').order('created_at', { ascending: false }),
-      supabase.from('customers').select('id, name, phone').order('name'),
-      supabase.from('inventory').select('id, name, category, sale_price, quantity').gt('quantity', 0)
-    ])
-    if (salesRes.data) setSales(salesRes.data)
-    if (customersRes.data) setCustomers(customersRes.data)
-    if (inventoryRes.data) setInventory(inventoryRes.data)
-    setLoading(false)
+  const handleAddCustomer = () => {
+    if (!newCustomer.name || !newCustomer.phone) return
+    
+    const customer: Customer = {
+      id: Date.now(),
+      name: newCustomer.name,
+      phone: newCustomer.phone,
+      phone2: newCustomer.phone2 || undefined,
+      email: newCustomer.email || undefined
+    }
+    
+    setCustomers([customer, ...customers])
+    setNewCustomer({ name: "", phone: "", phone2: "", email: "" })
+    setIsNewCustomerOpen(false)
+    setSelectedCustomer(String(customer.id))
   }
 
-  const handleInventorySelect = (inventoryId: string) => {
-    for (var i = 0; i < inventory.length; i++) {
-      if (inventory[i].id === inventoryId) {
-        var item = inventory[i]
-        var newType = 'Cihaz'
-        if (item.category === 'Aksesuar') newType = 'Aksesuar'
-        else if (item.category === 'Parca') newType = 'Parca'
-        setForm({
-          ...form,
-          selected_inventory: inventoryId,
-          item_name: item.name,
-          item_type: newType,
-          unit_price: item.sale_price.toString()
-        })
-        break
-      }
-    }
+  const handleEditSale = (sale: Sale) => {
+    setEditingSale(sale)
+    setSelectedCustomer(String(sale.customerId))
+    setCartItems([...sale.items])
+    setIsNewSaleOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    var qty = parseInt(form.quantity) || 1
-    var price = parseFloat(form.unit_price) || 0
-    var total = qty * price
-    var installments = parseInt(form.installments) || 1
-    var warrantyMonths = parseInt(form.warranty_months) || 12
-    var remaining = 0
-    if (form.payment_method === 'Taksit' || form.payment_method === 'Borc') {
-      remaining = total
-    }
+  const handleUpdateSale = () => {
+    if (!editingSale || !selectedCustomer || cartItems.length === 0) return
+    
+    const customer = customers.find(c => c.id === Number(selectedCustomer))
+    if (!customer) return
 
-    var warrantyEnd = new Date()
-    warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
-    var warrantyEndStr = warrantyEnd.toISOString().split('T')[0]
-
-    var { data: saleData, error } = await supabase.from('sales').insert([{
-      customer_id: form.customer_id || null,
-      item_name: form.item_name,
-      item_type: form.item_type,
-      quantity: qty,
-      unit_price: price,
-      total_price: total,
-      payment_method: form.payment_method,
-      installments: installments,
-      remaining_amount: remaining,
-      warranty_months: warrantyMonths,
-      warranty_end_date: warrantyEndStr
-    }]).select()
-
-    if (error) {
-      showToast('Hata: ' + error.message, 'error')
-      return
-    }
-
-    if (form.selected_inventory) {
-      for (var i = 0; i < inventory.length; i++) {
-        if (inventory[i].id === form.selected_inventory) {
-          await supabase.from('inventory').update({ quantity: inventory[i].quantity - qty }).eq('id', form.selected_inventory)
-          break
-        }
-      }
-    }
-
-    if (remaining === 0) {
-      await supabase.from('transactions').insert([{
-        type: 'gelir',
-        category: 'Satis',
-        amount: total,
-        description: form.item_name + ' - ' + form.payment_method,
-        related_id: saleData && saleData[0] ? saleData[0].id : null,
-        related_table: 'sales'
-      }])
-    }
-
-    if (saleData && saleData[0]) {
-      var customerName = ''
-      for (var i = 0; i < customers.length; i++) {
-        if (customers[i].id === form.customer_id) {
-          customerName = customers[i].name
-          break
-        }
-      }
-      await supabase.from('warranties').insert([{
-        sale_id: saleData[0].id,
-        customer_id: form.customer_id || null,
-        customer_name: customerName,
-        item_name: form.item_name,
-        warranty_months: warrantyMonths,
-        warranty_start: new Date().toISOString().split('T')[0],
-        warranty_end: warrantyEndStr,
-        status: 'Aktif'
-      }])
-    }
-
-    if (remaining > 0) {
-      var dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      await supabase.from('debts').insert([{
-        customer_id: form.customer_id || null,
-        source_type: 'sale',
-        source_id: saleData && saleData[0] ? saleData[0].id : null,
-        total_amount: total,
-        paid_amount: 0,
-        remaining_amount: remaining,
-        due_date: dueDate.toISOString().split('T')[0]
-      }])
-    }
-
-    showToast('Satis kaydedildi')
-    setShowModal(false)
-    setForm({ customer_id: '', item_name: '', item_type: 'Cihaz', quantity: '1', unit_price: '', payment_method: 'Nakit', installments: '1', warranty_months: '12', selected_inventory: '' })
-    loadData()
-  }
-
-  const isWarrantyActive = (endDate: string) => {
-    if (!endDate) return false
-    return new Date(endDate) > new Date()
-  }
-
-  const daysUntilExpiry = (endDate: string) => {
-    if (!endDate) return 0
-    var diff = new Date(endDate).getTime() - new Date().getTime()
-    return Math.ceil(diff / (1000 * 60 * 60 * 24))
-  }
-
-  var typeOptions = ['Tumu']
-  for (var i = 0; i < sales.length; i++) {
-    var t = sales[i].item_type
-    var found = false
-    for (var j = 0; j < typeOptions.length; j++) {
-      if (typeOptions[j] === t) { found = true; break }
-    }
-    if (!found) typeOptions.push(t)
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner" />
-      </div>
-    )
+    const total = cartItems.reduce((sum, item) => sum + item.totalPrice, 0)
+    
+    setSales(sales.map(s => 
+      s.id === editingSale.id 
+        ? {
+            ...s,
+            customerId: customer.id,
+            customerName: customer.name,
+            items: [...cartItems],
+            totalAmount: total
+          }
+        : s
+    ))
+    
+    setEditingSale(null)
+    setCartItems([])
+    setSelectedCustomer("")
+    setIsNewSaleOpen(false)
   }
 
   return (
-    <div className="space-y-4">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg`}>
-          {toast.message}
-        </div>
-      )}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight text-white">Satis (POS)</h1>
+        <Dialog open={isNewSaleOpen} onOpenChange={setIsNewSaleOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={() => {
+              setEditingSale(null)
+              setCartItems([])
+              setSelectedCustomer("")
+            }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Yeni Satis
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[700px] bg-slate-900 border-slate-800 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-white">
+                {editingSale ? "Satis Duzenle" : "Yeni Satis"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Musteri</label>
+                <div className="flex gap-2">
+                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                    <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-white">
+                      <SelectValue placeholder="Musteri secin" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      {customers.map(c => (
+                        <SelectItem key={c.id} value={String(c.id)} className="text-white">
+                          {c.name} - {c.phone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsNewCustomerOpen(true)}
+                    className="border-slate-700 text-slate-300 hover:text-white"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-white">Satis (POS)</h1>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-sm">Yeni Satis</button>
-      </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Urunler</label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {stock.filter(s => s.quantity > 0).map(item => (
+                      <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-800">
+                        <div>
+                          <div className="text-sm text-white">{item.name}</div>
+                          <div className="text-xs text-slate-400">Stok: {item.quantity} | ₺{item.unitPrice}</div>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          onClick={() => addToCart(item.name, item.unitPrice)}
+                          disabled={item.quantity <= 0}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-      <div className="flex gap-4 border-b border-[#334155]">
-        <button 
-          onClick={() => setActiveTab('sales')}
-          className={`pb-2 px-1 font-medium ${activeTab === 'sales' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500'}`}
-        >Tum Satislar</button>
-        <button 
-          onClick={() => setActiveTab('devices')}
-          className={`pb-2 px-1 font-medium ${activeTab === 'devices' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500'}`}
-        >Satilan Cihazlar</button>
-      </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Sepet</label>
+                  <div className="space-y-2 min-h-[120px]">
+                    {cartItems.length === 0 ? (
+                      <div className="text-center text-slate-500 py-8">Sepet bos</div>
+                    ) : (
+                      cartItems.map(item => (
+                        <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-800">
+                          <div>
+                            <div className="text-sm text-white">{item.productName}</div>
+                            <div className="text-xs text-slate-400">{item.quantity} x ₺{item.unitPrice}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-white">₺{item.totalPrice}</span>
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={() => removeFromCart(item.productName)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {cartItems.length > 0 && (
+                    <div className="border-t border-slate-700 pt-2">
+                      <div className="flex justify-between text-white font-bold">
+                        <span>Toplam:</span>
+                        <span>₺{cartItems.reduce((sum, i) => sum + i.totalPrice, 0)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-      <div className="flex gap-2 flex-wrap">
-        <input type="text" className="input max-w-xs" placeholder="Urun ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select className="select w-32" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          {typeOptions.map(function(t) { return <option key={t}>{t}</option> })}
-        </select>
-        <select className="select w-36" value={warrantyFilter} onChange={(e) => setWarrantyFilter(e.target.value)}>
-          <option value="Tumu">Tum Garantiler</option>
-          <option value="Aktif">Aktif Garanti</option>
-          <option value="Sona Erdi">Sona Eren</option>
-        </select>
-      </div>
-
-      {activeTab === 'sales' && (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Urun</th><th>Tip</th><th>Musteri</th><th>Adet</th>
-                <th>Birim Fiyat</th><th>Toplam</th><th>Odeme</th><th>Garanti</th><th>Tarih</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSales.map((sale) => {
-                var customer = null
-                for (var i = 0; i < customers.length; i++) {
-                  if (customers[i].id === sale.customer_id) { customer = customers[i]; break }
-                }
-                return (
-                  <tr key={sale.id}>
-                    <td className="font-medium text-white">{sale.item_name}</td>
-                    <td><span className="badge badge-blue">{sale.item_type}</span></td>
-                    <td className="text-slate-300">{customer ? customer.name : 'Bilinmiyor'}</td>
-                    <td className="text-slate-300">{sale.quantity}</td>
-                    <td className="text-slate-300">{sale.unit_price ? sale.unit_price.toLocaleString('tr-TR') : '0'} TL</td>
-                    <td className="text-slate-300">{sale.total_price ? sale.total_price.toLocaleString('tr-TR') : '0'} TL</td>
-                    <td>
-                      {sale.payment_method}
-                      {sale.remaining_amount > 0 && <div className="text-xs text-red-400">Kalan: {sale.remaining_amount ? sale.remaining_amount.toLocaleString('tr-TR') : '0'} TL</div>}
-                    </td>
-                    <td className="text-slate-300">{sale.warranty_months} ay</td>
-                    <td className="text-slate-400 text-sm">{sale.created_at ? new Date(sale.created_at).toLocaleDateString('tr-TR') : '-'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {filteredSales.length === 0 && <div className="empty-state"><p>Satis bulunamadi</p></div>}
-        </div>
-      )}
-
-      {activeTab === 'devices' && (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Cihaz</th><th>Musteri</th><th>Tutar</th><th>Odeme</th>
-                <th>Garanti Durumu</th><th>Kalan Sure</th><th>Satis Tarihi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSales.filter(function(s) { return s.item_type === 'Cihaz' }).map((sale) => {
-                var customer = null
-                for (var i = 0; i < customers.length; i++) {
-                  if (customers[i].id === sale.customer_id) { customer = customers[i]; break }
-                }
-                var active = isWarrantyActive(sale.warranty_end_date)
-                var daysLeft = daysUntilExpiry(sale.warranty_end_date)
-                return (
-                  <tr key={sale.id}>
-                    <td className="font-medium text-white">{sale.item_name}</td>
-                    <td className="text-slate-300">
-                      {customer ? customer.name : 'Bilinmiyor'}
-                      <br/><span className="text-xs text-slate-500">{customer ? customer.phone : ''}</span>
-                    </td>
-                    <td className="text-slate-300">{sale.total_price ? sale.total_price.toLocaleString('tr-TR') : '0'} TL</td>
-                    <td>
-                      {sale.payment_method}
-                      {sale.remaining_amount > 0 && <div className="text-xs text-red-400">Kalan: {sale.remaining_amount ? sale.remaining_amount.toLocaleString('tr-TR') : '0'} TL</div>}
-                    </td>
-                    <td>
-                      <span className={`badge ${active ? 'badge-green' : 'badge-red'}`}>
-                        {active ? 'Aktif' : 'Sona Erdi'}
-                      </span>
-                    </td>
-                    <td className={daysLeft < 30 ? 'text-red-400' : 'text-slate-300'}>
-                      {active ? daysLeft + ' gun' : 'Sona erdi'}
-                    </td>
-                    <td className="text-slate-400 text-sm">{sale.created_at ? new Date(sale.created_at).toLocaleDateString('tr-TR') : '-'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {filteredSales.filter(function(s) { return s.item_type === 'Cihaz' }).length === 0 && (
-            <div className="empty-state"><p>Satilan cihaz bulunamadi</p></div>
-          )}
-        </div>
-      )}
-
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal max-w-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">Yeni Satis</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+              <Button 
+                className="w-full" 
+                onClick={editingSale ? handleUpdateSale : handleCompleteSale}
+                disabled={!selectedCustomer || cartItems.length === 0}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {editingSale ? "Guncelle" : "Satis Tamamla"}
+              </Button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Musteri</label>
-                  <select className="select" value={form.customer_id} onChange={(e) => setForm({...form, customer_id: e.target.value})}>
-                    <option value="">Musteri secin...</option>
-                    {customers.map(function(c) { return <option key={c.id} value={c.id}>{c.name} - {c.phone}</option> })}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Stoktan Sec (Opsiyonel)</label>
-                  <select className="select" value={form.selected_inventory} onChange={(e) => handleInventorySelect(e.target.value)}>
-                    <option value="">Stoktan secin...</option>
-                    {inventory.map(function(i) { return <option key={i.id} value={i.id}>{i.name} - {i.sale_price ? i.sale_price.toLocaleString('tr-TR') : '0'} TL ({i.quantity} adet)</option> })}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Urun Adi *</label>
-                  <input className="input" value={form.item_name} onChange={(e) => setForm({...form, item_name: e.target.value})} required />
-                </div>
-                <div className="grid-2">
-                  <div className="form-group">
-                    <label>Tip</label>
-                    <select className="select" value={form.item_type} onChange={(e) => setForm({...form, item_type: e.target.value})}>
-                      <option>Cihaz</option><option>Aksesuar</option><option>Parca</option><option>Servis</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Adet</label>
-                    <input className="input" type="number" min="1" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} required />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Birim Fiyat (TL) *</label>
-                  <input className="input" type="number" step="0.01" value={form.unit_price} onChange={(e) => setForm({...form, unit_price: e.target.value})} required />
-                </div>
-                <div className="grid-2">
-                  <div className="form-group">
-                    <label>Odeme Yontemi</label>
-                    <select className="select" value={form.payment_method} onChange={(e) => setForm({...form, payment_method: e.target.value})}>
-                      <option>Nakit</option><option>Kredi Karti</option><option>Havale</option><option>Taksit</option><option>Borc</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Taksit Sayisi</label>
-                    <input className="input" type="number" min="1" value={form.installments} onChange={(e) => setForm({...form, installments: e.target.value})} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Garanti Suresi (Ay)</label>
-                  <input className="input" type="number" min="0" value={form.warranty_months} onChange={(e) => setForm({...form, warranty_months: e.target.value})} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">Satis Yap</button>
-              </div>
-            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Satis</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{totalSales}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Ciro</CardTitle>
+            <Package className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-500">₺{totalRevenue.toLocaleString("tr-TR")}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">Iptal Edilen</CardTitle>
+            <X className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">{cancelledSales.length}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5" />
+            Satis Gecmisi
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="h-4 w-4 text-slate-500" />
+            <Input
+              placeholder="Musteri veya urun ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+            />
           </div>
-        </div>
-      )}
+
+          <div className="space-y-3">
+            {filteredSales.map((sale) => (
+              <div key={sale.id} className={`rounded-lg border p-4 ${sale.status === "cancelled" ? "border-red-800 bg-red-900/20" : "border-slate-700 bg-slate-800/50"}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-semibold text-white">{sale.customerName}</span>
+                      {sale.status === "completed" ? (
+                        <Badge className="bg-green-900/50 text-green-300 border-green-700">Tamamlandi</Badge>
+                      ) : (
+                        <Badge className="bg-red-900/50 text-red-300 border-red-700">Iptal Edildi</Badge>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      {sale.items.map((item, idx) => (
+                        <div key={idx} className="text-sm text-slate-400">
+                          {item.productName} - {item.quantity} adet x ₺{item.unitPrice} = ₺{item.totalPrice}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-lg font-bold text-white">
+                      Toplam: ₺{sale.totalAmount}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">{sale.date}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    {sale.status === "completed" && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleEditSale(sale)}
+                          className="border-slate-600 text-slate-300 hover:text-white"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => handleCancelSale(sale.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                    <Button 
+                      size="sm" 
+                      variant="destructive"
+                      onClick={() => handleDeleteSale(sale.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Yeni Musteri Ekle</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Ad Soyad *</label>
+              <Input
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="Ahmet Yilmaz"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Telefon *</label>
+              <Input
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="0555 123 4567"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">2. Telefon (Opsiyonel)</label>
+              <Input
+                value={newCustomer.phone2}
+                onChange={(e) => setNewCustomer({...newCustomer, phone2: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="0532 987 6543"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">E-posta (Opsiyonel)</label>
+              <Input
+                value={newCustomer.email}
+                onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="ornek@email.com"
+              />
+            </div>
+            <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone}>
+              <Save className="mr-2 h-4 w-4" />
+              Musteri Ekle ve Sec
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
