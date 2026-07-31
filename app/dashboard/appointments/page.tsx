@@ -34,15 +34,21 @@ export default function AppointmentsPage() {
   useEffect(() => { loadData() }, [])
 
   useEffect(() => {
-    let result = appointments
-    if (search) result = result.filter(a => a.customer_name?.toLowerCase().includes(search.toLowerCase()))
-    if (dateFilter) result = result.filter(a => a.appointment_date === dateFilter)
+    var result = appointments
+    if (search) {
+      result = result.filter(function(a) {
+        return a.customer_name && a.customer_name.toLowerCase().indexOf(search.toLowerCase()) !== -1
+      })
+    }
+    if (dateFilter) {
+      result = result.filter(function(a) { return a.appointment_date === dateFilter })
+    }
     setFiltered(result)
   }, [search, dateFilter, appointments])
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
+    setTimeout(function() { setToast(null) }, 3000)
   }
 
   const loadData = async () => {
@@ -118,14 +124,7 @@ export default function AppointmentsPage() {
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Musteri</th>
-              <th>Servis</th>
-              <th>Tarih</th>
-              <th>Saat</th>
-              <th>Durum</th>
-              <th>Islemler</th>
-            </tr>
+            <tr><th>Musteri</th><th>Servis</th><th>Tarih</th><th>Saat</th><th>Durum</th><th>Islemler</th></tr>
           </thead>
           <tbody>
             {filtered.map((a) => (
@@ -157,11 +156,7 @@ export default function AppointmentsPage() {
         </table>
       </div>
 
-      {filtered.length === 0 && (
-        <div className="empty-state">
-          <p>Henuz randevu kaydi yok</p>
-        </div>
-      )}
+      {filtered.length === 0 && <div className="empty-state"><p>Henuz randevu kaydi yok</p></div>}
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
@@ -172,41 +167,20 @@ export default function AppointmentsPage() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Musteri Adi *</label>
-                  <input className="input" value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Telefon</label>
-                  <input className="input" value={form.customer_phone} onChange={(e) => setForm({...form, customer_phone: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>Servis Turu *</label>
-                  <input className="input" value={form.service_type} onChange={(e) => setForm({...form, service_type: e.target.value})} required placeholder="Orn: Ekran Degisimi" />
-                </div>
+                <div className="form-group"><label>Musteri Adi *</label><input className="input" value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required /></div>
+                <div className="form-group"><label>Telefon</label><input className="input" value={form.customer_phone} onChange={(e) => setForm({...form, customer_phone: e.target.value})} /></div>
+                <div className="form-group"><label>Servis Turu *</label><input className="input" value={form.service_type} onChange={(e) => setForm({...form, service_type: e.target.value})} required placeholder="Orn: Ekran Degisimi" /></div>
                 <div className="grid-2">
-                  <div className="form-group">
-                    <label>Tarih *</label>
-                    <input className="input" type="date" value={form.appointment_date} onChange={(e) => setForm({...form, appointment_date: e.target.value})} required />
-                  </div>
-                  <div className="form-group">
-                    <label>Saat</label>
-                    <input className="input" type="time" value={form.appointment_time} onChange={(e) => setForm({...form, appointment_time: e.target.value})} />
-                  </div>
+                  <div className="form-group"><label>Tarih *</label><input className="input" type="date" value={form.appointment_date} onChange={(e) => setForm({...form, appointment_date: e.target.value})} required /></div>
+                  <div className="form-group"><label>Saat</label><input className="input" type="time" value={form.appointment_time} onChange={(e) => setForm({...form, appointment_time: e.target.value})} /></div>
                 </div>
                 <div className="form-group">
                   <label>Durum</label>
                   <select className="select" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
-                    <option>Beklemede</option>
-                    <option>Onaylandi</option>
-                    <option>Tamamlandi</option>
-                    <option>Iptal Edildi</option>
+                    <option>Beklemede</option><option>Onaylandi</option><option>Tamamlandi</option><option>Iptal Edildi</option>
                   </select>
                 </div>
-                <div className="form-group">
-                  <label>Notlar</label>
-                  <textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} />
-                </div>
+                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} /></div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
