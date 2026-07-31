@@ -14,21 +14,20 @@ interface Transaction {
 }
 
 export default function FinancePage() {
-  var [transactions, setTransactions] = useState<Transaction[]>([])
-  var [loading, setLoading] = useState(true)
-  var [showForm, setShowForm] = useState(false)
-  var [search, setSearch] = useState("")
-  var [editTransaction, setEditTransaction] = useState<Transaction | null>(null)
-  var [filterType, setFilterType] = useState("all")
-  var [dateFrom, setDateFrom] = useState("")
-  var [dateTo, setDateTo] = useState("")
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [search, setSearch] = useState("")
+  const [editTransaction, setEditTransaction] = useState<Transaction | null>(null)
+  const [filterType, setFilterType] = useState("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
 
-  // Form state
-  var [type, setType] = useState("income")
-  var [category, setCategory] = useState("")
-  var [amount, setAmount] = useState(0)
-  var [description, setDescription] = useState("")
-  var [date, setDate] = useState("")
+  const [type, setType] = useState("income")
+  const [category, setCategory] = useState("")
+  const [amount, setAmount] = useState(0)
+  const [description, setDescription] = useState("")
+  const [date, setDate] = useState("")
 
   useEffect(function() {
     fetchTransactions()
@@ -36,7 +35,7 @@ export default function FinancePage() {
 
   async function fetchTransactions() {
     setLoading(true)
-    var result = await supabase.from("transactions").select("*").order("date", { ascending: false })
+    const result = await supabase.from("transactions").select("*").order("date", { ascending: false })
     if (result.data) setTransactions(result.data)
     setLoading(false)
   }
@@ -52,7 +51,7 @@ export default function FinancePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    var data = {
+    const data = {
       type: type,
       category: category,
       amount: amount,
@@ -80,21 +79,21 @@ export default function FinancePage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    if (!confirm("Silmek istediginize emin misiniz?")) return
     await supabase.from("transactions").delete().eq("id", id)
     fetchTransactions()
   }
 
   function getFilteredTransactions() {
-    var filtered: Transaction[] = []
-    for (var i = 0; i < transactions.length; i++) {
-      var t = transactions[i]
+    const filtered: Transaction[] = []
+    for (let i = 0; i < transactions.length; i++) {
+      const t = transactions[i]
       if (filterType !== "all" && t.type !== filterType) continue
       if (dateFrom && t.date && t.date < dateFrom) continue
       if (dateTo && t.date && t.date > dateTo) continue
       if (search) {
-        var lowerSearch = search.toLowerCase()
-        var match = false
+        const lowerSearch = search.toLowerCase()
+        let match = false
         if (t.category && t.category.toLowerCase().indexOf(lowerSearch) !== -1) match = true
         if (t.description && t.description.toLowerCase().indexOf(lowerSearch) !== -1) match = true
         if (!match) continue
@@ -105,12 +104,12 @@ export default function FinancePage() {
   }
 
   function getCategories() {
-    var cats: string[] = []
-    for (var i = 0; i < transactions.length; i++) {
-      var cat = transactions[i].category
+    const cats: string[] = []
+    for (let i = 0; i < transactions.length; i++) {
+      const cat = transactions[i].category
       if (cat) {
-        var found = false
-        for (var j = 0; j < cats.length; j++) {
+        let found = false
+        for (let j = 0; j < cats.length; j++) {
           if (cats[j] === cat) {
             found = true
             break
@@ -124,7 +123,7 @@ export default function FinancePage() {
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "-"
-    var d = new Date(dateStr)
+    const d = new Date(dateStr)
     return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
@@ -132,25 +131,24 @@ export default function FinancePage() {
     return price.toLocaleString("tr-TR") + " TL"
   }
 
-  var filtered = getFilteredTransactions()
-  var totalIncome = 0
-  var totalExpense = 0
-  for (var i = 0; i < filtered.length; i++) {
+  const filtered = getFilteredTransactions()
+  let totalIncome = 0
+  let totalExpense = 0
+  for (let i = 0; i < filtered.length; i++) {
     if (filtered[i].type === "income") totalIncome = totalIncome + filtered[i].amount
     else totalExpense = totalExpense + filtered[i].amount
   }
-  var balance = totalIncome - totalExpense
+  const balance = totalIncome - totalExpense
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Finans</h1>
         <button className="btn btn-primary" onClick={function() { resetForm(); setShowForm(true) }}>
-          + Yeni İşlem
+          + Yeni Islem
         </button>
       </div>
 
-      {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="card">
           <div className="card-header"><h3 className="card-title">Toplam Gelir</h3></div>
@@ -166,11 +164,10 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* Filtreler */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <input type="text" className="input w-full md:w-48" placeholder="Ara..." value={search} onChange={function(e) { setSearch(e.target.value) }} />
+        <input type="text" className="input w-full md:w-48" placeholder="Ara" value={search} onChange={function(e) { setSearch(e.target.value) }} />
         <select className="input" value={filterType} onChange={function(e) { setFilterType(e.target.value) }}>
-          <option value="all">Tümü</option>
+          <option value="all">Tumu</option>
           <option value="income">Gelir</option>
           <option value="expense">Gider</option>
         </select>
@@ -178,18 +175,17 @@ export default function FinancePage() {
         <input type="date" className="input" value={dateTo} onChange={function(e) { setDateTo(e.target.value) }} />
       </div>
 
-      {/* Form */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{editTransaction ? "İşlem Düzenle" : "Yeni İşlem"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
+              <h2 className="modal-title">{editTransaction ? "Islem Duzenle" : "Yeni Islem"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Tür</label>
+                  <label className="label">Tur</label>
                   <select className="input" value={type} onChange={function(e) { setType(e.target.value) }}>
                     <option value="income">Gelir</option>
                     <option value="expense">Gider</option>
@@ -213,35 +209,34 @@ export default function FinancePage() {
                   <input type="date" className="input" value={date} onChange={function(e) { setDate(e.target.value) }} required />
                 </div>
                 <div className="form-group md:col-span-2">
-                  <label className="label">Açıklama</label>
+                  <label className="label">Aciklama</label>
                   <textarea className="input" rows={2} value={description} onChange={function(e) { setDescription(e.target.value) }} />
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
-                <button type="submit" className="btn btn-primary">{editTransaction ? "Güncelle" : "Kaydet"}</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
+                <button type="submit" className="btn btn-primary">{editTransaction ? "Guncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Liste */}
       {loading ? (
         <div className="spinner"></div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">İşlem bulunamadı.</div>
+        <div className="empty-state">Islem bulunamadi.</div>
       ) : (
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
                 <th>Tarih</th>
-                <th>Tür</th>
+                <th>Tur</th>
                 <th>Kategori</th>
-                <th>Açıklama</th>
+                <th>Aciklama</th>
                 <th>Tutar</th>
-                <th>İşlemler</th>
+                <th>Islemler</th>
               </tr>
             </thead>
             <tbody>
@@ -261,7 +256,7 @@ export default function FinancePage() {
                     </td>
                     <td>
                       <div className="flex gap-2">
-                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(t) }}>Düzenle</button>
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(t) }}>Duzenle</button>
                         <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(t.id) }}>Sil</button>
                       </div>
                     </td>

@@ -22,18 +22,17 @@ interface Debt {
 }
 
 export default function CustomersPage() {
-  var [customers, setCustomers] = useState<Customer[]>([])
-  var [debts, setDebts] = useState<Debt[]>([])
-  var [loading, setLoading] = useState(true)
-  var [showForm, setShowForm] = useState(false)
-  var [search, setSearch] = useState("")
-  var [editCustomer, setEditCustomer] = useState<Customer | null>(null)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [debts, setDebts] = useState<Debt[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [search, setSearch] = useState("")
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
 
-  // Form state
-  var [name, setName] = useState("")
-  var [phone, setPhone] = useState("")
-  var [email, setEmail] = useState("")
-  var [address, setAddress] = useState("")
+  const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [email, setEmail] = useState("")
+  const [address, setAddress] = useState("")
 
   useEffect(function() {
     fetchCustomers()
@@ -42,13 +41,13 @@ export default function CustomersPage() {
 
   async function fetchCustomers() {
     setLoading(true)
-    var result = await supabase.from("customers").select("*").order("name")
+    const result = await supabase.from("customers").select("*").order("name")
     if (result.data) setCustomers(result.data)
     setLoading(false)
   }
 
   async function fetchDebts() {
-    var result = await supabase.from("debts").select("*")
+    const result = await supabase.from("debts").select("*")
     if (result.data) setDebts(result.data)
   }
 
@@ -62,7 +61,7 @@ export default function CustomersPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    var data = { name: name, phone: phone, email: email, address: address }
+    const data = { name: name, phone: phone, email: email, address: address }
     if (editCustomer) {
       await supabase.from("customers").update(data).eq("id", editCustomer.id)
     } else {
@@ -83,14 +82,14 @@ export default function CustomersPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    if (!confirm("Silmek istediginize emin misiniz?")) return
     await supabase.from("customers").delete().eq("id", id)
     fetchCustomers()
   }
 
   function getCustomerDebt(phone: string) {
-    var total = 0
-    for (var i = 0; i < debts.length; i++) {
+    let total = 0
+    for (let i = 0; i < debts.length; i++) {
       if (debts[i].customer_phone === phone && debts[i].status === "unpaid") {
         total = total + debts[i].amount - (debts[i].paid_amount || 0)
       }
@@ -100,10 +99,10 @@ export default function CustomersPage() {
 
   function getFilteredCustomers() {
     if (!search) return customers
-    var filtered: Customer[] = []
-    var lowerSearch = search.toLowerCase()
-    for (var i = 0; i < customers.length; i++) {
-      var c = customers[i]
+    const filtered: Customer[] = []
+    const lowerSearch = search.toLowerCase()
+    for (let i = 0; i < customers.length; i++) {
+      const c = customers[i]
       if (
         (c.name && c.name.toLowerCase().indexOf(lowerSearch) !== -1) ||
         (c.phone && c.phone.indexOf(search) !== -1) ||
@@ -117,7 +116,7 @@ export default function CustomersPage() {
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "-"
-    var d = new Date(dateStr)
+    const d = new Date(dateStr)
     return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
@@ -126,20 +125,20 @@ export default function CustomersPage() {
   }
 
   function openWhatsApp(phone: string) {
-    var clean = phone.replace(/[^0-9]/g, "")
+    let clean = phone.replace(/[^0-9]/g, "")
     if (clean.startsWith("0")) clean = "9" + clean
     if (!clean.startsWith("9")) clean = "90" + clean
     window.open("https://wa.me/" + clean, "_blank")
   }
 
-  var filtered = getFilteredCustomers()
+  const filtered = getFilteredCustomers()
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Müşteriler</h1>
+        <h1 className="text-2xl font-bold">Musteriler</h1>
         <button className="btn btn-primary" onClick={function() { resetForm(); setShowForm(true) }}>
-          + Yeni Müşteri
+          + Yeni Musteri
         </button>
       </div>
 
@@ -147,7 +146,7 @@ export default function CustomersPage() {
         <input
           type="text"
           className="input w-full md:w-96"
-          placeholder="Müşteri ara..."
+          placeholder="Musteri ara"
           value={search}
           onChange={function(e) { setSearch(e.target.value) }}
         />
@@ -157,8 +156,8 @@ export default function CustomersPage() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{editCustomer ? "Müşteri Düzenle" : "Yeni Müşteri"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
+              <h2 className="modal-title">{editCustomer ? "Musteri Duzenle" : "Yeni Musteri"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -180,8 +179,8 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
-                <button type="submit" className="btn btn-primary">{editCustomer ? "Güncelle" : "Kaydet"}</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
+                <button type="submit" className="btn btn-primary">{editCustomer ? "Guncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
@@ -191,7 +190,7 @@ export default function CustomersPage() {
       {loading ? (
         <div className="spinner"></div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">Müşteri bulunamadı.</div>
+        <div className="empty-state">Musteri bulunamadi.</div>
       ) : (
         <div className="table-container">
           <table className="table">
@@ -200,14 +199,14 @@ export default function CustomersPage() {
                 <th>Ad Soyad</th>
                 <th>Telefon</th>
                 <th>E-posta</th>
-                <th>Borç</th>
-                <th>Kayıt Tarihi</th>
-                <th>İşlemler</th>
+                <th>Borc</th>
+                <th>Kayit Tarihi</th>
+                <th>Islemler</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(function(customer) {
-                var debt = getCustomerDebt(customer.phone)
+                const debt = getCustomerDebt(customer.phone)
                 return (
                   <tr key={customer.id}>
                     <td className="font-medium">{customer.name}</td>
@@ -217,13 +216,13 @@ export default function CustomersPage() {
                       {debt > 0 ? (
                         <span className="badge badge-red">{formatPrice(debt)}</span>
                       ) : (
-                        <span className="badge badge-green">Borç Yok</span>
+                        <span className="badge badge-green">Borc Yok</span>
                       )}
                     </td>
                     <td>{formatDate(customer.created_at)}</td>
                     <td>
                       <div className="flex gap-2">
-                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(customer) }}>Düzenle</button>
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(customer) }}>Duzenle</button>
                         <button className="btn btn-sm btn-success" onClick={function() { openWhatsApp(customer.phone) }}>WhatsApp</button>
                         <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(customer.id) }}>Sil</button>
                       </div>

@@ -18,22 +18,21 @@ interface Warranty {
 }
 
 export default function WarrantiesPage() {
-  var [warranties, setWarranties] = useState<Warranty[]>([])
-  var [loading, setLoading] = useState(true)
-  var [showForm, setShowForm] = useState(false)
-  var [search, setSearch] = useState("")
-  var [editWarranty, setEditWarranty] = useState<Warranty | null>(null)
-  var [filterStatus, setFilterStatus] = useState("all")
+  const [warranties, setWarranties] = useState<Warranty[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [search, setSearch] = useState("")
+  const [editWarranty, setEditWarranty] = useState<Warranty | null>(null)
+  const [filterStatus, setFilterStatus] = useState("all")
 
-  // Form state
-  var [customerName, setCustomerName] = useState("")
-  var [customerPhone, setCustomerPhone] = useState("")
-  var [itemName, setItemName] = useState("")
-  var [imei, setImei] = useState("")
-  var [brand, setBrand] = useState("")
-  var [model, setModel] = useState("")
-  var [warrantyMonths, setWarrantyMonths] = useState(12)
-  var [status, setStatus] = useState("active")
+  const [customerName, setCustomerName] = useState("")
+  const [customerPhone, setCustomerPhone] = useState("")
+  const [itemName, setItemName] = useState("")
+  const [imei, setImei] = useState("")
+  const [brand, setBrand] = useState("")
+  const [model, setModel] = useState("")
+  const [warrantyMonths, setWarrantyMonths] = useState(12)
+  const [status, setStatus] = useState("active")
 
   useEffect(function() {
     fetchWarranties()
@@ -41,7 +40,7 @@ export default function WarrantiesPage() {
 
   async function fetchWarranties() {
     setLoading(true)
-    var result = await supabase.from("warranties").select("*").order("created_at", { ascending: false })
+    const result = await supabase.from("warranties").select("*").order("created_at", { ascending: false })
     if (result.data) setWarranties(result.data)
     setLoading(false)
   }
@@ -59,14 +58,14 @@ export default function WarrantiesPage() {
   }
 
   function calculateWarrantyEnd() {
-    var date = new Date()
+    const date = new Date()
     date.setMonth(date.getMonth() + warrantyMonths)
     return date.toISOString().split("T")[0]
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    var data = {
+    const data = {
       customer_name: customerName,
       customer_phone: customerPhone,
       item_name: itemName,
@@ -101,7 +100,7 @@ export default function WarrantiesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    if (!confirm("Silmek istediginize emin misiniz?")) return
     await supabase.from("warranties").delete().eq("id", id)
     fetchWarranties()
   }
@@ -112,13 +111,13 @@ export default function WarrantiesPage() {
   }
 
   function getFilteredWarranties() {
-    var filtered: Warranty[] = []
-    for (var i = 0; i < warranties.length; i++) {
-      var w = warranties[i]
+    const filtered: Warranty[] = []
+    for (let i = 0; i < warranties.length; i++) {
+      const w = warranties[i]
       if (filterStatus !== "all" && w.status !== filterStatus) continue
       if (search) {
-        var lowerSearch = search.toLowerCase()
-        var match = false
+        const lowerSearch = search.toLowerCase()
+        let match = false
         if (w.customer_name && w.customer_name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
         if (w.customer_phone && w.customer_phone.indexOf(search) !== -1) match = true
         if (w.item_name && w.item_name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
@@ -139,14 +138,14 @@ export default function WarrantiesPage() {
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "-"
-    var d = new Date(dateStr)
+    const d = new Date(dateStr)
     return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
-  var filtered = getFilteredWarranties()
-  var activeCount = 0
-  var expiredCount = 0
-  for (var i = 0; i < warranties.length; i++) {
+  const filtered = getFilteredWarranties()
+  let activeCount = 0
+  let expiredCount = 0
+  for (let i = 0; i < warranties.length; i++) {
     if (warranties[i].status === "active" && !isExpired(warranties[i])) activeCount++
     if (isExpired(warranties[i])) expiredCount++
   }
@@ -160,7 +159,6 @@ export default function WarrantiesPage() {
         </button>
       </div>
 
-      {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="card">
           <div className="card-header"><h3 className="card-title">Toplam Garanti</h3></div>
@@ -171,34 +169,32 @@ export default function WarrantiesPage() {
           <div className="card-content"><p className="text-2xl font-bold text-green-600">{activeCount}</p></div>
         </div>
         <div className="card">
-          <div className="card-header"><h3 className="card-title">Süresi Dolan</h3></div>
+          <div className="card-header"><h3 className="card-title">Suresi Dolan</h3></div>
           <div className="card-content"><p className="text-2xl font-bold text-red-600">{expiredCount}</p></div>
         </div>
       </div>
 
-      {/* Filtreler */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <input type="text" className="input w-full md:w-64" placeholder="Ara..." value={search} onChange={function(e) { setSearch(e.target.value) }} />
+        <input type="text" className="input w-full md:w-64" placeholder="Ara" value={search} onChange={function(e) { setSearch(e.target.value) }} />
         <select className="input" value={filterStatus} onChange={function(e) { setFilterStatus(e.target.value) }}>
-          <option value="all">Tümü</option>
+          <option value="all">Tumu</option>
           <option value="active">Aktif</option>
-          <option value="expired">Süresi Dolan</option>
-          <option value="cancelled">İptal</option>
+          <option value="expired">Suresi Dolan</option>
+          <option value="cancelled">Iptal</option>
         </select>
       </div>
 
-      {/* Form */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{editWarranty ? "Garanti Düzenle" : "Yeni Garanti"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
+              <h2 className="modal-title">{editWarranty ? "Garanti Duzenle" : "Yeni Garanti"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Müşteri Adı *</label>
+                  <label className="label">Musteri Adi *</label>
                   <input type="text" className="input" value={customerName} onChange={function(e) { setCustomerName(e.target.value) }} required />
                 </div>
                 <div className="form-group">
@@ -206,7 +202,7 @@ export default function WarrantiesPage() {
                   <input type="text" className="input" value={customerPhone} onChange={function(e) { setCustomerPhone(e.target.value) }} required />
                 </div>
                 <div className="form-group">
-                  <label className="label">Ürün Adı *</label>
+                  <label className="label">Urun Adi *</label>
                   <input type="text" className="input" value={itemName} onChange={function(e) { setItemName(e.target.value) }} required />
                 </div>
                 <div className="form-group">
@@ -222,54 +218,53 @@ export default function WarrantiesPage() {
                   <input type="text" className="input" value={model} onChange={function(e) { setModel(e.target.value) }} />
                 </div>
                 <div className="form-group">
-                  <label className="label">Garanti Süresi (Ay)</label>
+                  <label className="label">Garanti Suresi (Ay)</label>
                   <input type="number" className="input" value={warrantyMonths} min={1} onChange={function(e) { setWarrantyMonths(Number(e.target.value)) }} />
                 </div>
                 <div className="form-group">
-                  <label className="label">Garanti Bitiş</label>
+                  <label className="label">Garanti Bitis</label>
                   <input type="text" className="input bg-gray-100" value={formatDate(calculateWarrantyEnd())} readOnly />
                 </div>
                 <div className="form-group">
                   <label className="label">Durum</label>
                   <select className="input" value={status} onChange={function(e) { setStatus(e.target.value) }}>
                     <option value="active">Aktif</option>
-                    <option value="expired">Süresi Doldu</option>
-                    <option value="cancelled">İptal</option>
+                    <option value="expired">Suresi Doldu</option>
+                    <option value="cancelled">Iptal</option>
                   </select>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
-                <button type="submit" className="btn btn-primary">{editWarranty ? "Güncelle" : "Kaydet"}</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
+                <button type="submit" className="btn btn-primary">{editWarranty ? "Guncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Liste */}
       {loading ? (
         <div className="spinner"></div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">Garanti bulunamadı.</div>
+        <div className="empty-state">Garanti bulunamadi.</div>
       ) : (
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
-                <th>Müşteri</th>
-                <th>Ürün</th>
+                <th>Musteri</th>
+                <th>Urun</th>
                 <th>Marka/Model</th>
                 <th>IMEI</th>
-                <th>Garanti Süresi</th>
-                <th>Bitiş Tarihi</th>
+                <th>Garanti Suresi</th>
+                <th>Bitis Tarihi</th>
                 <th>Durum</th>
-                <th>İşlemler</th>
+                <th>Islemler</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(function(w) {
-                var expired = isExpired(w)
+                const expired = isExpired(w)
                 return (
                   <tr key={w.id}>
                     <td>{w.customer_name}<br/><small>{w.customer_phone}</small></td>
@@ -280,12 +275,12 @@ export default function WarrantiesPage() {
                     <td>{formatDate(w.warranty_end_date)}</td>
                     <td>
                       <span className={"badge " + (expired ? "badge-red" : w.status === "active" ? "badge-green" : "badge-gray")}>
-                        {expired ? "Süresi Doldu" : w.status === "active" ? "Aktif" : w.status === "cancelled" ? "İptal" : w.status}
+                        {expired ? "Suresi Doldu" : w.status === "active" ? "Aktif" : w.status === "cancelled" ? "Iptal" : w.status}
                       </span>
                     </td>
                     <td>
                       <div className="flex gap-2">
-                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(w) }}>Düzenle</button>
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(w) }}>Duzenle</button>
                         {w.status === "active" && !expired && (
                           <button className="btn btn-sm btn-warning" onClick={function() { handleChangeStatus(w.id, "expired") }}>Bitir</button>
                         )}

@@ -20,24 +20,23 @@ interface Device {
 }
 
 export default function DevicesPage() {
-  var [devices, setDevices] = useState<Device[]>([])
-  var [loading, setLoading] = useState(true)
-  var [showForm, setShowForm] = useState(false)
-  var [search, setSearch] = useState("")
-  var [editDevice, setEditDevice] = useState<Device | null>(null)
-  var [filterStatus, setFilterStatus] = useState("all")
+  const [devices, setDevices] = useState<Device[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [search, setSearch] = useState("")
+  const [editDevice, setEditDevice] = useState<Device | null>(null)
+  const [filterStatus, setFilterStatus] = useState("all")
 
-  // Form state
-  var [customerName, setCustomerName] = useState("")
-  var [customerPhone, setCustomerPhone] = useState("")
-  var [brand, setBrand] = useState("")
-  var [model, setModel] = useState("")
-  var [imei, setImei] = useState("")
-  var [problem, setProblem] = useState("")
-  var [status, setStatus] = useState("waiting")
-  var [cost, setCost] = useState(0)
-  var [price, setPrice] = useState(0)
-  var [notes, setNotes] = useState("")
+  const [customerName, setCustomerName] = useState("")
+  const [customerPhone, setCustomerPhone] = useState("")
+  const [brand, setBrand] = useState("")
+  const [model, setModel] = useState("")
+  const [imei, setImei] = useState("")
+  const [problem, setProblem] = useState("")
+  const [status, setStatus] = useState("waiting")
+  const [cost, setCost] = useState(0)
+  const [price, setPrice] = useState(0)
+  const [notes, setNotes] = useState("")
 
   useEffect(function() {
     fetchDevices()
@@ -45,7 +44,7 @@ export default function DevicesPage() {
 
   async function fetchDevices() {
     setLoading(true)
-    var result = await supabase.from("devices").select("*").order("created_at", { ascending: false })
+    const result = await supabase.from("devices").select("*").order("created_at", { ascending: false })
     if (result.data) setDevices(result.data)
     setLoading(false)
   }
@@ -66,7 +65,7 @@ export default function DevicesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    var deviceData = {
+    const deviceData: any = {
       customer_name: customerName,
       customer_phone: customerPhone,
       brand: brand,
@@ -79,7 +78,7 @@ export default function DevicesPage() {
       notes: notes,
     }
     if (status === "completed" && editDevice && !editDevice.completed_at) {
-      (deviceData as any).completed_at = new Date().toISOString()
+      deviceData.completed_at = new Date().toISOString()
     }
     if (editDevice) {
       await supabase.from("devices").update(deviceData).eq("id", editDevice.id)
@@ -107,7 +106,7 @@ export default function DevicesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    if (!confirm("Silmek istediginize emin misiniz?")) return
     await supabase.from("devices").delete().eq("id", id)
     fetchDevices()
   }
@@ -123,19 +122,19 @@ export default function DevicesPage() {
   function getStatusText(s: string) {
     if (s === "waiting") return "Bekliyor"
     if (s === "in_progress") return "Devam Ediyor"
-    if (s === "completed") return "Tamamlandı"
-    if (s === "cancelled") return "İptal"
+    if (s === "completed") return "Tamamlandi"
+    if (s === "cancelled") return "Iptal"
     return s
   }
 
   function getFilteredDevices() {
-    var filtered: Device[] = []
-    for (var i = 0; i < devices.length; i++) {
-      var d = devices[i]
+    const filtered: Device[] = []
+    for (let i = 0; i < devices.length; i++) {
+      const d = devices[i]
       if (filterStatus !== "all" && d.status !== filterStatus) continue
       if (search) {
-        var lowerSearch = search.toLowerCase()
-        var match = false
+        const lowerSearch = search.toLowerCase()
+        let match = false
         if (d.customer_name && d.customer_name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
         if (d.customer_phone && d.customer_phone.indexOf(search) !== -1) match = true
         if (d.brand && d.brand.toLowerCase().indexOf(lowerSearch) !== -1) match = true
@@ -150,7 +149,7 @@ export default function DevicesPage() {
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "-"
-    var d = new Date(dateStr)
+    const d = new Date(dateStr)
     return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
@@ -158,12 +157,12 @@ export default function DevicesPage() {
     return price.toLocaleString("tr-TR") + " TL"
   }
 
-  var filteredDevices = getFilteredDevices()
-  var waitingCount = 0
-  var inProgressCount = 0
-  var completedCount = 0
-  var totalRevenue = 0
-  for (var i = 0; i < devices.length; i++) {
+  const filteredDevices = getFilteredDevices()
+  let waitingCount = 0
+  let inProgressCount = 0
+  let completedCount = 0
+  let totalRevenue = 0
+  for (let i = 0; i < devices.length; i++) {
     if (devices[i].status === "waiting") waitingCount++
     if (devices[i].status === "in_progress") inProgressCount++
     if (devices[i].status === "completed") completedCount++
@@ -179,7 +178,6 @@ export default function DevicesPage() {
         </button>
       </div>
 
-      {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="card">
           <div className="card-header"><h3 className="card-title">Bekleyen</h3></div>
@@ -199,36 +197,28 @@ export default function DevicesPage() {
         </div>
       </div>
 
-      {/* Filtreler */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <input
-          type="text"
-          className="input w-full md:w-64"
-          placeholder="Ara..."
-          value={search}
-          onChange={function(e) { setSearch(e.target.value) }}
-        />
+        <input type="text" className="input w-full md:w-64" placeholder="Ara" value={search} onChange={function(e) { setSearch(e.target.value) }} />
         <select className="input" value={filterStatus} onChange={function(e) { setFilterStatus(e.target.value) }}>
-          <option value="all">Tümü</option>
+          <option value="all">Tumu</option>
           <option value="waiting">Bekliyor</option>
           <option value="in_progress">Devam Ediyor</option>
-          <option value="completed">Tamamlandı</option>
-          <option value="cancelled">İptal</option>
+          <option value="completed">Tamamlandi</option>
+          <option value="cancelled">Iptal</option>
         </select>
       </div>
 
-      {/* Form */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{editDevice ? "Cihaz Düzenle" : "Yeni Cihaz"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
+              <h2 className="modal-title">{editDevice ? "Cihaz Duzenle" : "Yeni Cihaz"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Müşteri Adı</label>
+                  <label className="label">Musteri Adi</label>
                   <input type="text" className="input" value={customerName} onChange={function(e) { setCustomerName(e.target.value) }} required />
                 </div>
                 <div className="form-group">
@@ -252,8 +242,8 @@ export default function DevicesPage() {
                   <select className="input" value={status} onChange={function(e) { setStatus(e.target.value) }}>
                     <option value="waiting">Bekliyor</option>
                     <option value="in_progress">Devam Ediyor</option>
-                    <option value="completed">Tamamlandı</option>
-                    <option value="cancelled">İptal</option>
+                    <option value="completed">Tamamlandi</option>
+                    <option value="cancelled">Iptal</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -265,7 +255,7 @@ export default function DevicesPage() {
                   <input type="number" className="input" value={price} min={0} onChange={function(e) { setPrice(Number(e.target.value)) }} />
                 </div>
                 <div className="form-group md:col-span-2">
-                  <label className="label">Arıza</label>
+                  <label className="label">Ariza</label>
                   <textarea className="input" rows={3} value={problem} onChange={function(e) { setProblem(e.target.value) }} />
                 </div>
                 <div className="form-group md:col-span-2">
@@ -274,32 +264,31 @@ export default function DevicesPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
-                <button type="submit" className="btn btn-primary">{editDevice ? "Güncelle" : "Kaydet"}</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
+                <button type="submit" className="btn btn-primary">{editDevice ? "Guncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Liste */}
       {loading ? (
         <div className="spinner"></div>
       ) : filteredDevices.length === 0 ? (
-        <div className="empty-state">Cihaz bulunamadı.</div>
+        <div className="empty-state">Cihaz bulunamadi.</div>
       ) : (
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
                 <th>Tarih</th>
-                <th>Müşteri</th>
+                <th>Musteri</th>
                 <th>Marka/Model</th>
                 <th>IMEI</th>
-                <th>Arıza</th>
+                <th>Ariza</th>
                 <th>Durum</th>
                 <th>Fiyat</th>
-                <th>İşlemler</th>
+                <th>Islemler</th>
               </tr>
             </thead>
             <tbody>
@@ -315,7 +304,7 @@ export default function DevicesPage() {
                     <td>{formatPrice(device.price)}</td>
                     <td>
                       <div className="flex gap-2">
-                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(device) }}>Düzenle</button>
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(device) }}>Duzenle</button>
                         <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(device.id) }}>Sil</button>
                       </div>
                     </td>

@@ -38,12 +38,12 @@ interface Transaction {
 }
 
 export default function DashboardPage() {
-  var [sales, setSales] = useState<Sale[]>([])
-  var [debts, setDebts] = useState<Debt[]>([])
-  var [warranties, setWarranties] = useState<Warranty[]>([])
-  var [devices, setDevices] = useState<Device[]>([])
-  var [transactions, setTransactions] = useState<Transaction[]>([])
-  var [loading, setLoading] = useState(true)
+  const [sales, setSales] = useState<Sale[]>([])
+  const [debts, setDebts] = useState<Debt[]>([])
+  const [warranties, setWarranties] = useState<Warranty[]>([])
+  const [devices, setDevices] = useState<Device[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(function() {
     fetchData()
@@ -51,15 +51,15 @@ export default function DashboardPage() {
 
   async function fetchData() {
     setLoading(true)
-    var s = await supabase.from("sales").select("id, total_price, remaining_amount, created_at")
+    const s = await supabase.from("sales").select("id, total_price, remaining_amount, created_at")
     if (s.data) setSales(s.data)
-    var d = await supabase.from("debts").select("*")
+    const d = await supabase.from("debts").select("*")
     if (d.data) setDebts(d.data)
-    var w = await supabase.from("warranties").select("*")
+    const w = await supabase.from("warranties").select("*")
     if (w.data) setWarranties(w.data)
-    var dev = await supabase.from("devices").select("id, status")
+    const dev = await supabase.from("devices").select("id, status")
     if (dev.data) setDevices(dev.data)
-    var t = await supabase.from("transactions").select("id, type, amount")
+    const t = await supabase.from("transactions").select("id, type, amount")
     if (t.data) setTransactions(t.data)
     setLoading(false)
   }
@@ -70,59 +70,56 @@ export default function DashboardPage() {
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "-"
-    var d = new Date(dateStr)
+    const d = new Date(dateStr)
     return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
-  // Hesaplamalar
-  var totalRevenue = 0
-  var totalDebt = 0
-  for (var i = 0; i < sales.length; i++) {
+  let totalRevenue = 0
+  let totalDebt = 0
+  for (let i = 0; i < sales.length; i++) {
     totalRevenue = totalRevenue + sales[i].total_price
     totalDebt = totalDebt + sales[i].remaining_amount
   }
 
-  var unpaidDebts = 0
-  var unpaidDebtAmount = 0
-  for (var i = 0; i < debts.length; i++) {
+  let unpaidDebts = 0
+  let unpaidDebtAmount = 0
+  for (let i = 0; i < debts.length; i++) {
     if (debts[i].status === "unpaid") {
       unpaidDebts++
       unpaidDebtAmount = unpaidDebtAmount + debts[i].amount - (debts[i].paid_amount || 0)
     }
   }
 
-  var activeWarranties = 0
-  var expiredWarranties = 0
-  for (var i = 0; i < warranties.length; i++) {
+  let activeWarranties = 0
+  let expiredWarranties = 0
+  for (let i = 0; i < warranties.length; i++) {
     if (warranties[i].status === "active" && warranties[i].warranty_end_date) {
       if (new Date(warranties[i].warranty_end_date) >= new Date()) activeWarranties++
       else expiredWarranties++
     }
   }
 
-  var waitingDevices = 0
-  var inProgressDevices = 0
-  for (var i = 0; i < devices.length; i++) {
+  let waitingDevices = 0
+  let inProgressDevices = 0
+  for (let i = 0; i < devices.length; i++) {
     if (devices[i].status === "waiting") waitingDevices++
     if (devices[i].status === "in_progress") inProgressDevices++
   }
 
-  var totalIncome = 0
-  var totalExpense = 0
-  for (var i = 0; i < transactions.length; i++) {
+  let totalIncome = 0
+  let totalExpense = 0
+  for (let i = 0; i < transactions.length; i++) {
     if (transactions[i].type === "income") totalIncome = totalIncome + transactions[i].amount
     else totalExpense = totalExpense + transactions[i].amount
   }
 
-  // Son 5 borç
-  var recentDebts: Debt[] = []
-  for (var i = 0; i < debts.length && recentDebts.length < 5; i++) {
+  const recentDebts: Debt[] = []
+  for (let i = 0; i < debts.length && recentDebts.length < 5; i++) {
     if (debts[i].status === "unpaid") recentDebts.push(debts[i])
   }
 
-  // Son 5 garanti
-  var recentWarranties: Warranty[] = []
-  for (var i = 0; i < warranties.length && recentWarranties.length < 5; i++) {
+  const recentWarranties: Warranty[] = []
+  for (let i = 0; i < warranties.length && recentWarranties.length < 5; i++) {
     recentWarranties.push(warranties[i])
   }
 
@@ -134,10 +131,9 @@ export default function DashboardPage() {
         <div className="spinner"></div>
       ) : (
         <>
-          {/* İstatistik Kartları */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="card">
-              <div className="card-header"><h3 className="card-title">Toplam Satış</h3></div>
+              <div className="card-header"><h3 className="card-title">Toplam Satis</h3></div>
               <div className="card-content"><p className="text-2xl font-bold">{sales.length}</p></div>
             </div>
             <div className="card">
@@ -155,21 +151,20 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Borçlar Kartı */}
             <div className="card">
               <div className="card-header">
-                <h3 className="card-title">Borçlar ({unpaidDebts})</h3>
+                <h3 className="card-title">Borclar ({unpaidDebts})</h3>
               </div>
               <div className="card-content">
                 {recentDebts.length === 0 ? (
-                  <div className="empty-state">Borç bulunmuyor.</div>
+                  <div className="empty-state">Borc bulunmuyor.</div>
                 ) : (
                   <div className="table-container">
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Müşteri</th>
-                          <th>Borç</th>
+                          <th>Musteri</th>
+                          <th>Borc</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -186,12 +181,11 @@ export default function DashboardPage() {
                   </div>
                 )}
                 <div className="mt-4 p-3 bg-red-50 rounded">
-                  <p className="text-red-700 font-bold">Toplam Borç: {formatPrice(unpaidDebtAmount)}</p>
+                  <p className="text-red-700 font-bold">Toplam Borc: {formatPrice(unpaidDebtAmount)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Garantiler Kartı */}
             <div className="card">
               <div className="card-header">
                 <h3 className="card-title">Garantiler</h3>
@@ -204,14 +198,14 @@ export default function DashboardPage() {
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Müşteri</th>
-                          <th>Ürün</th>
-                          <th>Bitiş</th>
+                          <th>Musteri</th>
+                          <th>Urun</th>
+                          <th>Bitis</th>
                         </tr>
                       </thead>
                       <tbody>
                         {recentWarranties.map(function(w) {
-                          var expired = w.warranty_end_date && new Date(w.warranty_end_date) < new Date()
+                          const expired = w.warranty_end_date && new Date(w.warranty_end_date) < new Date()
                           return (
                             <tr key={w.id}>
                               <td>{w.customer_name}</td>
@@ -233,7 +227,7 @@ export default function DashboardPage() {
                     <p className="text-green-700 font-bold">Aktif: {activeWarranties}</p>
                   </div>
                   <div className="p-3 bg-red-50 rounded flex-1">
-                    <p className="text-red-700 font-bold">Süresi Dolan: {expiredWarranties}</p>
+                    <p className="text-red-700 font-bold">Suresi Dolan: {expiredWarranties}</p>
                   </div>
                 </div>
               </div>

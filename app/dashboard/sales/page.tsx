@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
 interface Sale {
@@ -36,7 +35,6 @@ interface InventoryItem {
 }
 
 export default function SalesPage() {
-  const router = useRouter()
   const [sales, setSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -46,7 +44,6 @@ export default function SalesPage() {
   const [search, setSearch] = useState("")
   const [editSale, setEditSale] = useState<Sale | null>(null)
 
-  // Form state
   const [customerId, setCustomerId] = useState("")
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
@@ -67,24 +64,24 @@ export default function SalesPage() {
 
   async function fetchSales() {
     setLoading(true)
-    var result = await supabase.from("sales").select("*").order("created_at", { ascending: false })
+    const result = await supabase.from("sales").select("*").order("created_at", { ascending: false })
     if (result.data) setSales(result.data)
     setLoading(false)
   }
 
   async function fetchCustomers() {
-    var result = await supabase.from("customers").select("id, name, phone").order("name")
+    const result = await supabase.from("customers").select("id, name, phone").order("name")
     if (result.data) setCustomers(result.data)
   }
 
   async function fetchInventory() {
-    var result = await supabase.from("inventory").select("id, name, stock, price").order("name")
+    const result = await supabase.from("inventory").select("id, name, stock, price").order("name")
     if (result.data) setInventory(result.data)
   }
 
   function handleCustomerChange(id: string) {
     setCustomerId(id)
-    for (var i = 0; i < customers.length; i++) {
+    for (let i = 0; i < customers.length; i++) {
       if (customers[i].id === id) {
         setCustomerName(customers[i].name)
         setCustomerPhone(customers[i].phone)
@@ -95,7 +92,7 @@ export default function SalesPage() {
 
   function handleItemChange(name: string) {
     setItemName(name)
-    for (var i = 0; i < inventory.length; i++) {
+    for (let i = 0; i < inventory.length; i++) {
       if (inventory[i].name === name) {
         setUnitPrice(inventory[i].price)
         break
@@ -112,18 +109,18 @@ export default function SalesPage() {
   }
 
   function calculateWarrantyEnd() {
-    var date = new Date()
+    const date = new Date()
     date.setMonth(date.getMonth() + warrantyMonths)
     return date.toISOString().split("T")[0]
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    var total = calculateTotal()
-    var remaining = calculateRemaining()
-    var warrantyEnd = calculateWarrantyEnd()
+    const total = calculateTotal()
+    const remaining = calculateRemaining()
+    const warrantyEnd = calculateWarrantyEnd()
 
-    var saleData = {
+    const saleData = {
       customer_name: customerName,
       customer_phone: customerPhone,
       item_name: itemName,
@@ -145,9 +142,8 @@ export default function SalesPage() {
       await supabase.from("sales").insert([saleData])
     }
 
-    // Stok düş
     if (!editSale) {
-      for (var i = 0; i < inventory.length; i++) {
+      for (let i = 0; i < inventory.length; i++) {
         if (inventory[i].name === itemName) {
           await supabase.from("inventory").update({ stock: inventory[i].stock - quantity }).eq("id", inventory[i].id)
           break
@@ -155,18 +151,16 @@ export default function SalesPage() {
       }
     }
 
-    // Borç kaydet
     if (remaining > 0) {
       await supabase.from("debts").insert([{
         customer_name: customerName,
         customer_phone: customerPhone,
         amount: remaining,
-        description: itemName + " satışı borcu",
+        description: itemName + " satis borcu",
         status: "unpaid",
       }])
     }
 
-    // Garanti kaydet
     await supabase.from("warranties").insert([{
       customer_name: customerName,
       customer_phone: customerPhone,
@@ -216,17 +210,17 @@ export default function SalesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    if (!confirm("Silmek istediginize emin misiniz?")) return
     await supabase.from("sales").delete().eq("id", id)
     fetchSales()
   }
 
   function getFilteredSales() {
     if (!search) return sales
-    var filtered: Sale[] = []
-    var lowerSearch = search.toLowerCase()
-    for (var i = 0; i < sales.length; i++) {
-      var s = sales[i]
+    const filtered: Sale[] = []
+    const lowerSearch = search.toLowerCase()
+    for (let i = 0; i < sales.length; i++) {
+      const s = sales[i]
       if (
         (s.customer_name && s.customer_name.toLowerCase().indexOf(lowerSearch) !== -1) ||
         (s.customer_phone && s.customer_phone.indexOf(search) !== -1) ||
@@ -243,7 +237,7 @@ export default function SalesPage() {
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "-"
-    var d = new Date(dateStr)
+    const d = new Date(dateStr)
     return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
@@ -251,10 +245,10 @@ export default function SalesPage() {
     return price.toLocaleString("tr-TR") + " TL"
   }
 
-  var filteredSales = getFilteredSales()
-  var totalRevenue = 0
-  var totalRemaining = 0
-  for (var i = 0; i < sales.length; i++) {
+  const filteredSales = getFilteredSales()
+  let totalRevenue = 0
+  let totalRemaining = 0
+  for (let i = 0; i < sales.length; i++) {
     totalRevenue = totalRevenue + sales[i].total_price
     totalRemaining = totalRemaining + sales[i].remaining_amount
   }
@@ -262,28 +256,27 @@ export default function SalesPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Satış Yönetimi</h1>
+        <h1 className="text-2xl font-bold">Satis Yonetimi</h1>
         <div className="flex gap-2">
           <button
             className="btn btn-secondary"
             onClick={function() { setShowDevices(!showDevices) }}
           >
-            {showDevices ? "Satışları Göster" : "Satılan Cihazlar"}
+            {showDevices ? "Satislari Goster" : "Satilan Cihazlar"}
           </button>
           <button
             className="btn btn-primary"
             onClick={function() { resetForm(); setShowForm(true) }}
           >
-            + Yeni Satış
+            + Yeni Satis
           </button>
         </div>
       </div>
 
-      {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">Toplam Satış</h3>
+            <h3 className="card-title">Toplam Satis</h3>
           </div>
           <div className="card-content">
             <p className="text-2xl font-bold">{sales.length}</p>
@@ -299,7 +292,7 @@ export default function SalesPage() {
         </div>
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">Toplam Borç</h3>
+            <h3 className="card-title">Toplam Borc</h3>
           </div>
           <div className="card-content">
             <p className="text-2xl font-bold text-red-600">{formatPrice(totalRemaining)}</p>
@@ -307,42 +300,40 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Arama */}
       <div className="mb-4">
         <input
           type="text"
           className="input w-full md:w-96"
-          placeholder="Müşteri, ürün, IMEI, marka veya model ara..."
+          placeholder="Musteri, urun, IMEI, marka veya model ara"
           value={search}
           onChange={function(e) { setSearch(e.target.value) }}
         />
       </div>
 
-      {/* Satış Formu */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{editSale ? "Satış Düzenle" : "Yeni Satış"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
+              <h2 className="modal-title">{editSale ? "Satis Duzenle" : "Yeni Satis"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Müşteri Seç</label>
+                  <label className="label">Musteri Sec</label>
                   <select
                     className="input"
                     value={customerId}
                     onChange={function(e) { handleCustomerChange(e.target.value) }}
                   >
-                    <option value="">Yeni Müşteri / Seç</option>
+                    <option value="">Yeni Musteri / Sec</option>
                     {customers.map(function(c) {
                       return <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>
                     })}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="label">Müşteri Adı</label>
+                  <label className="label">Musteri Adi</label>
                   <input
                     type="text"
                     className="input"
@@ -362,20 +353,20 @@ export default function SalesPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Ürün Seç</label>
+                  <label className="label">Urun Sec</label>
                   <select
                     className="input"
                     value={itemName}
                     onChange={function(e) { handleItemChange(e.target.value) }}
                   >
-                    <option value="">Ürün Seç</option>
+                    <option value="">Urun Sec</option>
                     {inventory.map(function(item) {
                       return <option key={item.id} value={item.name}>{item.name} (Stok: {item.stock})</option>
                     })}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="label">Ürün Adı</label>
+                  <label className="label">Urun Adi</label>
                   <input
                     type="text"
                     className="input"
@@ -407,7 +398,7 @@ export default function SalesPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Peşinat (TL)</label>
+                  <label className="label">Pesinat (TL)</label>
                   <input
                     type="number"
                     className="input"
@@ -427,7 +418,7 @@ export default function SalesPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Kalan Borç</label>
+                  <label className="label">Kalan Borc</label>
                   <input
                     type="text"
                     className="input bg-gray-100"
@@ -447,7 +438,7 @@ export default function SalesPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Garanti Bitiş</label>
+                  <label className="label">Garanti Bitis</label>
                   <input
                     type="text"
                     className="input bg-gray-100"
@@ -484,22 +475,21 @@ export default function SalesPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
-                <button type="submit" className="btn btn-primary">{editSale ? "Güncelle" : "Kaydet"}</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
+                <button type="submit" className="btn btn-primary">{editSale ? "Guncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Satılan Cihazlar Görünümü */}
       {showDevices ? (
         <div>
-          <h2 className="text-xl font-bold mb-4">Satılan Cihazlar</h2>
+          <h2 className="text-xl font-bold mb-4">Satilan Cihazlar</h2>
           {loading ? (
             <div className="spinner"></div>
           ) : filteredSales.length === 0 ? (
-            <div className="empty-state">Satılan cihaz bulunamadı.</div>
+            <div className="empty-state">Satilan cihaz bulunamadi.</div>
           ) : (
             <div className="table-container">
               <table className="table">
@@ -508,15 +498,15 @@ export default function SalesPage() {
                     <th>Marka</th>
                     <th>Model</th>
                     <th>IMEI</th>
-                    <th>Müşteri</th>
+                    <th>Musteri</th>
                     <th>Telefon</th>
-                    <th>Garanti Bitiş</th>
+                    <th>Garanti Bitis</th>
                     <th>Durum</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredSales.map(function(sale) {
-                    var isExpired = false
+                    let isExpired = false
                     if (sale.warranty_end_date) {
                       isExpired = new Date(sale.warranty_end_date) < new Date()
                     }
@@ -530,7 +520,7 @@ export default function SalesPage() {
                         <td>{formatDate(sale.warranty_end_date)}</td>
                         <td>
                           <span className={"badge " + (isExpired ? "badge-red" : "badge-green")}>
-                            {isExpired ? "Süresi Doldu" : "Aktif"}
+                            {isExpired ? "Suresi Doldu" : "Aktif"}
                           </span>
                         </td>
                       </tr>
@@ -542,27 +532,26 @@ export default function SalesPage() {
           )}
         </div>
       ) : (
-        /* Satış Listesi */
         <div>
           {loading ? (
             <div className="spinner"></div>
           ) : filteredSales.length === 0 ? (
-            <div className="empty-state">Satış bulunamadı.</div>
+            <div className="empty-state">Satis bulunamadi.</div>
           ) : (
             <div className="table-container">
               <table className="table">
                 <thead>
                   <tr>
                     <th>Tarih</th>
-                    <th>Müşteri</th>
+                    <th>Musteri</th>
                     <th>Telefon</th>
-                    <th>Ürün</th>
+                    <th>Urun</th>
                     <th>Adet</th>
                     <th>Birim Fiyat</th>
                     <th>Toplam</th>
-                    <th>Peşinat</th>
-                    <th>Borç</th>
-                    <th>İşlemler</th>
+                    <th>Pesinat</th>
+                    <th>Borc</th>
+                    <th>Islemler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -582,7 +571,7 @@ export default function SalesPage() {
                         </td>
                         <td>
                           <div className="flex gap-2">
-                            <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(sale) }}>Düzenle</button>
+                            <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(sale) }}>Duzenle</button>
                             <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(sale.id) }}>Sil</button>
                           </div>
                         </td>
