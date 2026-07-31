@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package } from "lucide-react"
+import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, Trash2, Edit3 } from "lucide-react"
 
 interface Supplier {
   id: number
@@ -36,11 +36,11 @@ interface Supplier {
 }
 
 const initialSuppliers: Supplier[] = [
-  { id: 1, name: "EkranTedarik A.Ş.", contactPerson: "Ali Yılmaz", phone: "0212 123 4567", email: "info@ekrantedarik.com", address: "İstanbul, Kadıköy", category: "Ekran", rating: 5, status: "active", totalOrders: 45, lastOrderDate: "2024-01-15" },
-  { id: 2, name: "SamsungParts", contactPerson: "Mehmet Kaya", phone: "0216 234 5678", email: "satis@samsungparts.com", address: "İstanbul, Ümraniye", category: "Batarya", rating: 4, status: "active", totalOrders: 32, lastOrderDate: "2024-01-10" },
-  { id: 3, name: "AppleParts", contactPerson: "Ayşe Demir", phone: "0232 345 6789", email: "destek@appleparts.com", address: "İzmir, Bornova", category: "Kapak", rating: 5, status: "active", totalOrders: 28, lastOrderDate: "2024-01-08" },
-  { id: 4, name: "GenelTedarik", contactPerson: "Fatma Şahin", phone: "0312 456 7890", email: "iletisim@geneltedarik.com", address: "Ankara, Çankaya", category: "Port", rating: 3, status: "inactive", totalOrders: 15, lastOrderDate: "2023-12-20" },
-  { id: 5, name: "KimyaTedarik", contactPerson: "Veli Can", phone: "0212 567 8901", email: "siparis@kimyatedarik.com", address: "İstanbul, Maltepe", category: "Yapıştırıcı", rating: 4, status: "active", totalOrders: 22, lastOrderDate: "2024-01-12" },
+  { id: 1, name: "EkranTedarik A.S.", contactPerson: "Ali Yilmaz", phone: "0212 123 4567", email: "info@ekrantedarik.com", address: "Istanbul, Kadikoy", category: "Ekran", rating: 5, status: "active", totalOrders: 45, lastOrderDate: "2024-01-15" },
+  { id: 2, name: "SamsungParts", contactPerson: "Mehmet Kaya", phone: "0216 234 5678", email: "satis@samsungparts.com", address: "Istanbul, Umraniye", category: "Batarya", rating: 4, status: "active", totalOrders: 32, lastOrderDate: "2024-01-10" },
+  { id: 3, name: "AppleParts", contactPerson: "Ayse Demir", phone: "0232 345 6789", email: "destek@appleparts.com", address: "Izmir, Bornova", category: "Kapak", rating: 5, status: "active", totalOrders: 28, lastOrderDate: "2024-01-08" },
+  { id: 4, name: "GenelTedarik", contactPerson: "Fatma Sahin", phone: "0312 456 7890", email: "iletisim@geneltedarik.com", address: "Ankara, Cankaya", category: "Port", rating: 3, status: "inactive", totalOrders: 15, lastOrderDate: "2023-12-20" },
+  { id: 5, name: "KimyaTedarik", contactPerson: "Veli Can", phone: "0212 567 8901", email: "siparis@kimyatedarik.com", address: "Istanbul, Maltepe", category: "Yapistirici", rating: 4, status: "active", totalOrders: 22, lastOrderDate: "2024-01-12" },
 ]
 
 const categories = Array.from(new Set(initialSuppliers.map(s => s.category)))
@@ -51,6 +51,8 @@ export default function SuppliersPage() {
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({
     category: "Ekran",
     rating: 5,
@@ -62,15 +64,15 @@ export default function SuppliersPage() {
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
-        className={`h-4 w-4 ${i < rating ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
+        className={`h-4 w-4 ${i < rating ? "text-yellow-500 fill-yellow-500" : "text-slate-600"}`}
       />
     ))
   }
 
   const getStatusBadge = (status: string) => {
     return status === "active"
-      ? <Badge className="bg-green-100 text-green-800">Aktif</Badge>
-      : <Badge variant="secondary">Pasif</Badge>
+      ? <Badge className="bg-green-900/50 text-green-300 border-green-700">Aktif</Badge>
+      : <Badge className="bg-slate-700 text-slate-300">Pasif</Badge>
   }
 
   const filteredSuppliers = suppliers.filter((s) => {
@@ -93,7 +95,7 @@ export default function SuppliersPage() {
       phone: newSupplier.phone || "",
       email: newSupplier.email || "",
       address: newSupplier.address || "",
-      category: newSupplier.category || "Diğer",
+      category: newSupplier.category || "Diger",
       rating: Number(newSupplier.rating) || 5,
       status: "active",
       totalOrders: 0,
@@ -104,103 +106,135 @@ export default function SuppliersPage() {
     setIsDialogOpen(false)
   }
 
+  const handleEditSupplier = () => {
+    if (!editingSupplier || !newSupplier.name || !newSupplier.contactPerson) return
+    setSuppliers(suppliers.map(s => s.id === editingSupplier.id ? { ...s, ...newSupplier, rating: Number(newSupplier.rating) || s.rating } : s))
+    setIsEditOpen(false)
+    setEditingSupplier(null)
+  }
+
+  const handleDeleteSupplier = (id: number) => {
+    setSuppliers(suppliers.filter(s => s.id !== id))
+  }
+
+  const openEdit = (supplier: Supplier) => {
+    setEditingSupplier(supplier)
+    setNewSupplier({
+      name: supplier.name,
+      contactPerson: supplier.contactPerson,
+      phone: supplier.phone,
+      email: supplier.email,
+      address: supplier.address,
+      category: supplier.category,
+      rating: supplier.rating,
+      status: supplier.status
+    })
+    setIsEditOpen(true)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Tedarikçi Yönetimi</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Tedarikci Yonetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Yeni Tedarikçi
+              Yeni Tedarikci
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
             <DialogHeader>
-              <DialogTitle>Yeni Tedarikçi Ekle</DialogTitle>
+              <DialogTitle className="text-white">Yeni Tedarikci Ekle</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Firma Adı</label>
+                <label className="text-sm font-medium text-slate-300">Firma Adi</label>
                 <Input
                   value={newSupplier.name || ""}
                   onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
-                  placeholder="Firma adı"
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Firma adi"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Yetkili Kişi</label>
+                <label className="text-sm font-medium text-slate-300">Yetkili Kisi</label>
                 <Input
                   value={newSupplier.contactPerson || ""}
                   onChange={(e) => setNewSupplier({ ...newSupplier, contactPerson: e.target.value })}
+                  className="bg-slate-800 border-slate-700 text-white"
                   placeholder="Ad Soyad"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Telefon</label>
+                  <label className="text-sm font-medium text-slate-300">Telefon</label>
                   <Input
                     value={newSupplier.phone || ""}
                     onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white"
                     placeholder="0212 123 4567"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">E-posta</label>
+                  <label className="text-sm font-medium text-slate-300">E-posta</label>
                   <Input
                     type="email"
                     value={newSupplier.email || ""}
                     onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white"
                     placeholder="ornek@firma.com"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Kategori</label>
+                  <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
                     value={newSupplier.category}
                     onValueChange={(value) => setNewSupplier({ ...newSupplier, category: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-slate-800 border-slate-700">
                       {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer">Diğer</SelectItem>
+                      <SelectItem value="Diger" className="text-white">Diger</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Değerlendirme (1-5)</label>
+                  <label className="text-sm font-medium text-slate-300">Degerlendirme (1-5)</label>
                   <Select
                     value={String(newSupplier.rating)}
                     onValueChange={(value) => setNewSupplier({ ...newSupplier, rating: Number(value) })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">5 - Mükemmel</SelectItem>
-                      <SelectItem value="4">4 - Çok İyi</SelectItem>
-                      <SelectItem value="3">3 - İyi</SelectItem>
-                      <SelectItem value="2">2 - Orta</SelectItem>
-                      <SelectItem value="1">1 - Kötü</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="5" className="text-white">5 - Mukemmel</SelectItem>
+                      <SelectItem value="4" className="text-white">4 - Cok Iyi</SelectItem>
+                      <SelectItem value="3" className="text-white">3 - Iyi</SelectItem>
+                      <SelectItem value="2" className="text-white">2 - Orta</SelectItem>
+                      <SelectItem value="1" className="text-white">1 - Kotu</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Adres</label>
+                <label className="text-sm font-medium text-slate-300">Adres</label>
                 <Input
                   value={newSupplier.address || ""}
                   onChange={(e) => setNewSupplier({ ...newSupplier, address: e.target.value })}
-                  placeholder="Şehir, İlçe"
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Sehir, Ilce"
                 />
               </div>
               <Button onClick={handleAddSupplier} className="w-full">
+                <Save className="mr-2 h-4 w-4" />
                 Kaydet
               </Button>
             </div>
@@ -209,79 +243,79 @@ export default function SuppliersPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Tedarikçi</CardTitle>
-            <Truck className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Tedarikci</CardTitle>
+            <Truck className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{suppliers.length}</div>
+            <div className="text-2xl font-bold text-white">{suppliers.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Aktif Tedarikçi</CardTitle>
-            <Truck className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Aktif Tedarikci</CardTitle>
+            <Truck className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{activeCount}</div>
+            <div className="text-2xl font-bold text-green-500">{activeCount}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Sipariş</CardTitle>
-            <Package className="h-4 w-4 text-purple-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Siparis</CardTitle>
+            <Package className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalOrders}</div>
+            <div className="text-2xl font-bold text-purple-500">{totalOrders}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Kategori</CardTitle>
-            <Truck className="h-4 w-4 text-orange-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Kategori</CardTitle>
+            <Truck className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categories.length}</div>
+            <div className="text-2xl font-bold text-orange-500">{categories.length}</div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
-          <CardTitle>Tedarikçi Listesi</CardTitle>
+          <CardTitle className="text-white">Tedarikci Listesi</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
             <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4 text-muted-foreground" />
+              <Search className="h-4 w-4 text-slate-500" />
               <Input
                 placeholder="Firma veya yetkili ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
+                className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
             <div className="flex gap-2">
               <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-[150px] bg-slate-800 border-slate-700 text-white">
                   <SelectValue placeholder="Kategori" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Kategoriler</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">Tum Kategoriler</SelectItem>
                   {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-[130px]">
+                <SelectTrigger className="w-[130px] bg-slate-800 border-slate-700 text-white">
                   <SelectValue placeholder="Durum" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tümü</SelectItem>
-                  <SelectItem value="active">Aktif</SelectItem>
-                  <SelectItem value="inactive">Pasif</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">Tumu</SelectItem>
+                  <SelectItem value="active" className="text-white">Aktif</SelectItem>
+                  <SelectItem value="inactive" className="text-white">Pasif</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -289,22 +323,22 @@ export default function SuppliersPage() {
 
           <div className="space-y-3">
             {filteredSuppliers.map((supplier) => (
-              <div key={supplier.id} className="rounded-lg border p-4 hover:bg-muted/50">
+              <div key={supplier.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 hover:bg-slate-800 transition-colors">
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-lg">{supplier.name}</span>
+                      <span className="font-semibold text-lg text-white">{supplier.name}</span>
                       {getStatusBadge(supplier.status)}
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">Yetkili:</span> {supplier.contactPerson}
+                    <div className="flex items-center gap-1 text-sm text-slate-400">
+                      <span className="font-medium text-slate-300">Yetkili:</span> {supplier.contactPerson}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     {getRatingStars(supplier.rating)}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mb-2">
+                <div className="grid grid-cols-2 gap-2 text-sm text-slate-400 mb-2">
                   <div className="flex items-center gap-1">
                     <Phone className="h-3 w-3" />
                     {supplier.phone}
@@ -319,18 +353,59 @@ export default function SuppliersPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <Package className="h-3 w-3" />
-                    <Badge variant="outline">{supplier.category}</Badge>
+                    <Badge variant="outline" className="border-slate-600 text-slate-400">{supplier.category}</Badge>
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-sm bg-muted p-2 rounded">
-                  <span>Toplam Sipariş: <span className="font-semibold">{supplier.totalOrders}</span></span>
-                  <span>Son Sipariş: <span className="font-semibold">{supplier.lastOrderDate}</span></span>
+                <div className="flex items-center justify-between text-sm bg-slate-900 p-2 rounded border border-slate-700">
+                  <span className="text-slate-400">Toplam Siparis: <span className="font-semibold text-white">{supplier.totalOrders}</span></span>
+                  <span className="text-slate-400">Son Siparis: <span className="font-semibold text-white">{supplier.lastOrderDate}</span></span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" variant="outline" onClick={() => openEdit(supplier)} className="border-slate-600 text-slate-300 hover:text-white">
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDeleteSupplier(supplier.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Tedarikci Duzenle</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Firma Adi</label>
+              <Input value={newSupplier.name || ""} onChange={(e) => setNewSupplier({...newSupplier, name: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Yetkili Kisi</label>
+              <Input value={newSupplier.contactPerson || ""} onChange={(e) => setNewSupplier({...newSupplier, contactPerson: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Telefon</label>
+                <Input value={newSupplier.phone || ""} onChange={(e) => setNewSupplier({...newSupplier, phone: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">E-posta</label>
+                <Input value={newSupplier.email || ""} onChange={(e) => setNewSupplier({...newSupplier, email: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+              </div>
+            </div>
+            <Button onClick={handleEditSupplier}>
+              <Save className="mr-2 h-4 w-4" />
+              Guncelle
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

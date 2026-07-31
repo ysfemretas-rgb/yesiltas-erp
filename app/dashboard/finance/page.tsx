@@ -32,14 +32,12 @@ interface Transaction {
 }
 
 const initialTransactions: Transaction[] = [
-  { id: 1, description: "iPhone 14 Pro Tamir", amount: 3500, type: "income", category: "Tamir Geliri", date: "2024-01-15", customer: "Ahmet Yılmaz" },
-  { id: 2, description: "Ekran Tedarik", amount: 1200, type: "expense", category: "Parça Maliyeti", date: "2024-01-14", customer: "Tedarikçi A" },
-  { id: 3, description: "Samsung S23 Batarya Değişimi", amount: 800, type: "income", category: "Tamir Geliri", date: "2024-01-13", customer: "Mehmet Kaya" },
-  { id: 4, description: "Kira Ödemesi", amount: 5000, type: "expense", category: "Kira", date: "2024-01-01" },
-  { id: 5, description: "MacBook Air Anakart Tamir", amount: 4500, type: "income", category: "Tamir Geliri", date: "2024-01-10", customer: "Ayşe Demir" },
-  { id: 6, description: "Elektrik Faturası", amount: 850, type: "expense", category: "Fatura", date: "2024-01-05" },
-  { id: 7, description: "iPad Ekran Değişimi", amount: 2200, type: "income", category: "Tamir Geliri", date: "2024-01-08", customer: "Fatma Şahin" },
-  { id: 8, description: "Araç Parçaları", amount: 3000, type: "expense", category: "Parça Maliyeti", date: "2024-01-07" },
+  { id: 1, description: "iPhone 14 Pro Tamir", amount: 3500, type: "income", category: "Tamir Geliri", date: "2024-01-15", customer: "Ahmet Yilmaz" },
+  { id: 2, description: "Ekran Tedarik", amount: 1200, type: "expense", category: "Parca Maliyeti", date: "2024-01-14", customer: "Tedarikci A" },
+  { id: 3, description: "Samsung S23 Batarya Degisimi", amount: 800, type: "income", category: "Tamir Geliri", date: "2024-01-13", customer: "Mehmet Kaya" },
+  { id: 4, description: "Kira Odemesi", amount: 5000, type: "expense", category: "Kira", date: "2024-01-01" },
+  { id: 5, description: "MacBook Air Anakart Tamir", amount: 4500, type: "income", category: "Tamir Geliri", date: "2024-01-10", customer: "Ayse Demir" },
+  { id: 6, description: "Elektrik Faturasi", amount: 850, type: "expense", category: "Fatura", date: "2024-01-05" },
 ]
 
 const categories = Array.from(new Set(initialTransactions.map(t => t.category)))
@@ -75,7 +73,7 @@ export default function FinancePage() {
       description: newTransaction.description,
       amount: Number(newTransaction.amount),
       type: newTransaction.type as "income" | "expense",
-      category: newTransaction.category || "Diğer",
+      category: newTransaction.category || "Diger",
       date: newTransaction.date || new Date().toISOString().split("T")[0],
       customer: newTransaction.customer,
     }
@@ -91,86 +89,90 @@ export default function FinancePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Finans Yönetimi</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Finans Yonetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Yeni İşlem
+              Yeni Islem
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
             <DialogHeader>
-              <DialogTitle>Yeni Finansal İşlem</DialogTitle>
+              <DialogTitle className="text-white">Yeni Finansal Islem</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">İşlem Tipi</label>
+                  <label className="text-sm font-medium text-slate-300">Islem Tipi</label>
                   <Select
                     value={newTransaction.type}
                     onValueChange={(value) => setNewTransaction({ ...newTransaction, type: value as "income" | "expense" })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="income">Gelir</SelectItem>
-                      <SelectItem value="expense">Gider</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="income" className="text-white">Gelir</SelectItem>
+                      <SelectItem value="expense" className="text-white">Gider</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tutar (₺)</label>
+                  <label className="text-sm font-medium text-slate-300">Tutar</label>
                   <Input
                     type="number"
                     value={newTransaction.amount || ""}
                     onChange={(e) => setNewTransaction({ ...newTransaction, amount: Number(e.target.value) })}
                     placeholder="0.00"
+                    className="bg-slate-800 border-slate-700 text-white"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Açıklama</label>
+                <label className="text-sm font-medium text-slate-300">Aciklama</label>
                 <Input
                   value={newTransaction.description || ""}
                   onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
-                  placeholder="İşlem açıklaması"
+                  placeholder="Islem aciklamasi"
+                  className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Kategori</label>
+                  <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
                     value={newTransaction.category}
                     onValueChange={(value) => setNewTransaction({ ...newTransaction, category: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-slate-800 border-slate-700">
                       {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer">Diğer</SelectItem>
+                      <SelectItem value="Diger" className="text-white">Diger</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tarih</label>
+                  <label className="text-sm font-medium text-slate-300">Tarih</label>
                   <Input
                     type="date"
                     value={newTransaction.date}
                     onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Müşteri/Tedarikçi (Opsiyonel)</label>
+                <label className="text-sm font-medium text-slate-300">Musteri/Tedarikci (Opsiyonel)</label>
                 <Input
                   value={newTransaction.customer || ""}
                   onChange={(e) => setNewTransaction({ ...newTransaction, customer: e.target.value })}
-                  placeholder="İsim girin"
+                  placeholder="Isim girin"
+                  className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
               <Button onClick={handleAddTransaction} className="w-full">
@@ -182,99 +184,99 @@ export default function FinancePage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Gelir</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Gelir</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">₺{totalIncome.toLocaleString("tr-TR")}</div>
+            <div className="text-2xl font-bold text-green-500">₺{totalIncome.toLocaleString("tr-TR")}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Gider</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Gider</CardTitle>
+            <TrendingDown className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">₺{totalExpense.toLocaleString("tr-TR")}</div>
+            <div className="text-2xl font-bold text-red-500">₺{totalExpense.toLocaleString("tr-TR")}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Bakiye</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium text-slate-300">Net Bakiye</CardTitle>
+            <DollarSign className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+            <div className={`text-2xl font-bold ${balance >= 0 ? "text-green-500" : "text-red-500"}`}>
               ₺{balance.toLocaleString("tr-TR")}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
-          <CardTitle>İşlem Geçmişi</CardTitle>
+          <CardTitle className="text-white">Islem Gecmisi</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
             <div className="flex items-center gap-2 flex-1">
-              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Filter className="h-4 w-4 text-slate-500" />
               <Input
                 placeholder="Ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
+                className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
             <div className="flex gap-2">
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] bg-slate-800 border-slate-700 text-white">
                   <SelectValue placeholder="Tip" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tümü</SelectItem>
-                  <SelectItem value="income">Gelir</SelectItem>
-                  <SelectItem value="expense">Gider</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">Tumu</SelectItem>
+                  <SelectItem value="income" className="text-white">Gelir</SelectItem>
+                  <SelectItem value="expense" className="text-white">Gider</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[160px] bg-slate-800 border-slate-700 text-white">
                   <SelectValue placeholder="Kategori" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Kategoriler</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">Tum Kategoriler</SelectItem>
                   {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="rounded-md border">
-            <div className="grid grid-cols-12 gap-2 p-3 text-sm font-medium text-muted-foreground border-b bg-muted/50">
-              <div className="col-span-3">Açıklama</div>
+          <div className="rounded-md border border-slate-700">
+            <div className="grid grid-cols-12 gap-2 p-3 text-sm font-medium text-slate-400 border-b border-slate-700 bg-slate-800/50">
+              <div className="col-span-3">Aciklama</div>
               <div className="col-span-2">Kategori</div>
               <div className="col-span-2">Tarih</div>
-              <div className="col-span-2">Müşteri/Tedarikçi</div>
+              <div className="col-span-2">Musteri/Tedarikci</div>
               <div className="col-span-2 text-right">Tutar</div>
               <div className="col-span-1 text-center">Tip</div>
             </div>
             {filteredTransactions.map((transaction) => (
-              <div key={transaction.id} className="grid grid-cols-12 gap-2 p-3 text-sm border-b last:border-0 items-center hover:bg-muted/50">
-                <div className="col-span-3 font-medium">{transaction.description}</div>
+              <div key={transaction.id} className="grid grid-cols-12 gap-2 p-3 text-sm border-b border-slate-700 last:border-0 items-center hover:bg-slate-800/50">
+                <div className="col-span-3 font-medium text-white">{transaction.description}</div>
                 <div className="col-span-2">
-                  <Badge variant="outline">{transaction.category}</Badge>
+                  <Badge variant="outline" className="border-slate-600 text-slate-400">{transaction.category}</Badge>
                 </div>
-                <div className="col-span-2 text-muted-foreground">{transaction.date}</div>
-                <div className="col-span-2 text-muted-foreground">{transaction.customer || "-"}</div>
-                <div className={`col-span-2 text-right font-semibold ${transaction.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                <div className="col-span-2 text-slate-400">{transaction.date}</div>
+                <div className="col-span-2 text-slate-400">{transaction.customer || "-"}</div>
+                <div className={`col-span-2 text-right font-semibold ${transaction.type === "income" ? "text-green-500" : "text-red-500"}`}>
                   {transaction.type === "income" ? "+" : "-"}₺{transaction.amount.toLocaleString("tr-TR")}
                 </div>
                 <div className="col-span-1 text-center">
-                  <Badge className={transaction.type === "income" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                  <Badge className={transaction.type === "income" ? "bg-green-900/50 text-green-300 border-green-700" : "bg-red-900/50 text-red-300 border-red-700"}>
                     {transaction.type === "income" ? "Gelir" : "Gider"}
                   </Badge>
                 </div>

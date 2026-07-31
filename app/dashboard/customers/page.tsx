@@ -1,265 +1,430 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { 
+  Users, 
+  Plus, 
+  Search, 
+  Phone,
+  MessageCircle,
+  Edit3,
+  Trash2,
+  Save,
+  AlertTriangle
+} from "lucide-react"
 
-function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => {
-    var timer = setTimeout(onClose, 4000)
-    return function() { clearTimeout(timer) }
-  }, [onClose])
-  return (
-    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-    }`}>
-      <div className="flex items-center gap-2">
-        <span>{type === 'success' ? '✅' : '❌'}</span>
-        <span>{message}</span>
-        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
-      </div>
-    </div>
-  )
+interface Debt {
+  id: number
+  amount: number
+  type: "installment" | "cash"
+  dueDate: string
+  status: "paid" | "pending" | "overdue"
+  description: string
 }
 
+interface Customer {
+  id: number
+  customerId: string
+  name: string
+  phone: string
+  phone2?: string
+  email?: string
+  debts: Debt[]
+  totalDebt: number
+}
+
+const generateCustomerId = (index: number) => {
+  return `YTM-${String(index + 1).padStart(4, '0')}`
+}
+
+const initialCustomers: Customer[] = [
+  {
+    id: 1,
+    customerId: "YTM-0001",
+    name: "Ahmet Yilmaz",
+    phone: "0555 123 4567",
+    phone2: "0532 987 6543",
+    debts: [
+      { id: 1, amount: 2500, type: "installment", dueDate: "2024-08-15", status: "pending", description: "iPhone tamir taksidi" }
+    ],
+    totalDebt: 2500
+  },
+  {
+    id: 2,
+    customerId: "YTM-0002",
+    name: "Mehmet Kaya",
+    phone: "0555 234 5678",
+    debts: [],
+    totalDebt: 0
+  },
+  {
+    id: 3,
+    customerId: "YTM-0003",
+    name: "Ayse Demir",
+    phone: "0555 345 6789",
+    debts: [
+      { id: 2, amount: 1200, type: "cash", dueDate: "2024-07-20", status: "overdue", description: "Samsung batarya" }
+    ],
+    totalDebt: 1200
+  }
+]
+
+const IBAN = "TR00 1234 5678 9012 3456 7890 12"
+const ACCOUNT_NAME = "Yesiltas Teknik Servis"
+
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<any[]>([])
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
-  const [customerDetails, setCustomerDetails] = useState<any>(null)
-  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [isDebtOpen, setIsDebtOpen] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  
+  const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({
+    name: "",
+    phone: "",
+    phone2: "",
+    email: ""
+  })
 
-  useEffect(() => { loadData() }, [])
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.phone.includes(searchTerm) ||
+    c.customerId.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
-  const loadData = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('customers').select('*').order('name')
-    if (data) setCustomers(data)
-    setLoading(false)
-  }
+  const totalCustomers = customers.length
+  const debtCustomers = customers.filter(c => c.totalDebt > 0).length
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session) {
-        setToast({ message: 'HATA: Oturum bulunamadi! Lutfen tekrar giris yapin.', type: 'error' })
-        return
-      }
-      const insertData = {
-        name: form.name.trim(),
-        phone: form.phone.trim() || null,
-        email: form.email.trim() || null,
-        address: form.address.trim() || null,
-        notes: form.notes.trim() || null
-      }
-      const { data, error } = await supabase.from('customers').insert([insertData]).select()
-      if (error) {
-        setToast({ message: 'HATA: ' + error.message + ' (Kod: ' + error.code + ')', type: 'error' })
-      } else {
-        setToast({ message: 'Musteri eklendi!', type: 'success' })
-        setShowModal(false)
-        setForm({ name: '', phone: '', email: '', address: '', notes: '' })
-        loadData()
-      }
-    } catch (err: any) {
-      setToast({ message: 'HATA: ' + (err.message || 'Bilinmeyen hata'), type: 'error' })
+  const handleAddCustomer = () => {
+    if (!newCustomer.name || !newCustomer.phone) return
+    
+    const customer: Customer = {
+      id: Date.now(),
+      customerId: generateCustomerId(customers.length),
+      name: newCustomer.name,
+      phone: newCustomer.phone,
+      phone2: newCustomer.phone2 || undefined,
+      email: newCustomer.email || undefined,
+      debts: [],
+      totalDebt: 0
     }
+    
+    setCustomers([customer, ...customers])
+    setNewCustomer({ name: "", phone: "", phone2: "", email: "" })
+    setIsNewCustomerOpen(false)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Silmek istediginize emin misiniz? Bu musteriye ait tum kayitlar da silinecektir.')) return
-    try {
-      setLoading(true)
-      await supabase.from('device_history').delete().eq('customer_id', id)
-      await supabase.from('devices').delete().eq('customer_id', id)
-      await supabase.from('sales').delete().eq('customer_id', id)
-      await supabase.from('customer_payments').delete().eq('customer_id', id)
-      await supabase.from('debts').delete().eq('customer_id', id)
-      await supabase.from('warranties').delete().eq('customer_id', id)
-      await supabase.from('appointments').delete().eq('customer_id', id)
-      const { error: custError } = await supabase.from('customers').delete().eq('id', id)
-      if (custError) {
-        setToast({ message: 'HATA: ' + custError.message, type: 'error' })
-      } else {
-        setToast({ message: 'Musteri ve tum bagli kayitlar silindi!', type: 'success' })
-        setCustomers(function(prev) { var res = []; for (var i = 0; i < prev.length; i++) { if (prev[i].id !== id) res.push(prev[i]) } return res })
-        if (selectedCustomer && selectedCustomer.id === id) { setSelectedCustomer(null); setCustomerDetails(null) }
-      }
-    } catch (err: any) {
-      setToast({ message: 'HATA: ' + (err.message || 'Silme islemi basarisiz'), type: 'error' })
-    } finally {
-      setLoading(false)
-    }
+  const handleEditCustomer = () => {
+    if (!selectedCustomer || !newCustomer.name || !newCustomer.phone) return
+    
+    setCustomers(customers.map(c => 
+      c.id === selectedCustomer.id 
+        ? { ...c, name: newCustomer.name, phone: newCustomer.phone, phone2: newCustomer.phone2, email: newCustomer.email }
+        : c
+    ))
+    setIsEditOpen(false)
+    setSelectedCustomer(null)
   }
 
-  const loadCustomerDetails = async (customer: any) => {
+  const handleDeleteCustomer = (id: number) => {
+    setCustomers(customers.filter(c => c.id !== id))
+  }
+
+  const openEdit = (customer: Customer) => {
     setSelectedCustomer(customer)
-    setDetailsLoading(true)
-    try {
-      const [debtsRes, paymentsRes, devicesRes, salesRes] = await Promise.all([
-        supabase.from('debts').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
-        supabase.from('customer_payments').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
-        supabase.from('devices').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }),
-        supabase.from('sales').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false })
-      ])
-      var totalDebt = 0
-      if (debtsRes.data) { for (var i = 0; i < debtsRes.data.length; i++) totalDebt += debtsRes.data[i].amount || 0 }
-      var totalPaid = 0
-      if (paymentsRes.data) { for (var i = 0; i < paymentsRes.data.length; i++) totalPaid += paymentsRes.data[i].amount || 0 }
-      
-      var allTransactions: any[] = []
-      if (debtsRes.data) { for (var i = 0; i < debtsRes.data.length; i++) allTransactions.push({...debtsRes.data[i], type: 'Borc', typeColor: 'text-red-400'}) }
-      if (paymentsRes.data) { for (var i = 0; i < paymentsRes.data.length; i++) allTransactions.push({...paymentsRes.data[i], type: 'Odeme', typeColor: 'text-emerald-400'}) }
-      if (devicesRes.data) { for (var i = 0; i < devicesRes.data.length; i++) allTransactions.push({...devicesRes.data[i], type: 'Teknik Servis', typeColor: 'text-blue-400', amount: devicesRes.data[i].price || 0}) }
-      if (salesRes.data) { for (var i = 0; i < salesRes.data.length; i++) allTransactions.push({...salesRes.data[i], type: 'Satis', typeColor: 'text-purple-400'}) }
-      
-      allTransactions.sort(function(a: any, b: any) {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      })
-      
-      setCustomerDetails({
-        debts: debtsRes.data || [], payments: paymentsRes.data || [], devices: devicesRes.data || [], sales: salesRes.data || [],
-        totalDebt, totalPaid, remaining: totalDebt - totalPaid, transactions: allTransactions
-      })
-    } catch (err) {
-      setToast({ message: 'Detaylar yuklenirken hata olustu', type: 'error' })
-    } finally {
-      setDetailsLoading(false)
-    }
+    setNewCustomer({
+      name: customer.name,
+      phone: customer.phone,
+      phone2: customer.phone2,
+      email: customer.email
+    })
+    setIsEditOpen(true)
   }
 
-  var filtered = []
-  for (var i = 0; i < customers.length; i++) {
-    var c = customers[i]
-    var matches = false
-    if (!search) {
-      matches = true
-    } else {
-      var term = search.toLowerCase()
-      if (c.name && c.name.toLowerCase().indexOf(term) !== -1) matches = true
-      if (c.phone && c.phone.indexOf(search) !== -1) matches = true
-    }
-    if (matches) filtered.push(c)
+  const openDebt = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setIsDebtOpen(true)
   }
 
-  if (loading && customers.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
+  const sendWhatsApp = (customer: Customer) => {
+    const message = `Merhaba ${customer.name},%0A%0AYesiltas Teknik Servis borc bilgileriniz:%0ABorc Tutari: ₺${customer.totalDebt}%0A%0AOdeme icin IBAN:%0A${IBAN}%0AHesap Adi: ${ACCOUNT_NAME}%0A%0AIyi gunler dileriz.`
+    const url = `https://wa.me/${customer.phone.replace(/\s/g, '')}?text=${message}`
+    window.open(url, '_blank')
+  }
+
+  const getDebtBadge = (debt: number) => {
+    if (debt > 0) return <Badge className="bg-red-900/50 text-red-300 border-red-700"><AlertTriangle className="mr-1 h-3 w-3"/>₺{debt}</Badge>
+    return <Badge className="bg-green-900/50 text-green-300 border-green-700">Borc Yok</Badge>
+  }
 
   return (
-    <div className="space-y-4">
-      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Musteriler</h1>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">+ Yeni Musteri</button>
-      </div>
-      <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-      <div className="table-container">
-        <table className="table">
-          <thead><tr><th>Ad</th><th>Telefon</th><th>E-posta</th><th>Adres</th><th>Islemler</th></tr></thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id}>
-                <td className="font-medium text-white cursor-pointer hover:underline" onClick={() => loadCustomerDetails(c)}>{c.name}</td>
-                <td className="text-slate-300">{c.phone || '-'}</td>
-                <td className="text-slate-300">{c.email || '-'}</td>
-                <td className="text-slate-400">{c.address || '-'}</td>
-                <td><button onClick={() => handleDelete(c.id)} className="btn btn-danger btn-sm">Sil</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {filtered.length === 0 && <div className="empty-state"><p>Musteri bulunamadi</p></div>}
-
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold text-white">Yeni Musteri</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight text-white">Musteriler</h1>
+        <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Yeni Musteri
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-white">Yeni Musteri Ekle</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Ad Soyad *</label>
+                <Input
+                  value={newCustomer.name}
+                  onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Ahmet Yilmaz"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Telefon *</label>
+                <Input
+                  value={newCustomer.phone}
+                  onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="0555 123 4567"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">2. Telefon</label>
+                <Input
+                  value={newCustomer.phone2 || ""}
+                  onChange={(e) => setNewCustomer({...newCustomer, phone2: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="0532 987 6543"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">E-posta</label>
+                <Input
+                  value={newCustomer.email || ""}
+                  onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="ornek@email.com"
+                />
+              </div>
+              <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone}>
+                <Save className="mr-2 h-4 w-4" />
+                Kaydet
+              </Button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group"><label>Ad *</label><input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required /></div>
-                <div className="form-group"><label>Telefon</label><input className="input" value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} /></div>
-                <div className="form-group"><label>E-posta</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} /></div>
-                <div className="form-group"><label>Adres</label><textarea className="input" rows={2} value={form.address} onChange={(e) => setForm({...form, address: e.target.value})} /></div>
-                <div className="form-group"><label>Notlar</label><textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} /></div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
-              </div>
-            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Musteri</CardTitle>
+            <Users className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{totalCustomers}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">Borclu Musteri</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">{debtCustomers}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam Borc</CardTitle>
+            <Phone className="h-4 w-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-500">
+              ₺{customers.reduce((sum, c) => sum + c.totalDebt, 0).toLocaleString("tr-TR")}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Musteri Listesi
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="h-4 w-4 text-slate-500" />
+            <Input
+              placeholder="ID, isim veya telefon ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+            />
           </div>
-        </div>
-      )}
 
-      {selectedCustomer && (
-        <div className="modal-overlay" onClick={() => { setSelectedCustomer(null); setCustomerDetails(null) }}>
-          <div className="modal max-w-6xl w-full" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'hidden' }}>
-            <div className="modal-header">
-              <div>
-                <h2 className="text-xl font-bold text-white">{selectedCustomer.name}</h2>
-                <p className="text-sm text-slate-400">{selectedCustomer.phone} {selectedCustomer.email ? '| ' + selectedCustomer.email : ''}</p>
-              </div>
-              <button onClick={() => { setSelectedCustomer(null); setCustomerDetails(null) }} className="text-slate-400 hover:text-white text-xl">&times;</button>
-            </div>
-            {detailsLoading ? (
-              <div className="p-8 flex justify-center"><div className="spinner" /></div>
-            ) : customerDetails ? (
-              <div className="modal-body space-y-4" style={{ overflow: 'hidden' }}>
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155] text-center">
-                    <div className="text-2xl font-bold text-red-400">&#8378;{customerDetails.totalDebt.toLocaleString('tr-TR')}</div>
-                    <div className="text-xs text-slate-400">Toplam Borc</div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155] text-center">
-                    <div className="text-2xl font-bold text-emerald-400">&#8378;{customerDetails.totalPaid.toLocaleString('tr-TR')}</div>
-                    <div className="text-xs text-slate-400">Toplam Odeme</div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155] text-center">
-                    <div className={'text-2xl font-bold ' + (customerDetails.remaining > 0 ? 'text-red-400' : 'text-emerald-400')}>
-                      &#8378;{customerDetails.remaining.toLocaleString('tr-TR')}
+          <div className="space-y-3">
+            {filteredCustomers.map((customer) => (
+              <div key={customer.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline" className="border-blue-600 text-blue-400">{customer.customerId}</Badge>
+                      <span className="font-semibold text-white text-lg">{customer.name}</span>
+                      {getDebtBadge(customer.totalDebt)}
                     </div>
-                    <div className="text-xs text-slate-400">Kalan Borc</div>
+                    <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
+                      <div><span className="text-slate-500">Telefon:</span> {customer.phone}</div>
+                      {customer.phone2 && <div><span className="text-slate-500">2. Telefon:</span> {customer.phone2}</div>}
+                      {customer.email && <div><span className="text-slate-500">E-posta:</span> {customer.email}</div>}
+                    </div>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#1e293b] border border-[#334155] text-center">
-                    <div className="text-2xl font-bold text-blue-400">{customerDetails.transactions.length}</div>
-                    <div className="text-xs text-slate-400">Toplam Islem</div>
+                  <div className="flex gap-2">
+                    {customer.totalDebt > 0 && (
+                      <Button 
+                        size="sm" 
+                        className="bg-green-600 hover:bg-green-700"
+                        onClick={() => sendWhatsApp(customer)}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => openDebt(customer)}
+                      className="border-slate-600 text-slate-300 hover:text-white"
+                    >
+                      Borc
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => openEdit(customer)}
+                      className="border-slate-600 text-slate-300 hover:text-white"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="destructive"
+                      onClick={() => handleDeleteCustomer(customer.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <h3 className="text-lg font-semibold text-white">Islem Gecmisi</h3>
-                <div className="table-container" style={{ overflow: 'visible' }}>
-                  <table className="table" style={{ tableLayout: 'auto', width: '100%' }}>
-                    <thead>
-                      <tr><th style={{ whiteSpace: 'nowrap' }}>Tarih</th><th style={{ whiteSpace: 'nowrap' }}>Saat</th><th style={{ whiteSpace: 'nowrap' }}>Islem Turu</th><th style={{ whiteSpace: 'nowrap' }}>Detay</th><th style={{ whiteSpace: 'nowrap' }}>Tutar</th><th style={{ whiteSpace: 'nowrap' }}>Durum</th></tr>
-                    </thead>
-                    <tbody>
-                      {customerDetails.transactions.map((t: any, i: number) => (
-                        <tr key={i}>
-                          <td className="text-slate-300 whitespace-nowrap">{new Date(t.created_at).toLocaleDateString('tr-TR')}</td>
-                          <td className="text-slate-400 whitespace-nowrap">{new Date(t.created_at).toLocaleTimeString('tr-TR')}</td>
-                          <td className="whitespace-nowrap"><span className={'font-semibold ' + t.typeColor}>{t.type}</span></td>
-                          <td className="text-slate-300" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{t.description || t.issue || t.device_name || t.product_name || t.notes || '-'}</td>
-                          <td className={'whitespace-nowrap ' + (t.type === 'Odeme' ? 'text-emerald-400' : t.type === 'Borc' ? 'text-red-400' : 'text-blue-400')}>
-                            &#8378;{(t.amount || 0).toLocaleString('tr-TR')}
-                          </td>
-                          <td className="whitespace-nowrap"><span className={'badge ' + (t.status === 'Tamamlandi' || t.status === 'Odendi' ? 'badge-green' : t.status === 'Beklemede' ? 'badge-yellow' : 'badge-blue')}>{t.status || 'Tamamlandi'}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {customerDetails.transactions.length === 0 && <div className="empty-state"><p>Henüz islem kaydi yok</p></div>}
               </div>
-            ) : null}
+            ))}
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
+
+      {/* Duzenle Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Musteri Duzenle</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Ad Soyad *</label>
+              <Input
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Telefon *</label>
+              <Input
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">2. Telefon</label>
+              <Input
+                value={newCustomer.phone2 || ""}
+                onChange={(e) => setNewCustomer({...newCustomer, phone2: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">E-posta</label>
+              <Input
+                value={newCustomer.email || ""}
+                onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+            <Button onClick={handleEditCustomer}>
+              <Save className="mr-2 h-4 w-4" />
+              Guncelle
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Borc Detay Dialog */}
+      <Dialog open={isDebtOpen} onOpenChange={setIsDebtOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Borc Detaylari - {selectedCustomer?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {selectedCustomer?.debts.length === 0 ? (
+              <div className="text-center text-slate-500 py-4">Borc kaydi bulunmuyor</div>
+            ) : (
+              <div className="space-y-3">
+                {selectedCustomer?.debts.map(debt => (
+                  <div key={debt.id} className="p-3 rounded-lg bg-slate-800 border border-slate-700">
+                    <div className="flex justify-between mb-1">
+                      <span className="font-medium text-white">{debt.description}</span>
+                      <Badge className={debt.status === "overdue" ? "bg-red-900/50 text-red-300" : debt.status === "paid" ? "bg-green-900/50 text-green-300" : "bg-yellow-900/50 text-yellow-300"}>
+                        {debt.status === "overdue" ? "Gecikmis" : debt.status === "paid" ? "Odenmis" : "Bekliyor"}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      Tutar: ₺{debt.amount} | Tur: {debt.type === "installment" ? "Taksitli" : "Pesin"} | Vade: {debt.dueDate}
+                    </div>
+                  </div>
+                ))}
+                <div className="border-t border-slate-700 pt-2 mt-2">
+                  <div className="text-lg font-bold text-white text-right">
+                    Toplam Borc: ₺{selectedCustomer?.totalDebt}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
