@@ -1,318 +1,242 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
-interface Device {
-  id: string
-  customer_name: string
-  customer_phone: string
-  brand: string
-  model: string
-  imei: string
-  problem: string
-  status: string
-  cost: number
-  price: number
-  notes: string
-  created_at: string
-  completed_at: string
+function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    var timer = setTimeout(onClose, 4000)
+    return function() { clearTimeout(timer) }
+  }, [onClose])
+  return (
+    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+    }`}>
+      <div className="flex items-center gap-2">
+        <span>{type === 'success' ? '✅' : '❌'}</span>
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
+      </div>
+    </div>
+  )
+}
+
+function getWhatsAppLink(phone: string, message: string): string {
+  var cleanPhone = phone.replace(/\D/g, '')
+  var intlPhone = cleanPhone
+  if (cleanPhone.startsWith('0')) {
+    intlPhone = '9' + cleanPhone
+  } else if (!cleanPhone.startsWith('90')) {
+    intlPhone = '90' + cleanPhone
+  }
+  return 'https://wa.me/' + intlPhone + '?text=' + encodeURIComponent(message)
 }
 
 export default function DevicesPage() {
-  const [devices, setDevices] = useState<Device[]>([])
+  const [devices, setDevices] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('Tumu')
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [search, setSearch] = useState("")
-  const [editDevice, setEditDevice] = useState<Device | null>(null)
-  const [filterStatus, setFilterStatus] = useState("all")
+  const [showModal, setShowModal] = useState(false)
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+  const [form, setForm] = useState({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
 
-  const [customerName, setCustomerName] = useState("")
-  const [customerPhone, setCustomerPhone] = useState("")
-  const [brand, setBrand] = useState("")
-  const [model, setModel] = useState("")
-  const [imei, setImei] = useState("")
-  const [problem, setProblem] = useState("")
-  const [status, setStatus] = useState("waiting")
-  const [cost, setCost] = useState(0)
-  const [price, setPrice] = useState(0)
-  const [notes, setNotes] = useState("")
+  useEffect(() => { loadData() }, [])
 
-  useEffect(function() {
-    fetchDevices()
-  }, [])
-
-  async function fetchDevices() {
+  const loadData = async () => {
     setLoading(true)
-    const result = await supabase.from("devices").select("*").order("created_at", { ascending: false })
-    if (result.data) setDevices(result.data)
+    const [{ data: devicesData }, { data: customersData }] = await Promise.all([
+      supabase.from('devices').select('*, customers:customer_id(name, phone)').order('created_at', { ascending: false }),
+      supabase.from('customers').select('id, name, phone').order('name')
+    ])
+    if (devicesData) setDevices(devicesData)
+    if (customersData) setCustomers(customersData)
     setLoading(false)
   }
 
-  function resetForm() {
-    setCustomerName("")
-    setCustomerPhone("")
-    setBrand("")
-    setModel("")
-    setImei("")
-    setProblem("")
-    setStatus("waiting")
-    setCost(0)
-    setPrice(0)
-    setNotes("")
-    setEditDevice(null)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const deviceData: any = {
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      brand: brand,
-      model: model,
-      imei: imei,
-      problem: problem,
-      status: status,
-      cost: cost,
-      price: price,
-      notes: notes,
-    }
-    if (status === "completed" && editDevice && !editDevice.completed_at) {
-      deviceData.completed_at = new Date().toISOString()
-    }
-    if (editDevice) {
-      await supabase.from("devices").update(deviceData).eq("id", editDevice.id)
-    } else {
-      await supabase.from("devices").insert([deviceData])
-    }
-    resetForm()
-    setShowForm(false)
-    fetchDevices()
-  }
-
-  function handleEdit(device: Device) {
-    setEditDevice(device)
-    setCustomerName(device.customer_name)
-    setCustomerPhone(device.customer_phone)
-    setBrand(device.brand || "")
-    setModel(device.model || "")
-    setImei(device.imei || "")
-    setProblem(device.problem || "")
-    setStatus(device.status)
-    setCost(device.cost || 0)
-    setPrice(device.price || 0)
-    setNotes(device.notes || "")
-    setShowForm(true)
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("Silmek istediginize emin misiniz?")) return
-    await supabase.from("devices").delete().eq("id", id)
-    fetchDevices()
-  }
-
-  function getStatusBadgeClass(s: string) {
-    if (s === "waiting") return "badge-yellow"
-    if (s === "in_progress") return "badge-blue"
-    if (s === "completed") return "badge-green"
-    if (s === "cancelled") return "badge-red"
-    return "badge-gray"
-  }
-
-  function getStatusText(s: string) {
-    if (s === "waiting") return "Bekliyor"
-    if (s === "in_progress") return "Devam Ediyor"
-    if (s === "completed") return "Tamamlandi"
-    if (s === "cancelled") return "Iptal"
-    return s
-  }
-
-  function getFilteredDevices() {
-    const filtered: Device[] = []
-    for (let i = 0; i < devices.length; i++) {
-      const d = devices[i]
-      if (filterStatus !== "all" && d.status !== filterStatus) continue
-      if (search) {
-        const lowerSearch = search.toLowerCase()
-        let match = false
-        if (d.customer_name && d.customer_name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
-        if (d.customer_phone && d.customer_phone.indexOf(search) !== -1) match = true
-        if (d.brand && d.brand.toLowerCase().indexOf(lowerSearch) !== -1) match = true
-        if (d.model && d.model.toLowerCase().indexOf(lowerSearch) !== -1) match = true
-        if (d.imei && d.imei.indexOf(search) !== -1) match = true
-        if (!match) continue
+    try {
+      var { error } = await supabase.from('devices').insert([{
+        customer_id: form.customer_id,
+        device_name: form.device_name.trim(),
+        imei: form.imei.trim() || null,
+        issue: form.issue.trim(),
+        price: parseFloat(form.price) || 0,
+        status: form.status,
+        technician: form.technician.trim() || null
+      }])
+      if (error) {
+        console.error('Ekleme hatasi:', error)
+        setToast({ message: 'Hata: ' + error.message + ' (Kod: ' + error.code + ')', type: 'error' })
+      } else {
+        setToast({ message: 'Cihaz kaydi eklendi!', type: 'success' })
+        setShowModal(false)
+        setForm({ customer_id: '', device_name: '', imei: '', issue: '', price: '', status: 'Beklemede', technician: '' })
+        loadData()
       }
-      filtered.push(d)
+    } catch (err: any) {
+      setToast({ message: 'Hata: ' + err.message, type: 'error' })
     }
-    return filtered
   }
 
-  function formatDate(dateStr: string) {
-    if (!dateStr) return "-"
-    const d = new Date(dateStr)
-    return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      console.log('Durum guncelleniyor:', id, '->', newStatus)
+      var { data, error } = await supabase
+        .from('devices')
+        .update({ status: newStatus })
+        .eq('id', id)
+        .select()
+
+      if (error) {
+        console.error('Durum guncelleme hatasi:', error)
+        if (error.message && error.message.indexOf('check constraint') !== -1 || error.code === '23514') {
+          setToast({ 
+            message: "HATA: '" + newStatus + "' durumu veritabaninda izin verilmiyor. Lutfen Supabase SQL Editor'da constraint'i kaldirin: ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_status_check;", 
+            type: 'error' 
+          })
+        } else {
+          setToast({ message: 'Hata: ' + error.message + ' (Kod: ' + error.code + ')', type: 'error' })
+        }
+      } else {
+        console.log('Durum guncellendi:', data)
+        setToast({ message: 'Durum guncellendi!', type: 'success' })
+        loadData()
+      }
+    } catch (err: any) {
+      console.error('Beklenmedik hata:', err)
+      setToast({ message: 'Hata: ' + err.message, type: 'error' })
+    }
   }
 
-  function formatPrice(price: number) {
-    return price.toLocaleString("tr-TR") + " TL"
+  const handleDelete = async (id: string) => {
+    if (!confirm('Silmek istediginize emin misiniz?')) return
+    await supabase.from('device_history').delete().eq('device_id', id)
+    await supabase.from('devices').delete().eq('id', id)
+    setToast({ message: 'Cihaz silindi!', type: 'success' })
+    loadData()
   }
 
-  const filteredDevices = getFilteredDevices()
-  let waitingCount = 0
-  let inProgressCount = 0
-  let completedCount = 0
-  let totalRevenue = 0
-  for (let i = 0; i < devices.length; i++) {
-    if (devices[i].status === "waiting") waitingCount++
-    if (devices[i].status === "in_progress") inProgressCount++
-    if (devices[i].status === "completed") completedCount++
-    totalRevenue = totalRevenue + devices[i].price
+  const sendWhatsAppReady = (device: any) => {
+    var phone = device.customers ? device.customers.phone : ''
+    if (!phone) {
+      setToast({ message: 'HATA: Musteri telefon numarasi bulunamadi!', type: 'error' })
+      return
+    }
+    var message = 'Merhaba ' + (device.customers ? device.customers.name : 'Sayin Musterimiz') + ',\n\n' +
+      device.device_name + ' cihazinizin tamir islemi tamamlanmistir. Cihazinizi servisimizden teslim alabilirsiniz.\n\n' +
+      'Ucret: &#8378;' + (device.price || 0).toLocaleString('tr-TR') + '\nSorun: ' + device.issue + '\n\nYeşiltaş Teknoloji'
+    window.open(getWhatsAppLink(phone, message), '_blank')
   }
+
+  var filtered: any[] = []
+  for (var i = 0; i < devices.length; i++) {
+    var d = devices[i]
+    var matchesSearch = false
+    if (!search) {
+      matchesSearch = true
+    } else {
+      var term = search.toLowerCase()
+      if (d.device_name && d.device_name.toLowerCase().indexOf(term) !== -1) matchesSearch = true
+      if (d.customers && d.customers.name && d.customers.name.toLowerCase().indexOf(term) !== -1) matchesSearch = true
+      if (d.imei && d.imei.indexOf(search) !== -1) matchesSearch = true
+    }
+    var matchesStatus = statusFilter === 'Tumu' || d.status === statusFilter
+    if (matchesSearch && matchesStatus) filtered.push(d)
+  }
+
+  var statusOptions = ['Tumu', 'Beklemede', 'Islemde', 'Tamamlandi', 'Teslim Edildi', 'Iptal']
+
+  if (loading && devices.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Teknik Servis</h1>
-        <button className="btn btn-primary" onClick={function() { resetForm(); setShowForm(true) }}>
-          + Yeni Cihaz
-        </button>
+    <div className="space-y-4">
+      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">Teknik Servis</h1>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">+ Yeni Cihaz</button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Bekleyen</h3></div>
-          <div className="card-content"><p className="text-2xl font-bold text-yellow-600">{waitingCount}</p></div>
-        </div>
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Devam Eden</h3></div>
-          <div className="card-content"><p className="text-2xl font-bold text-blue-600">{inProgressCount}</p></div>
-        </div>
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Tamamlanan</h3></div>
-          <div className="card-content"><p className="text-2xl font-bold text-green-600">{completedCount}</p></div>
-        </div>
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Toplam Gelir</h3></div>
-          <div className="card-content"><p className="text-2xl font-bold">{formatPrice(totalRevenue)}</p></div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 mb-4">
-        <input type="text" className="input w-full md:w-64" placeholder="Ara" value={search} onChange={function(e) { setSearch(e.target.value) }} />
-        <select className="input" value={filterStatus} onChange={function(e) { setFilterStatus(e.target.value) }}>
-          <option value="all">Tumu</option>
-          <option value="waiting">Bekliyor</option>
-          <option value="in_progress">Devam Ediyor</option>
-          <option value="completed">Tamamlandi</option>
-          <option value="cancelled">Iptal</option>
+      <div className="flex gap-3 flex-wrap">
+        <input type="text" className="input max-w-md" placeholder="Ara (cihaz, musteri, IMEI)..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          {statusOptions.map(function(s) { return <option key={s}>{s}</option> })}
         </select>
       </div>
 
-      {showForm && (
-        <div className="modal-overlay">
-          <div className="modal">
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr><th>Tarih</th><th>Musteri</th><th>Cihaz</th><th>IMEI</th><th>Sorun</th><th>Ucret</th><th>Teknisyen</th><th>Durum</th><th>Islemler</th></tr>
+          </thead>
+          <tbody>
+            {filtered.map((d) => (
+              <tr key={d.id}>
+                <td className="text-slate-400 text-sm whitespace-nowrap">{d.created_at ? new Date(d.created_at).toLocaleDateString('tr-TR') : '-'}</td>
+                <td className="font-medium text-white">{d.customers ? d.customers.name : '-'}</td>
+                <td className="text-slate-300">{d.device_name}</td>
+                <td className="text-slate-400 text-sm">{d.imei || '-'}</td>
+                <td className="text-slate-300 truncate" style={{maxWidth: '200px'}}>{d.issue}</td>
+                <td className="text-emerald-400">&#8378;{(d.price || 0).toLocaleString('tr-TR')}</td>
+                <td className="text-slate-400">{d.technician || '-'}</td>
+                <td>
+                  <select className="select text-xs py-1" value={d.status || 'Beklemede'} onChange={(e) => updateStatus(d.id, e.target.value)}>
+                    <option>Beklemede</option><option>Islemde</option><option>Tamamlandi</option><option>Teslim Edildi</option><option>Iptal</option>
+                  </select>
+                </td>
+                <td>
+                  <div className="flex gap-1 flex-wrap">
+                    {d.status === 'Tamamlandi' && d.customers && d.customers.phone && (
+                      <button onClick={() => sendWhatsAppReady(d)} className="btn btn-sm" style={{ backgroundColor: '#25D366', color: 'white', border: 'none', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>
+                        WhatsApp
+                      </button>
+                    )}
+                    <button onClick={() => handleDelete(d.id)} className="btn btn-danger btn-sm">Sil</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {filtered.length === 0 && <div className="empty-state"><p>Cihaz bulunamadi</p></div>}
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">{editDevice ? "Cihaz Duzenle" : "Yeni Cihaz"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
+              <h2 className="text-lg font-semibold text-white">Yeni Cihaz Kaydi</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-            <form onSubmit={handleSubmit} className="modal-body">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body space-y-4">
                 <div className="form-group">
-                  <label className="label">Musteri Adi</label>
-                  <input type="text" className="input" value={customerName} onChange={function(e) { setCustomerName(e.target.value) }} required />
-                </div>
-                <div className="form-group">
-                  <label className="label">Telefon</label>
-                  <input type="text" className="input" value={customerPhone} onChange={function(e) { setCustomerPhone(e.target.value) }} required />
-                </div>
-                <div className="form-group">
-                  <label className="label">Marka</label>
-                  <input type="text" className="input" value={brand} onChange={function(e) { setBrand(e.target.value) }} />
-                </div>
-                <div className="form-group">
-                  <label className="label">Model</label>
-                  <input type="text" className="input" value={model} onChange={function(e) { setModel(e.target.value) }} />
-                </div>
-                <div className="form-group">
-                  <label className="label">IMEI</label>
-                  <input type="text" className="input" value={imei} onChange={function(e) { setImei(e.target.value) }} />
-                </div>
-                <div className="form-group">
-                  <label className="label">Durum</label>
-                  <select className="input" value={status} onChange={function(e) { setStatus(e.target.value) }}>
-                    <option value="waiting">Bekliyor</option>
-                    <option value="in_progress">Devam Ediyor</option>
-                    <option value="completed">Tamamlandi</option>
-                    <option value="cancelled">Iptal</option>
+                  <label>Musteri *</label>
+                  <select className="select" value={form.customer_id} onChange={(e) => setForm({...form, customer_id: e.target.value})} required>
+                    <option value="">Secin</option>
+                    {customers.map(function(c) { return <option key={c.id} value={c.id}>{c.name} {c.phone ? '(' + c.phone + ')' : ''}</option> })}
                   </select>
                 </div>
+                <div className="form-group"><label>Cihaz Adi *</label><input className="input" value={form.device_name} onChange={(e) => setForm({...form, device_name: e.target.value})} required /></div>
+                <div className="form-group"><label>IMEI</label><input className="input" value={form.imei} onChange={(e) => setForm({...form, imei: e.target.value})} /></div>
+                <div className="form-group"><label>Sorun *</label><textarea className="input" rows={2} value={form.issue} onChange={(e) => setForm({...form, issue: e.target.value})} required /></div>
+                <div className="form-group"><label>Ucret (TL)</label><input className="input" type="number" step="0.01" value={form.price} onChange={(e) => setForm({...form, price: e.target.value})} /></div>
+                <div className="form-group"><label>Teknisyen</label><input className="input" value={form.technician} onChange={(e) => setForm({...form, technician: e.target.value})} /></div>
                 <div className="form-group">
-                  <label className="label">Maliyet (TL)</label>
-                  <input type="number" className="input" value={cost} min={0} onChange={function(e) { setCost(Number(e.target.value)) }} />
-                </div>
-                <div className="form-group">
-                  <label className="label">Fiyat (TL)</label>
-                  <input type="number" className="input" value={price} min={0} onChange={function(e) { setPrice(Number(e.target.value)) }} />
-                </div>
-                <div className="form-group md:col-span-2">
-                  <label className="label">Ariza</label>
-                  <textarea className="input" rows={3} value={problem} onChange={function(e) { setProblem(e.target.value) }} />
-                </div>
-                <div className="form-group md:col-span-2">
-                  <label className="label">Notlar</label>
-                  <textarea className="input" rows={2} value={notes} onChange={function(e) { setNotes(e.target.value) }} />
+                  <label>Durum</label>
+                  <select className="select" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>
+                    <option>Beklemede</option><option>Islemde</option><option>Tamamlandi</option><option>Teslim Edildi</option><option>Iptal</option>
+                  </select>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
-                <button type="submit" className="btn btn-primary">{editDevice ? "Guncelle" : "Kaydet"}</button>
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
+                <button type="submit" className="btn btn-primary">Kaydet</button>
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="spinner"></div>
-      ) : filteredDevices.length === 0 ? (
-        <div className="empty-state">Cihaz bulunamadi.</div>
-      ) : (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Tarih</th>
-                <th>Musteri</th>
-                <th>Marka/Model</th>
-                <th>IMEI</th>
-                <th>Ariza</th>
-                <th>Durum</th>
-                <th>Fiyat</th>
-                <th>Islemler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDevices.map(function(device) {
-                return (
-                  <tr key={device.id}>
-                    <td>{formatDate(device.created_at)}</td>
-                    <td>{device.customer_name}<br/><small>{device.customer_phone}</small></td>
-                    <td>{device.brand} {device.model}</td>
-                    <td>{device.imei || "-"}</td>
-                    <td>{device.problem || "-"}</td>
-                    <td><span className={"badge " + getStatusBadgeClass(device.status)}>{getStatusText(device.status)}</span></td>
-                    <td>{formatPrice(device.price)}</td>
-                    <td>
-                      <div className="flex gap-2">
-                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(device) }}>Duzenle</button>
-                        <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(device.id) }}>Sil</button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
         </div>
       )}
     </div>

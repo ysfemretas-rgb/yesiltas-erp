@@ -1,24 +1,22 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
 interface Sale {
   id: string
-  customer_name: string
-  customer_phone: string
+  customer_id: string
   item_name: string
+  item_type: string
   quantity: number
   unit_price: number
   total_price: number
-  cash: number
+  payment_method: string
+  installments: number
   remaining_amount: number
   warranty_months: number
   warranty_end_date: string
   created_at: string
-  imei: string
-  brand: string
-  model: string
 }
 
 interface Customer {
@@ -30,558 +28,403 @@ interface Customer {
 interface InventoryItem {
   id: string
   name: string
-  stock: number
-  price: number
+  category: string
+  sale_price: number
+  quantity: number
 }
 
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([])
+  const [filteredSales, setFilteredSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [showDevices, setShowDevices] = useState(false)
-  const [search, setSearch] = useState("")
-  const [editSale, setEditSale] = useState<Sale | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('Tumu')
+  const [warrantyFilter, setWarrantyFilter] = useState('Tumu')
+  const [activeTab, setActiveTab] = useState<'sales' | 'devices'>('sales')
 
-  const [customerId, setCustomerId] = useState("")
-  const [customerName, setCustomerName] = useState("")
-  const [customerPhone, setCustomerPhone] = useState("")
-  const [itemName, setItemName] = useState("")
-  const [quantity, setQuantity] = useState(1)
-  const [unitPrice, setUnitPrice] = useState(0)
-  const [cash, setCash] = useState(0)
-  const [warrantyMonths, setWarrantyMonths] = useState(12)
-  const [imei, setImei] = useState("")
-  const [brand, setBrand] = useState("")
-  const [model, setModel] = useState("")
+  const [form, setForm] = useState({
+    customer_id: '', item_name: '', item_type: 'Cihaz', quantity: '1',
+    unit_price: '', payment_method: 'Nakit', installments: '1',
+    warranty_months: '12', selected_inventory: ''
+  })
 
-  useEffect(function() {
-    fetchSales()
-    fetchCustomers()
-    fetchInventory()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
-  async function fetchSales() {
+  useEffect(() => {
+    var result = sales
+    if (search) {
+      var term = search.toLowerCase()
+      result = result.filter(function(s) {
+        return s.item_name.toLowerCase().indexOf(term) !== -1
+      })
+    }
+    if (typeFilter !== 'Tumu') {
+      result = result.filter(function(s) { return s.item_type === typeFilter })
+    }
+    if (warrantyFilter !== 'Tumu') {
+      result = result.filter(function(s) {
+        if (warrantyFilter === 'Aktif') return s.warranty_end_date && new Date(s.warranty_end_date) > new Date()
+        if (warrantyFilter === 'Sona Erdi') return !s.warranty_end_date || new Date(s.warranty_end_date) <= new Date()
+        return true
+      })
+    }
+    setFilteredSales(result)
+  }, [search, typeFilter, warrantyFilter, sales])
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type })
+    setTimeout(function() { setToast(null) }, 3000)
+  }
+
+  const loadData = async () => {
     setLoading(true)
-    const result = await supabase.from("sales").select("*").order("created_at", { ascending: false })
-    if (result.data) setSales(result.data)
+    const [salesRes, customersRes, inventoryRes] = await Promise.all([
+      supabase.from('sales').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('id, name, phone').order('name'),
+      supabase.from('inventory').select('id, name, category, sale_price, quantity').gt('quantity', 0)
+    ])
+    if (salesRes.data) setSales(salesRes.data)
+    if (customersRes.data) setCustomers(customersRes.data)
+    if (inventoryRes.data) setInventory(inventoryRes.data)
     setLoading(false)
   }
 
-  async function fetchCustomers() {
-    const result = await supabase.from("customers").select("id, name, phone").order("name")
-    if (result.data) setCustomers(result.data)
-  }
-
-  async function fetchInventory() {
-    const result = await supabase.from("inventory").select("id, name, stock, price").order("name")
-    if (result.data) setInventory(result.data)
-  }
-
-  function handleCustomerChange(id: string) {
-    setCustomerId(id)
-    for (let i = 0; i < customers.length; i++) {
-      if (customers[i].id === id) {
-        setCustomerName(customers[i].name)
-        setCustomerPhone(customers[i].phone)
+  const handleInventorySelect = (inventoryId: string) => {
+    for (var i = 0; i < inventory.length; i++) {
+      if (inventory[i].id === inventoryId) {
+        var item = inventory[i]
+        var newType = 'Cihaz'
+        if (item.category === 'Aksesuar') newType = 'Aksesuar'
+        else if (item.category === 'Parca') newType = 'Parca'
+        setForm({
+          ...form,
+          selected_inventory: inventoryId,
+          item_name: item.name,
+          item_type: newType,
+          unit_price: item.sale_price.toString()
+        })
         break
       }
     }
   }
 
-  function handleItemChange(name: string) {
-    setItemName(name)
-    for (let i = 0; i < inventory.length; i++) {
-      if (inventory[i].name === name) {
-        setUnitPrice(inventory[i].price)
-        break
-      }
-    }
-  }
-
-  function calculateTotal() {
-    return quantity * unitPrice
-  }
-
-  function calculateRemaining() {
-    return calculateTotal() - cash
-  }
-
-  function calculateWarrantyEnd() {
-    const date = new Date()
-    date.setMonth(date.getMonth() + warrantyMonths)
-    return date.toISOString().split("T")[0]
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const total = calculateTotal()
-    const remaining = calculateRemaining()
-    const warrantyEnd = calculateWarrantyEnd()
+    var qty = parseInt(form.quantity) || 1
+    var price = parseFloat(form.unit_price) || 0
+    var total = qty * price
+    var installments = parseInt(form.installments) || 1
+    var warrantyMonths = parseInt(form.warranty_months) || 12
+    var remaining = 0
+    if (form.payment_method === 'Taksit' || form.payment_method === 'Borc') {
+      remaining = total
+    }
 
-    const saleData = {
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      item_name: itemName,
-      quantity: quantity,
-      unit_price: unitPrice,
+    var warrantyEnd = new Date()
+    warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
+    var warrantyEndStr = warrantyEnd.toISOString().split('T')[0]
+
+    var { data: saleData, error } = await supabase.from('sales').insert([{
+      customer_id: form.customer_id || null,
+      item_name: form.item_name,
+      item_type: form.item_type,
+      quantity: qty,
+      unit_price: price,
       total_price: total,
-      cash: cash,
+      payment_method: form.payment_method,
+      installments: installments,
       remaining_amount: remaining,
       warranty_months: warrantyMonths,
-      warranty_end_date: warrantyEnd,
-      imei: imei,
-      brand: brand,
-      model: model,
+      warranty_end_date: warrantyEndStr
+    }]).select()
+
+    if (error) {
+      showToast('Hata: ' + error.message, 'error')
+      return
     }
 
-    if (editSale) {
-      await supabase.from("sales").update(saleData).eq("id", editSale.id)
-    } else {
-      await supabase.from("sales").insert([saleData])
-    }
-
-    if (!editSale) {
-      for (let i = 0; i < inventory.length; i++) {
-        if (inventory[i].name === itemName) {
-          await supabase.from("inventory").update({ stock: inventory[i].stock - quantity }).eq("id", inventory[i].id)
+    if (form.selected_inventory) {
+      for (var i = 0; i < inventory.length; i++) {
+        if (inventory[i].id === form.selected_inventory) {
+          await supabase.from('inventory').update({ quantity: inventory[i].quantity - qty }).eq('id', form.selected_inventory)
           break
         }
       }
     }
 
-    if (remaining > 0) {
-      await supabase.from("debts").insert([{
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        amount: remaining,
-        description: itemName + " satis borcu",
-        status: "unpaid",
+    if (remaining === 0) {
+      await supabase.from('transactions').insert([{
+        type: 'gelir',
+        category: 'Satis',
+        amount: total,
+        description: form.item_name + ' - ' + form.payment_method,
+        related_id: saleData && saleData[0] ? saleData[0].id : null,
+        related_table: 'sales'
       }])
     }
 
-    await supabase.from("warranties").insert([{
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      item_name: itemName,
-      imei: imei,
-      brand: brand,
-      model: model,
-      warranty_months: warrantyMonths,
-      warranty_end_date: warrantyEnd,
-      status: "active",
-    }])
-
-    resetForm()
-    setShowForm(false)
-    fetchSales()
-    fetchInventory()
-  }
-
-  function resetForm() {
-    setCustomerId("")
-    setCustomerName("")
-    setCustomerPhone("")
-    setItemName("")
-    setQuantity(1)
-    setUnitPrice(0)
-    setCash(0)
-    setWarrantyMonths(12)
-    setImei("")
-    setBrand("")
-    setModel("")
-    setEditSale(null)
-  }
-
-  function handleEdit(sale: Sale) {
-    setEditSale(sale)
-    setCustomerName(sale.customer_name)
-    setCustomerPhone(sale.customer_phone)
-    setItemName(sale.item_name)
-    setQuantity(sale.quantity)
-    setUnitPrice(sale.unit_price)
-    setCash(sale.cash)
-    setWarrantyMonths(sale.warranty_months)
-    setImei(sale.imei || "")
-    setBrand(sale.brand || "")
-    setModel(sale.model || "")
-    setShowForm(true)
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("Silmek istediginize emin misiniz?")) return
-    await supabase.from("sales").delete().eq("id", id)
-    fetchSales()
-  }
-
-  function getFilteredSales() {
-    if (!search) return sales
-    const filtered: Sale[] = []
-    const lowerSearch = search.toLowerCase()
-    for (let i = 0; i < sales.length; i++) {
-      const s = sales[i]
-      if (
-        (s.customer_name && s.customer_name.toLowerCase().indexOf(lowerSearch) !== -1) ||
-        (s.customer_phone && s.customer_phone.indexOf(search) !== -1) ||
-        (s.item_name && s.item_name.toLowerCase().indexOf(lowerSearch) !== -1) ||
-        (s.imei && s.imei.indexOf(search) !== -1) ||
-        (s.brand && s.brand.toLowerCase().indexOf(lowerSearch) !== -1) ||
-        (s.model && s.model.toLowerCase().indexOf(lowerSearch) !== -1)
-      ) {
-        filtered.push(s)
+    if (saleData && saleData[0]) {
+      var customerName = ''
+      for (var i = 0; i < customers.length; i++) {
+        if (customers[i].id === form.customer_id) {
+          customerName = customers[i].name
+          break
+        }
       }
+      await supabase.from('warranties').insert([{
+        sale_id: saleData[0].id,
+        customer_id: form.customer_id || null,
+        customer_name: customerName,
+        item_name: form.item_name,
+        warranty_months: warrantyMonths,
+        warranty_start: new Date().toISOString().split('T')[0],
+        warranty_end: warrantyEndStr,
+        status: 'Aktif'
+      }])
     }
-    return filtered
+
+    if (remaining > 0) {
+      var dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      await supabase.from('debts').insert([{
+        customer_id: form.customer_id || null,
+        source_type: 'sale',
+        source_id: saleData && saleData[0] ? saleData[0].id : null,
+        total_amount: total,
+        paid_amount: 0,
+        remaining_amount: remaining,
+        due_date: dueDate.toISOString().split('T')[0]
+      }])
+    }
+
+    showToast('Satis kaydedildi')
+    setShowModal(false)
+    setForm({ customer_id: '', item_name: '', item_type: 'Cihaz', quantity: '1', unit_price: '', payment_method: 'Nakit', installments: '1', warranty_months: '12', selected_inventory: '' })
+    loadData()
   }
 
-  function formatDate(dateStr: string) {
-    if (!dateStr) return "-"
-    const d = new Date(dateStr)
-    return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
+  const isWarrantyActive = (endDate: string) => {
+    if (!endDate) return false
+    return new Date(endDate) > new Date()
   }
 
-  function formatPrice(price: number) {
-    return price.toLocaleString("tr-TR") + " TL"
+  const daysUntilExpiry = (endDate: string) => {
+    if (!endDate) return 0
+    var diff = new Date(endDate).getTime() - new Date().getTime()
+    return Math.ceil(diff / (1000 * 60 * 60 * 24))
   }
 
-  const filteredSales = getFilteredSales()
-  let totalRevenue = 0
-  let totalRemaining = 0
-  for (let i = 0; i < sales.length; i++) {
-    totalRevenue = totalRevenue + sales[i].total_price
-    totalRemaining = totalRemaining + sales[i].remaining_amount
+  var typeOptions = ['Tumu']
+  for (var i = 0; i < sales.length; i++) {
+    var t = sales[i].item_type
+    var found = false
+    for (var j = 0; j < typeOptions.length; j++) {
+      if (typeOptions[j] === t) { found = true; break }
+    }
+    if (!found) typeOptions.push(t)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="spinner" />
+      </div>
+    )
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Satis Yonetimi</h1>
-        <div className="flex gap-2">
-          <button
-            className="btn btn-secondary"
-            onClick={function() { setShowDevices(!showDevices) }}
-          >
-            {showDevices ? "Satislari Goster" : "Satilan Cihazlar"}
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={function() { resetForm(); setShowForm(true) }}
-          >
-            + Yeni Satis
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Toplam Satis</h3>
-          </div>
-          <div className="card-content">
-            <p className="text-2xl font-bold">{sales.length}</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Toplam Ciro</h3>
-          </div>
-          <div className="card-content">
-            <p className="text-2xl font-bold text-green-600">{formatPrice(totalRevenue)}</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Toplam Borc</h3>
-          </div>
-          <div className="card-content">
-            <p className="text-2xl font-bold text-red-600">{formatPrice(totalRemaining)}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-4">
-        <input
-          type="text"
-          className="input w-full md:w-96"
-          placeholder="Musteri, urun, IMEI, marka veya model ara"
-          value={search}
-          onChange={function(e) { setSearch(e.target.value) }}
-        />
-      </div>
-
-      {showForm && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h2 className="modal-title">{editSale ? "Satis Duzenle" : "Yeni Satis"}</h2>
-              <button className="modal-close" onClick={function() { setShowForm(false) }}>X</button>
-            </div>
-            <form onSubmit={handleSubmit} className="modal-body">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="label">Musteri Sec</label>
-                  <select
-                    className="input"
-                    value={customerId}
-                    onChange={function(e) { handleCustomerChange(e.target.value) }}
-                  >
-                    <option value="">Yeni Musteri / Sec</option>
-                    {customers.map(function(c) {
-                      return <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>
-                    })}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="label">Musteri Adi</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={customerName}
-                    onChange={function(e) { setCustomerName(e.target.value) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Telefon</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={customerPhone}
-                    onChange={function(e) { setCustomerPhone(e.target.value) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Urun Sec</label>
-                  <select
-                    className="input"
-                    value={itemName}
-                    onChange={function(e) { handleItemChange(e.target.value) }}
-                  >
-                    <option value="">Urun Sec</option>
-                    {inventory.map(function(item) {
-                      return <option key={item.id} value={item.name}>{item.name} (Stok: {item.stock})</option>
-                    })}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="label">Urun Adi</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={itemName}
-                    onChange={function(e) { setItemName(e.target.value) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Adet</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={quantity}
-                    min={1}
-                    onChange={function(e) { setQuantity(Number(e.target.value)) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Birim Fiyat (TL)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={unitPrice}
-                    min={0}
-                    onChange={function(e) { setUnitPrice(Number(e.target.value)) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Pesinat (TL)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={cash}
-                    min={0}
-                    onChange={function(e) { setCash(Number(e.target.value)) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Toplam</label>
-                  <input
-                    type="text"
-                    className="input bg-gray-100"
-                    value={formatPrice(calculateTotal())}
-                    readOnly
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Kalan Borc</label>
-                  <input
-                    type="text"
-                    className="input bg-gray-100"
-                    value={formatPrice(calculateRemaining())}
-                    readOnly
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Garanti (Ay)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={warrantyMonths}
-                    min={0}
-                    onChange={function(e) { setWarrantyMonths(Number(e.target.value)) }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Garanti Bitis</label>
-                  <input
-                    type="text"
-                    className="input bg-gray-100"
-                    value={formatDate(calculateWarrantyEnd())}
-                    readOnly
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">IMEI</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={imei}
-                    onChange={function(e) { setImei(e.target.value) }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Marka</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={brand}
-                    onChange={function(e) { setBrand(e.target.value) }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label">Model</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={model}
-                    onChange={function(e) { setModel(e.target.value) }}
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>Iptal</button>
-                <button type="submit" className="btn btn-primary">{editSale ? "Guncelle" : "Kaydet"}</button>
-              </div>
-            </form>
-          </div>
+    <div className="space-y-4">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg`}>
+          {toast.message}
         </div>
       )}
 
-      {showDevices ? (
-        <div>
-          <h2 className="text-xl font-bold mb-4">Satilan Cihazlar</h2>
-          {loading ? (
-            <div className="spinner"></div>
-          ) : filteredSales.length === 0 ? (
-            <div className="empty-state">Satilan cihaz bulunamadi.</div>
-          ) : (
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Marka</th>
-                    <th>Model</th>
-                    <th>IMEI</th>
-                    <th>Musteri</th>
-                    <th>Telefon</th>
-                    <th>Garanti Bitis</th>
-                    <th>Durum</th>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-white">Satis (POS)</h1>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-sm">Yeni Satis</button>
+      </div>
+
+      <div className="flex gap-4 border-b border-[#334155]">
+        <button 
+          onClick={() => setActiveTab('sales')}
+          className={`pb-2 px-1 font-medium ${activeTab === 'sales' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500'}`}
+        >Tum Satislar</button>
+        <button 
+          onClick={() => setActiveTab('devices')}
+          className={`pb-2 px-1 font-medium ${activeTab === 'devices' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500'}`}
+        >Satilan Cihazlar</button>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <input type="text" className="input max-w-xs" placeholder="Urun ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select className="select w-32" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          {typeOptions.map(function(t) { return <option key={t}>{t}</option> })}
+        </select>
+        <select className="select w-36" value={warrantyFilter} onChange={(e) => setWarrantyFilter(e.target.value)}>
+          <option value="Tumu">Tum Garantiler</option>
+          <option value="Aktif">Aktif Garanti</option>
+          <option value="Sona Erdi">Sona Eren</option>
+        </select>
+      </div>
+
+      {activeTab === 'sales' && (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Urun</th><th>Tip</th><th>Musteri</th><th>Adet</th>
+                <th>Birim Fiyat</th><th>Toplam</th><th>Odeme</th><th>Garanti</th><th>Tarih</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSales.map((sale) => {
+                var customer = null
+                for (var i = 0; i < customers.length; i++) {
+                  if (customers[i].id === sale.customer_id) { customer = customers[i]; break }
+                }
+                return (
+                  <tr key={sale.id}>
+                    <td className="font-medium text-white">{sale.item_name}</td>
+                    <td><span className="badge badge-blue">{sale.item_type}</span></td>
+                    <td className="text-slate-300">{customer ? customer.name : 'Bilinmiyor'}</td>
+                    <td className="text-slate-300">{sale.quantity}</td>
+                    <td className="text-slate-300">{sale.unit_price ? sale.unit_price.toLocaleString('tr-TR') : '0'} TL</td>
+                    <td className="text-slate-300">{sale.total_price ? sale.total_price.toLocaleString('tr-TR') : '0'} TL</td>
+                    <td>
+                      {sale.payment_method}
+                      {sale.remaining_amount > 0 && <div className="text-xs text-red-400">Kalan: {sale.remaining_amount ? sale.remaining_amount.toLocaleString('tr-TR') : '0'} TL</div>}
+                    </td>
+                    <td className="text-slate-300">{sale.warranty_months} ay</td>
+                    <td className="text-slate-400 text-sm">{sale.created_at ? new Date(sale.created_at).toLocaleDateString('tr-TR') : '-'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredSales.map(function(sale) {
-                    let isExpired = false
-                    if (sale.warranty_end_date) {
-                      isExpired = new Date(sale.warranty_end_date) < new Date()
-                    }
-                    return (
-                      <tr key={sale.id}>
-                        <td>{sale.brand || "-"}</td>
-                        <td>{sale.model || "-"}</td>
-                        <td>{sale.imei || "-"}</td>
-                        <td>{sale.customer_name}</td>
-                        <td>{sale.customer_phone}</td>
-                        <td>{formatDate(sale.warranty_end_date)}</td>
-                        <td>
-                          <span className={"badge " + (isExpired ? "badge-red" : "badge-green")}>
-                            {isExpired ? "Suresi Doldu" : "Aktif"}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                )
+              })}
+            </tbody>
+          </table>
+          {filteredSales.length === 0 && <div className="empty-state"><p>Satis bulunamadi</p></div>}
+        </div>
+      )}
+
+      {activeTab === 'devices' && (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Cihaz</th><th>Musteri</th><th>Tutar</th><th>Odeme</th>
+                <th>Garanti Durumu</th><th>Kalan Sure</th><th>Satis Tarihi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSales.filter(function(s) { return s.item_type === 'Cihaz' }).map((sale) => {
+                var customer = null
+                for (var i = 0; i < customers.length; i++) {
+                  if (customers[i].id === sale.customer_id) { customer = customers[i]; break }
+                }
+                var active = isWarrantyActive(sale.warranty_end_date)
+                var daysLeft = daysUntilExpiry(sale.warranty_end_date)
+                return (
+                  <tr key={sale.id}>
+                    <td className="font-medium text-white">{sale.item_name}</td>
+                    <td className="text-slate-300">
+                      {customer ? customer.name : 'Bilinmiyor'}
+                      <br/><span className="text-xs text-slate-500">{customer ? customer.phone : ''}</span>
+                    </td>
+                    <td className="text-slate-300">{sale.total_price ? sale.total_price.toLocaleString('tr-TR') : '0'} TL</td>
+                    <td>
+                      {sale.payment_method}
+                      {sale.remaining_amount > 0 && <div className="text-xs text-red-400">Kalan: {sale.remaining_amount ? sale.remaining_amount.toLocaleString('tr-TR') : '0'} TL</div>}
+                    </td>
+                    <td>
+                      <span className={`badge ${active ? 'badge-green' : 'badge-red'}`}>
+                        {active ? 'Aktif' : 'Sona Erdi'}
+                      </span>
+                    </td>
+                    <td className={daysLeft < 30 ? 'text-red-400' : 'text-slate-300'}>
+                      {active ? daysLeft + ' gun' : 'Sona erdi'}
+                    </td>
+                    <td className="text-slate-400 text-sm">{sale.created_at ? new Date(sale.created_at).toLocaleDateString('tr-TR') : '-'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          {filteredSales.filter(function(s) { return s.item_type === 'Cihaz' }).length === 0 && (
+            <div className="empty-state"><p>Satilan cihaz bulunamadi</p></div>
           )}
         </div>
-      ) : (
-        <div>
-          {loading ? (
-            <div className="spinner"></div>
-          ) : filteredSales.length === 0 ? (
-            <div className="empty-state">Satis bulunamadi.</div>
-          ) : (
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Tarih</th>
-                    <th>Musteri</th>
-                    <th>Telefon</th>
-                    <th>Urun</th>
-                    <th>Adet</th>
-                    <th>Birim Fiyat</th>
-                    <th>Toplam</th>
-                    <th>Pesinat</th>
-                    <th>Borc</th>
-                    <th>Islemler</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSales.map(function(sale) {
-                    return (
-                      <tr key={sale.id}>
-                        <td>{formatDate(sale.created_at)}</td>
-                        <td>{sale.customer_name}</td>
-                        <td>{sale.customer_phone}</td>
-                        <td>{sale.item_name}</td>
-                        <td>{sale.quantity}</td>
-                        <td>{formatPrice(sale.unit_price)}</td>
-                        <td className="font-bold">{formatPrice(sale.total_price)}</td>
-                        <td className="text-green-600">{formatPrice(sale.cash)}</td>
-                        <td className={sale.remaining_amount > 0 ? "text-red-600 font-bold" : ""}>
-                          {formatPrice(sale.remaining_amount)}
-                        </td>
-                        <td>
-                          <div className="flex gap-2">
-                            <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(sale) }}>Duzenle</button>
-                            <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(sale.id) }}>Sil</button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+      )}
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal max-w-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-lg font-semibold text-white">Yeni Satis</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
             </div>
-          )}
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label>Musteri</label>
+                  <select className="select" value={form.customer_id} onChange={(e) => setForm({...form, customer_id: e.target.value})}>
+                    <option value="">Musteri secin...</option>
+                    {customers.map(function(c) { return <option key={c.id} value={c.id}>{c.name} - {c.phone}</option> })}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Stoktan Sec (Opsiyonel)</label>
+                  <select className="select" value={form.selected_inventory} onChange={(e) => handleInventorySelect(e.target.value)}>
+                    <option value="">Stoktan secin...</option>
+                    {inventory.map(function(i) { return <option key={i.id} value={i.id}>{i.name} - {i.sale_price ? i.sale_price.toLocaleString('tr-TR') : '0'} TL ({i.quantity} adet)</option> })}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Urun Adi *</label>
+                  <input className="input" value={form.item_name} onChange={(e) => setForm({...form, item_name: e.target.value})} required />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label>Tip</label>
+                    <select className="select" value={form.item_type} onChange={(e) => setForm({...form, item_type: e.target.value})}>
+                      <option>Cihaz</option><option>Aksesuar</option><option>Parca</option><option>Servis</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Adet</label>
+                    <input className="input" type="number" min="1" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} required />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Birim Fiyat (TL) *</label>
+                  <input className="input" type="number" step="0.01" value={form.unit_price} onChange={(e) => setForm({...form, unit_price: e.target.value})} required />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label>Odeme Yontemi</label>
+                    <select className="select" value={form.payment_method} onChange={(e) => setForm({...form, payment_method: e.target.value})}>
+                      <option>Nakit</option><option>Kredi Karti</option><option>Havale</option><option>Taksit</option><option>Borc</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Taksit Sayisi</label>
+                    <input className="input" type="number" min="1" value={form.installments} onChange={(e) => setForm({...form, installments: e.target.value})} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Garanti Suresi (Ay)</label>
+                  <input className="input" type="number" min="0" value={form.warranty_months} onChange={(e) => setForm({...form, warranty_months: e.target.value})} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Iptal</button>
+                <button type="submit" className="btn btn-primary">Satis Yap</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
