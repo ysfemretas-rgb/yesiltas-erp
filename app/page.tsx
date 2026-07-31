@@ -40,7 +40,7 @@ const users: UserAccount[] = [
   }
 ]
 
-export default function LoginPage() {
+function LoginPage() {
   const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -66,7 +66,7 @@ export default function LoginPage() {
       }, 500)
     } else {
       setLoading(false)
-      setError("Kullanıcı adı veya şifre hatalı!")
+      setError("Kullanici adi veya sifre hatali!")
     }
   }
 
@@ -75,19 +75,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary mb-4">
-            <Wrench className="h-8 w-8 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-600 mb-4">
+            <Wrench className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">Yeşiltaş ERP</h1>
-          <p className="text-slate-400 mt-2">Teknik Servis Yönetim Sistemi</p>
+          <h1 className="text-3xl font-bold text-white">Yesiltas ERP</h1>
+          <p className="text-slate-400 mt-2">Teknik Servis Yonetim Sistemi</p>
         </div>
 
         <Card className="border-0 shadow-2xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Giriş Yap</CardTitle>
+            <CardTitle className="text-2xl text-center">Giris Yap</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {error && (
@@ -97,12 +97,12 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Kullanıcı Adı</label>
+              <label className="text-sm font-medium">Kullanici Adi</label>
               <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   className="pl-9"
-                  placeholder="Kullanıcı adınızı girin"
+                  placeholder="Kullanici adinizi girin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyPress={handleKeyPress}
@@ -111,20 +111,20 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Şifre</label>
+              <label className="text-sm font-medium">Sifre</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   className="pl-9 pr-10"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Şifrenizi girin"
+                  placeholder="Sifrenizi girin"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyPress={handleKeyPress}
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -133,5 +133,39 @@ export default function LoginPage() {
             </div>
 
             <Button 
-              className="w-full" 
-              on
+              className="w-full bg-blue-600 hover:bg-blue-700" 
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? "Giris yapiliyor..." : "Giris Yap"}
+            </Button>
+
+            <div className="text-center text-sm text-gray-500">
+              <p className="font-medium mb-2">Demo Hesaplar:</p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-center gap-2">
+                  <Badge variant="outline">admin / admin123</Badge>
+                  <span className="text-xs">(Yonetici)</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <Badge variant="outline">teknisyen / tek123</Badge>
+                  <span className="text-xs">(Teknisyen)</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <Badge variant="outline">kasa / kasa123</Badge>
+                  <span className="text-xs">(Kasiyer)</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-gray-500 text-sm mt-8">
+          2024 Yesiltas Teknik Servis. Tum haklari saklidir.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default LoginPage
