@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon } from "lucide-react"
 
 interface InventoryItem {
   id: number
@@ -67,6 +67,12 @@ export default function InventoryPage() {
   const lowStockItems = inventory.filter(item => item.quantity <= item.minQuantity)
   const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
 
+  const updateQuantity = (id: number, delta: number) => {
+    setInventory(inventory.map(item =>
+      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    ))
+  }
+
   const handleAddItem = () => {
     if (!newItem.name || !newItem.sku) return
     const item: InventoryItem = {
@@ -85,34 +91,28 @@ export default function InventoryPage() {
     setIsDialogOpen(false)
   }
 
-  const updateQuantity = (id: number, delta: number) => {
-    setInventory(inventory.map(item =>
-      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-    ))
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Envanter Yönetimi</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Stok Yonetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Yeni Ürün
+              Yeni Urun
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] bg-white">
             <DialogHeader>
-              <DialogTitle>Yeni Envanter Ürünü</DialogTitle>
+              <DialogTitle>Yeni Stok Urunu</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Ürün Adı</label>
+                <label className="text-sm font-medium">Urun Adi</label>
                 <Input
                   value={newItem.name || ""}
                   onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  placeholder="Ürün adı"
+                  placeholder="Urun adi"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -137,7 +137,7 @@ export default function InventoryPage() {
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer">Diğer</SelectItem>
+                      <SelectItem value="Diger">Diger</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -160,7 +160,7 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Birim Fiyat (₺)</label>
+                  <label className="text-sm font-medium">Birim Fiyat</label>
                   <Input
                     type="number"
                     value={newItem.unitPrice || ""}
@@ -170,11 +170,11 @@ export default function InventoryPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tedarikçi</label>
+                  <label className="text-sm font-medium">Tedarikci</label>
                   <Input
                     value={newItem.supplier || ""}
                     onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
-                    placeholder="Tedarikçi adı"
+                    placeholder="Tedarikci adi"
                   />
                 </div>
                 <div className="space-y-2">
@@ -197,7 +197,7 @@ export default function InventoryPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Ürün</CardTitle>
+            <CardTitle className="text-sm font-medium">Toplam Urun</CardTitle>
             <Package className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -215,7 +215,7 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Değer</CardTitle>
+            <CardTitle className="text-sm font-medium">Toplam Deger</CardTitle>
             <Barcode className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -224,7 +224,7 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Kategori Sayısı</CardTitle>
+            <CardTitle className="text-sm font-medium">Kategori Sayisi</CardTitle>
             <Package className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
@@ -238,7 +238,7 @@ export default function InventoryPage() {
           <CardHeader>
             <CardTitle className="text-red-800 flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />
-              Kritik Stok Uyarısı
+              Kritik Stok Uyarisi
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -256,14 +256,14 @@ export default function InventoryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Envanter Listesi</CardTitle>
+          <CardTitle>Stok Listesi</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Ürün adı veya SKU ara..."
+                placeholder="Urun adi veya SKU ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
@@ -274,7 +274,7 @@ export default function InventoryPage() {
                 <SelectValue placeholder="Kategori" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tüm Kategoriler</SelectItem>
+                <SelectItem value="all">Tum Kategoriler</SelectItem>
                 {categories.map((cat) => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
@@ -288,7 +288,7 @@ export default function InventoryPage() {
               const isLowStock = item.quantity <= item.minQuantity
 
               return (
-                <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-200 bg-red-50" : ""}`}>
+                <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-200 bg-red-50" : "bg-white"}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="flex items-center gap-2">
@@ -314,7 +314,7 @@ export default function InventoryPage() {
                         onClick={() => updateQuantity(item.id, -1)}
                         disabled={item.quantity <= 0}
                       >
-                        -
+                        <Minus className="h-3 w-3" />
                       </Button>
                       <span className="font-semibold w-8 text-center">{item.quantity}</span>
                       <Button
@@ -322,7 +322,7 @@ export default function InventoryPage() {
                         size="sm"
                         onClick={() => updateQuantity(item.id, 1)}
                       >
-                        +
+                        <PlusIcon className="h-3 w-3" />
                       </Button>
                     </div>
                     <div className="flex-1">
