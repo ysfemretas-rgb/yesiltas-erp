@@ -1,249 +1,259 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
 
-function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-  return (
-    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-    }`}>
-      <div className="flex items-center gap-2">
-        <span>{type === 'success' ? '✅' : '❌'}</span>
-        <span>{message}</span>
-        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
-      </div>
-    </div>
-  )
+interface InventoryItem {
+  id: string
+  name: string
+  category: string
+  stock: number
+  min_stock: number
+  price: number
+  cost: number
+  supplier: string
+  created_at: string
 }
 
 export default function InventoryPage() {
-  const [items, setItems] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
+  var [items, setItems] = useState<InventoryItem[]>([])
+  var [loading, setLoading] = useState(true)
+  var [showForm, setShowForm] = useState(false)
+  var [search, setSearch] = useState("")
+  var [editItem, setEditItem] = useState<InventoryItem | null>(null)
+  var [filterLowStock, setFilterLowStock] = useState(false)
 
-  const [form, setForm] = useState({ name: '', category: '', quantity: '', unit_price: '', min_stock: '5' })
-  const [editForm, setEditForm] = useState({ id: '', name: '', category: '', quantity: '', unit_price: '', min_stock: '' })
+  // Form state
+  var [name, setName] = useState("")
+  var [category, setCategory] = useState("")
+  var [stock, setStock] = useState(0)
+  var [minStock, setMinStock] = useState(5)
+  var [price, setPrice] = useState(0)
+  var [cost, setCost] = useState(0)
+  var [supplier, setSupplier] = useState("")
 
-  useEffect(() => { loadData() }, [])
+  useEffect(function() {
+    fetchItems()
+  }, [])
 
-  const loadData = async () => {
+  async function fetchItems() {
     setLoading(true)
-    const { data } = await supabase.from('inventory').select('*').order('created_at', { ascending: false })
-    if (data) setItems(data)
+    var result = await supabase.from("inventory").select("*").order("name")
+    if (result.data) setItems(result.data)
     setLoading(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  function resetForm() {
+    setName("")
+    setCategory("")
+    setStock(0)
+    setMinStock(5)
+    setPrice(0)
+    setCost(0)
+    setSupplier("")
+    setEditItem(null)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    try {
-      const qty = parseInt(form.quantity) || 0
-      const price = parseFloat(form.unit_price) || 0
-      const minStock = parseInt(form.min_stock) || 5
-      const { error } = await supabase.from('inventory').insert([{
-        name: form.name, category: form.category, quantity: qty, unit_price: price, min_stock: minStock
-      }])
-      if (error) throw error
-      setToast({ message: 'Ürün eklendi!', type: 'success' })
-      setShowAddModal(false)
-      setForm({ name: '', category: '', quantity: '', unit_price: '', min_stock: '5' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+    var data = {
+      name: name,
+      category: category,
+      stock: stock,
+      min_stock: minStock,
+      price: price,
+      cost: cost,
+      supplier: supplier,
     }
-  }
-
-  const openEditModal = (item: any) => {
-    setEditForm({
-      id: item.id, name: item.name || '', category: item.category || '',
-      quantity: item.quantity?.toString() || '', unit_price: item.unit_price?.toString() || '',
-      min_stock: item.min_stock?.toString() || '5'
-    })
-    setShowEditModal(true)
-  }
-
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const qty = parseInt(editForm.quantity) || 0
-      const price = parseFloat(editForm.unit_price) || 0
-      const minStock = parseInt(editForm.min_stock) || 5
-      const { error } = await supabase.from('inventory').update({
-        name: editForm.name, category: editForm.category, quantity: qty, unit_price: price, min_stock: minStock
-      }).eq('id', editForm.id)
-      if (error) throw error
-      setToast({ message: 'Ürün güncellendi!', type: 'success' })
-      setShowEditModal(false)
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+    if (editItem) {
+      await supabase.from("inventory").update(data).eq("id", editItem.id)
+    } else {
+      await supabase.from("inventory").insert([data])
     }
+    resetForm()
+    setShowForm(false)
+    fetchItems()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
-    try {
-      const { error } = await supabase.from('inventory').delete().eq('id', id)
-      if (error) throw error
-      setToast({ message: 'Ürün silindi!', type: 'success' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+  function handleEdit(item: InventoryItem) {
+    setEditItem(item)
+    setName(item.name)
+    setCategory(item.category || "")
+    setStock(item.stock)
+    setMinStock(item.min_stock || 5)
+    setPrice(item.price || 0)
+    setCost(item.cost || 0)
+    setSupplier(item.supplier || "")
+    setShowForm(true)
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    await supabase.from("inventory").delete().eq("id", id)
+    fetchItems()
+  }
+
+  function getFilteredItems() {
+    var filtered: InventoryItem[] = []
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i]
+      if (filterLowStock && item.stock >= (item.min_stock || 5)) continue
+      if (search) {
+        var lowerSearch = search.toLowerCase()
+        var match = false
+        if (item.name && item.name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (item.category && item.category.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (item.supplier && item.supplier.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (!match) continue
+      }
+      filtered.push(item)
     }
+    return filtered
   }
 
-  const lowStockItems = items.filter(i => i.quantity <= (i.min_stock || 5))
-  const filtered = items.filter(i =>
-    i.name?.toLowerCase().includes(search.toLowerCase()) ||
-    i.category?.toLowerCase().includes(search.toLowerCase())
-  )
+  function formatPrice(price: number) {
+    return price.toLocaleString("tr-TR") + " TL"
+  }
 
-  if (loading && items.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
+  var filtered = getFilteredItems()
+  var lowStockCount = 0
+  var totalValue = 0
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].stock < (items[i].min_stock || 5)) lowStockCount++
+    totalValue = totalValue + items[i].stock * items[i].price
+  }
 
   return (
-    <div className="space-y-4">
-      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Stok</h1>
-        <button onClick={() => setShowAddModal(true)} className="btn btn-primary">+ Yeni Ürün</button>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Stok Yönetimi</h1>
+        <button className="btn btn-primary" onClick={function() { resetForm(); setShowForm(true) }}>
+          + Yeni Ürün
+        </button>
       </div>
 
-      {lowStockItems.length > 0 && (
-        <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-          <div className="flex items-center gap-2 font-semibold text-yellow-400 mb-2">
-            <span>⚠️</span> Düşük Stok Uyarısı ({lowStockItems.length} ürün)
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {lowStockItems.map(item => (
-              <span key={item.id} className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-sm">
-                {item.name} ({item.quantity} adet)
-              </span>
-            ))}
-          </div>
+      {/* İstatistik Kartları */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Toplam Ürün</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold">{items.length}</p></div>
         </div>
-      )}
-
-      <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr><th>Ürün</th><th>Kategori</th><th>Adet</th><th>Birim Fiyat</th><th>Değer</th><th>Min. Stok</th><th>İşlemler</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((item) => {
-              const isLow = item.quantity <= (item.min_stock || 5)
-              return (
-                <tr key={item.id} className={isLow ? 'bg-yellow-500/5' : ''}>
-                  <td className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {isLow && <span className="text-yellow-400">⚠️</span>}
-                      {item.name}
-                    </div>
-                  </td>
-                  <td>{item.category}</td>
-                  <td className={isLow ? 'text-yellow-400 font-bold' : ''}>{item.quantity}</td>
-                  <td>₺{item.unit_price?.toLocaleString('tr-TR')}</td>
-                  <td>₺{(item.quantity * item.unit_price)?.toLocaleString('tr-TR')}</td>
-                  <td>{item.min_stock || 5}</td>
-                  <td>
-                    <div className="flex gap-1">
-                      <button onClick={() => openEditModal(item)} className="btn btn-sm btn-secondary">Düzenle</button>
-                      <button onClick={() => handleDelete(item.id)} className="btn btn-sm btn-danger">Sil</button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Düşük Stok</h3></div>
+          <div className="card-content"><p className={"text-2xl font-bold " + (lowStockCount > 0 ? "text-red-600" : "text-green-600")}>{lowStockCount}</p></div>
+        </div>
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Stok Değeri</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold">{formatPrice(totalValue)}</p></div>
+        </div>
       </div>
-      {filtered.length === 0 && <div className="empty-state"><p>Ürün bulunamadı</p></div>}
 
-      {/* Add Modal */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+      {/* Filtreler */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input type="text" className="input w-full md:w-64" placeholder="Ürün ara..." value={search} onChange={function(e) { setSearch(e.target.value) }} />
+        <button
+          className={"btn " + (filterLowStock ? "btn-danger" : "btn-secondary")}
+          onClick={function() { setFilterLowStock(!filterLowStock) }}
+        >
+          {filterLowStock ? "Tümünü Göster" : "Düşük Stokları Göster"}
+        </button>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <div className="modal-overlay">
+          <div className="modal">
             <div className="modal-header">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Ürün Ekle</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+              <h2 className="modal-title">{editItem ? "Ürün Düzenle" : "Yeni Ürün"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
+            <form onSubmit={handleSubmit} className="modal-body">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label>Ürün Adı *</label>
-                  <input className="input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} required />
+                  <label className="label">Ürün Adı *</label>
+                  <input type="text" className="input" value={name} onChange={function(e) { setName(e.target.value) }} required />
                 </div>
                 <div className="form-group">
-                  <label>Kategori</label>
-                  <input className="input" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})} />
+                  <label className="label">Kategori</label>
+                  <input type="text" className="input" value={category} onChange={function(e) { setCategory(e.target.value) }} />
                 </div>
                 <div className="form-group">
-                  <label>Adet *</label>
-                  <input className="input" type="number" min="0" value={form.quantity} onChange={(e) => setForm({...form, quantity: e.target.value})} required />
+                  <label className="label">Stok *</label>
+                  <input type="number" className="input" value={stock} min={0} onChange={function(e) { setStock(Number(e.target.value)) }} required />
                 </div>
                 <div className="form-group">
-                  <label>Birim Fiyat</label>
-                  <input className="input" type="number" value={form.unit_price} onChange={(e) => setForm({...form, unit_price: e.target.value})} />
+                  <label className="label">Min. Stok</label>
+                  <input type="number" className="input" value={minStock} min={0} onChange={function(e) { setMinStock(Number(e.target.value)) }} />
                 </div>
                 <div className="form-group">
-                  <label>Min. Stok</label>
-                  <input className="input" type="number" value={form.min_stock} onChange={(e) => setForm({...form, min_stock: e.target.value})} />
+                  <label className="label">Satış Fiyatı (TL)</label>
+                  <input type="number" className="input" value={price} min={0} onChange={function(e) { setPrice(Number(e.target.value)) }} />
+                </div>
+                <div className="form-group">
+                  <label className="label">Maliyet (TL)</label>
+                  <input type="number" className="input" value={cost} min={0} onChange={function(e) { setCost(Number(e.target.value)) }} />
+                </div>
+                <div className="form-group md:col-span-2">
+                  <label className="label">Tedarikçi</label>
+                  <input type="text" className="input" value={supplier} onChange={function(e) { setSupplier(e.target.value) }} />
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
+                <button type="submit" className="btn btn-primary">{editItem ? "Güncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Ürün Düzenle</h2>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
-            </div>
-            <form onSubmit={handleEdit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Ürün Adı *</label>
-                  <input className="input" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Kategori</label>
-                  <input className="input" value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>Adet *</label>
-                  <input className="input" type="number" min="0" value={editForm.quantity} onChange={(e) => setEditForm({...editForm, quantity: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Birim Fiyat</label>
-                  <input className="input" type="number" value={editForm.unit_price} onChange={(e) => setEditForm({...editForm, unit_price: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>Min. Stok</label>
-                  <input className="input" type="number" value={editForm.min_stock} onChange={(e) => setEditForm({...editForm, min_stock: e.target.value})} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary">Güncelle</button>
-              </div>
-            </form>
-          </div>
+      {/* Liste */}
+      {loading ? (
+        <div className="spinner"></div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">Ürün bulunamadı.</div>
+      ) : (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Ürün</th>
+                <th>Kategori</th>
+                <th>Stok</th>
+                <th>Min. Stok</th>
+                <th>Fiyat</th>
+                <th>Maliyet</th>
+                <th>Tedarikçi</th>
+                <th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(function(item) {
+                var isLow = item.stock < (item.min_stock || 5)
+                return (
+                  <tr key={item.id}>
+                    <td className="font-medium">{item.name}</td>
+                    <td>{item.category || "-"}</td>
+                    <td>
+                      <span className={"badge " + (isLow ? "badge-red" : "badge-green")}>
+                        {item.stock}
+                      </span>
+                    </td>
+                    <td>{item.min_stock || 5}</td>
+                    <td>{formatPrice(item.price || 0)}</td>
+                    <td>{formatPrice(item.cost || 0)}</td>
+                    <td>{item.supplier || "-"}</td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(item) }}>Düzenle</button>
+                        <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(item.id) }}>Sil</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

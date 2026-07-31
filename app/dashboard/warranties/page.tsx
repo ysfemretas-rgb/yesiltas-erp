@@ -1,204 +1,302 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
 
-function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-  return (
-    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-    }`}>
-      <div className="flex items-center gap-2">
-        <span>{type === 'success' ? '✅' : '❌'}</span>
-        <span>{message}</span>
-        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
-      </div>
-    </div>
-  )
+interface Warranty {
+  id: string
+  customer_name: string
+  customer_phone: string
+  item_name: string
+  imei: string
+  brand: string
+  model: string
+  warranty_months: number
+  warranty_end_date: string
+  status: string
+  created_at: string
 }
 
 export default function WarrantiesPage() {
-  const [warranties, setWarranties] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [showAddModal, setShowAddModal] = useState(false)
+  var [warranties, setWarranties] = useState<Warranty[]>([])
+  var [loading, setLoading] = useState(true)
+  var [showForm, setShowForm] = useState(false)
+  var [search, setSearch] = useState("")
+  var [editWarranty, setEditWarranty] = useState<Warranty | null>(null)
+  var [filterStatus, setFilterStatus] = useState("all")
 
-  const [form, setForm] = useState({
-    customer_name: '', item_name: '', warranty_months: '12', warranty_end_date: '', status: 'Aktif'
-  })
+  // Form state
+  var [customerName, setCustomerName] = useState("")
+  var [customerPhone, setCustomerPhone] = useState("")
+  var [itemName, setItemName] = useState("")
+  var [imei, setImei] = useState("")
+  var [brand, setBrand] = useState("")
+  var [model, setModel] = useState("")
+  var [warrantyMonths, setWarrantyMonths] = useState(12)
+  var [status, setStatus] = useState("active")
 
-  useEffect(() => { loadData() }, [])
+  useEffect(function() {
+    fetchWarranties()
+  }, [])
 
-  const loadData = async () => {
+  async function fetchWarranties() {
     setLoading(true)
-    const { data } = await supabase.from('warranties').select('*').order('created_at', { ascending: false })
-    if (data) setWarranties(data)
+    var result = await supabase.from("warranties").select("*").order("created_at", { ascending: false })
+    if (result.data) setWarranties(result.data)
     setLoading(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  function resetForm() {
+    setCustomerName("")
+    setCustomerPhone("")
+    setItemName("")
+    setImei("")
+    setBrand("")
+    setModel("")
+    setWarrantyMonths(12)
+    setStatus("active")
+    setEditWarranty(null)
+  }
+
+  function calculateWarrantyEnd() {
+    var date = new Date()
+    date.setMonth(date.getMonth() + warrantyMonths)
+    return date.toISOString().split("T")[0]
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    try {
-      const months = parseInt(form.warranty_months) || 12
-      let endDate = form.warranty_end_date
-      if (!endDate) {
-        const d = new Date()
-        d.setMonth(d.getMonth() + months)
-        endDate = d.toISOString().split('T')[0]
+    var data = {
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      item_name: itemName,
+      imei: imei,
+      brand: brand,
+      model: model,
+      warranty_months: warrantyMonths,
+      warranty_end_date: calculateWarrantyEnd(),
+      status: status,
+    }
+    if (editWarranty) {
+      await supabase.from("warranties").update(data).eq("id", editWarranty.id)
+    } else {
+      await supabase.from("warranties").insert([data])
+    }
+    resetForm()
+    setShowForm(false)
+    fetchWarranties()
+  }
+
+  function handleEdit(w: Warranty) {
+    setEditWarranty(w)
+    setCustomerName(w.customer_name)
+    setCustomerPhone(w.customer_phone)
+    setItemName(w.item_name)
+    setImei(w.imei || "")
+    setBrand(w.brand || "")
+    setModel(w.model || "")
+    setWarrantyMonths(w.warranty_months)
+    setStatus(w.status)
+    setShowForm(true)
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    await supabase.from("warranties").delete().eq("id", id)
+    fetchWarranties()
+  }
+
+  async function handleChangeStatus(id: string, newStatus: string) {
+    await supabase.from("warranties").update({ status: newStatus }).eq("id", id)
+    fetchWarranties()
+  }
+
+  function getFilteredWarranties() {
+    var filtered: Warranty[] = []
+    for (var i = 0; i < warranties.length; i++) {
+      var w = warranties[i]
+      if (filterStatus !== "all" && w.status !== filterStatus) continue
+      if (search) {
+        var lowerSearch = search.toLowerCase()
+        var match = false
+        if (w.customer_name && w.customer_name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (w.customer_phone && w.customer_phone.indexOf(search) !== -1) match = true
+        if (w.item_name && w.item_name.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (w.imei && w.imei.indexOf(search) !== -1) match = true
+        if (w.brand && w.brand.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (w.model && w.model.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (!match) continue
       }
-      const { error } = await supabase.from('warranties').insert([{
-        customer_name: form.customer_name, item_name: form.item_name,
-        warranty_months: months, warranty_end_date: endDate, status: form.status
-      }])
-      if (error) throw error
-      setToast({ message: 'Garanti eklendi!', type: 'success' })
-      setShowAddModal(false)
-      setForm({ customer_name: '', item_name: '', warranty_months: '12', warranty_end_date: '', status: 'Aktif' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+      filtered.push(w)
     }
+    return filtered
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Bu garantiyi silmek istediğinize emin misiniz?')) return
-    try {
-      const { error } = await supabase.from('warranties').delete().eq('id', id)
-      if (error) throw error
-      setToast({ message: 'Garanti silindi!', type: 'success' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
-    }
+  function isExpired(w: Warranty) {
+    if (!w.warranty_end_date) return false
+    return new Date(w.warranty_end_date) < new Date()
   }
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
-    try {
-      const { error } = await supabase.from('warranties').update({ status: newStatus }).eq('id', id)
-      if (error) throw error
-      setToast({ message: 'Durum güncellendi!', type: 'success' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
-    }
+  function formatDate(dateStr: string) {
+    if (!dateStr) return "-"
+    var d = new Date(dateStr)
+    return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Aktif': return 'badge-green'
-      case 'Süresi Dolmuş': return 'badge-red'
-      case 'İptal': return 'badge-gray'
-      default: return 'badge-blue'
-    }
+  var filtered = getFilteredWarranties()
+  var activeCount = 0
+  var expiredCount = 0
+  for (var i = 0; i < warranties.length; i++) {
+    if (warranties[i].status === "active" && !isExpired(warranties[i])) activeCount++
+    if (isExpired(warranties[i])) expiredCount++
   }
-
-  const activeWarranties = warranties.filter(w => w.status === 'Aktif' && new Date(w.warranty_end_date) > new Date())
-  const expiredWarranties = warranties.filter(w => w.status === 'Aktif' && new Date(w.warranty_end_date) <= new Date())
-
-  const filtered = warranties.filter(w =>
-    w.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-    w.item_name?.toLowerCase().includes(search.toLowerCase())
-  )
-
-  if (loading && warranties.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
 
   return (
-    <div className="space-y-4">
-      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Garantiler</h1>
-        <button onClick={() => setShowAddModal(true)} className="btn btn-primary">+ Yeni Garanti</button>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Garanti Takibi</h1>
+        <button className="btn btn-primary" onClick={function() { resetForm(); setShowForm(true) }}>
+          + Yeni Garanti
+        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="text-2xl font-bold text-emerald-400">{activeWarranties.length}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Aktif Garanti</div>
+      {/* İstatistik Kartları */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Toplam Garanti</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold">{warranties.length}</p></div>
         </div>
-        <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="text-2xl font-bold text-red-400">{expiredWarranties.length}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Süresi Dolmuş</div>
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Aktif</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold text-green-600">{activeCount}</p></div>
         </div>
-        <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="text-2xl font-bold text-blue-400">{warranties.length}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam</div>
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Süresi Dolan</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold text-red-600">{expiredCount}</p></div>
         </div>
       </div>
 
-      <input type="text" className="input max-w-md" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr><th>Müşteri</th><th>Ürün</th><th>Süre</th><th>Bitiş</th><th>Durum</th><th>İşlemler</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((warranty) => {
-              const isExpired = new Date(warranty.warranty_end_date) <= new Date() && warranty.status === 'Aktif'
-              return (
-                <tr key={warranty.id} className={isExpired ? 'bg-red-500/5' : ''}>
-                  <td className="font-medium">{warranty.customer_name}</td>
-                  <td>{warranty.item_name}</td>
-                  <td>{warranty.warranty_months} ay</td>
-                  <td>
-                    {new Date(warranty.warranty_end_date).toLocaleDateString('tr-TR')}
-                    {isExpired && <span className="text-red-400 text-xs ml-2">(Süresi Doldu)</span>}
-                  </td>
-                  <td><span className={`badge ${getStatusColor(warranty.status)}`}>{warranty.status}</span></td>
-                  <td>
-                    <div className="flex gap-1">
-                      {warranty.status === 'Aktif' && (
-                        <button onClick={() => handleStatusChange(warranty.id, 'İptal')} className="btn btn-sm btn-secondary">İptal</button>
-                      )}
-                      <button onClick={() => handleDelete(warranty.id)} className="btn btn-sm btn-danger">Sil</button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      {/* Filtreler */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input type="text" className="input w-full md:w-64" placeholder="Ara..." value={search} onChange={function(e) { setSearch(e.target.value) }} />
+        <select className="input" value={filterStatus} onChange={function(e) { setFilterStatus(e.target.value) }}>
+          <option value="all">Tümü</option>
+          <option value="active">Aktif</option>
+          <option value="expired">Süresi Dolan</option>
+          <option value="cancelled">İptal</option>
+        </select>
       </div>
-      {filtered.length === 0 && <div className="empty-state"><p>Garanti bulunamadı</p></div>}
 
-      {/* Add Modal */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+      {/* Form */}
+      {showForm && (
+        <div className="modal-overlay">
+          <div className="modal">
             <div className="modal-header">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni Garanti Ekle</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+              <h2 className="modal-title">{editWarranty ? "Garanti Düzenle" : "Yeni Garanti"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
+            <form onSubmit={handleSubmit} className="modal-body">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label>Müşteri Adı *</label>
-                  <input className="input" value={form.customer_name} onChange={(e) => setForm({...form, customer_name: e.target.value})} required />
+                  <label className="label">Müşteri Adı *</label>
+                  <input type="text" className="input" value={customerName} onChange={function(e) { setCustomerName(e.target.value) }} required />
                 </div>
                 <div className="form-group">
-                  <label>Ürün Adı *</label>
-                  <input className="input" value={form.item_name} onChange={(e) => setForm({...form, item_name: e.target.value})} required />
+                  <label className="label">Telefon *</label>
+                  <input type="text" className="input" value={customerPhone} onChange={function(e) { setCustomerPhone(e.target.value) }} required />
                 </div>
                 <div className="form-group">
-                  <label>Garanti Süresi (Ay)</label>
-                  <input className="input" type="number" value={form.warranty_months} onChange={(e) => setForm({...form, warranty_months: e.target.value})} />
+                  <label className="label">Ürün Adı *</label>
+                  <input type="text" className="input" value={itemName} onChange={function(e) { setItemName(e.target.value) }} required />
                 </div>
                 <div className="form-group">
-                  <label>Bitiş Tarihi (Opsiyonel)</label>
-                  <input className="input" type="date" value={form.warranty_end_date} onChange={(e) => setForm({...form, warranty_end_date: e.target.value})} />
+                  <label className="label">IMEI</label>
+                  <input type="text" className="input" value={imei} onChange={function(e) { setImei(e.target.value) }} />
+                </div>
+                <div className="form-group">
+                  <label className="label">Marka</label>
+                  <input type="text" className="input" value={brand} onChange={function(e) { setBrand(e.target.value) }} />
+                </div>
+                <div className="form-group">
+                  <label className="label">Model</label>
+                  <input type="text" className="input" value={model} onChange={function(e) { setModel(e.target.value) }} />
+                </div>
+                <div className="form-group">
+                  <label className="label">Garanti Süresi (Ay)</label>
+                  <input type="number" className="input" value={warrantyMonths} min={1} onChange={function(e) { setWarrantyMonths(Number(e.target.value)) }} />
+                </div>
+                <div className="form-group">
+                  <label className="label">Garanti Bitiş</label>
+                  <input type="text" className="input bg-gray-100" value={formatDate(calculateWarrantyEnd())} readOnly />
+                </div>
+                <div className="form-group">
+                  <label className="label">Durum</label>
+                  <select className="input" value={status} onChange={function(e) { setStatus(e.target.value) }}>
+                    <option value="active">Aktif</option>
+                    <option value="expired">Süresi Doldu</option>
+                    <option value="cancelled">İptal</option>
+                  </select>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
+                <button type="submit" className="btn btn-primary">{editWarranty ? "Güncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Liste */}
+      {loading ? (
+        <div className="spinner"></div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">Garanti bulunamadı.</div>
+      ) : (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Müşteri</th>
+                <th>Ürün</th>
+                <th>Marka/Model</th>
+                <th>IMEI</th>
+                <th>Garanti Süresi</th>
+                <th>Bitiş Tarihi</th>
+                <th>Durum</th>
+                <th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(function(w) {
+                var expired = isExpired(w)
+                return (
+                  <tr key={w.id}>
+                    <td>{w.customer_name}<br/><small>{w.customer_phone}</small></td>
+                    <td>{w.item_name}</td>
+                    <td>{w.brand || "-"} {w.model || "-"}</td>
+                    <td>{w.imei || "-"}</td>
+                    <td>{w.warranty_months} ay</td>
+                    <td>{formatDate(w.warranty_end_date)}</td>
+                    <td>
+                      <span className={"badge " + (expired ? "badge-red" : w.status === "active" ? "badge-green" : "badge-gray")}>
+                        {expired ? "Süresi Doldu" : w.status === "active" ? "Aktif" : w.status === "cancelled" ? "İptal" : w.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(w) }}>Düzenle</button>
+                        {w.status === "active" && !expired && (
+                          <button className="btn btn-sm btn-warning" onClick={function() { handleChangeStatus(w.id, "expired") }}>Bitir</button>
+                        )}
+                        <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(w.id) }}>Sil</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

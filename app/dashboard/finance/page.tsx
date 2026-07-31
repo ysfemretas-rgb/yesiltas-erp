@@ -1,290 +1,275 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
 
-function InlineToast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-  return (
-    <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-      type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-    }`}>
-      <div className="flex items-center gap-2">
-        <span>{type === 'success' ? '✅' : '❌'}</span>
-        <span>{message}</span>
-        <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
-      </div>
-    </div>
-  )
+interface Transaction {
+  id: string
+  type: string
+  category: string
+  amount: number
+  description: string
+  date: string
+  created_at: string
 }
 
 export default function FinancePage() {
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [dateFilter, setDateFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
+  var [transactions, setTransactions] = useState<Transaction[]>([])
+  var [loading, setLoading] = useState(true)
+  var [showForm, setShowForm] = useState(false)
+  var [search, setSearch] = useState("")
+  var [editTransaction, setEditTransaction] = useState<Transaction | null>(null)
+  var [filterType, setFilterType] = useState("all")
+  var [dateFrom, setDateFrom] = useState("")
+  var [dateTo, setDateTo] = useState("")
 
-  const [form, setForm] = useState({
-    type: 'income', category: 'Satış', amount: '', description: '',
-    date: new Date().toISOString().split('T')[0]
-  })
+  // Form state
+  var [type, setType] = useState("income")
+  var [category, setCategory] = useState("")
+  var [amount, setAmount] = useState(0)
+  var [description, setDescription] = useState("")
+  var [date, setDate] = useState("")
 
-  const [editForm, setEditForm] = useState({
-    id: '', type: 'income', category: '', amount: '', description: '', date: ''
-  })
+  useEffect(function() {
+    fetchTransactions()
+  }, [])
 
-  useEffect(() => { loadData() }, [])
-
-  const loadData = async () => {
+  async function fetchTransactions() {
     setLoading(true)
-    const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false })
-    if (data) setTransactions(data)
+    var result = await supabase.from("transactions").select("*").order("date", { ascending: false })
+    if (result.data) setTransactions(result.data)
     setLoading(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  function resetForm() {
+    setType("income")
+    setCategory("")
+    setAmount(0)
+    setDescription("")
+    setDate(new Date().toISOString().split("T")[0])
+    setEditTransaction(null)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    try {
-      const amount = parseFloat(form.amount) || 0
-      const { error } = await supabase.from('transactions').insert([{
-        type: form.type, category: form.category, amount: amount,
-        description: form.description, date: form.date
-      }])
-      if (error) throw error
-      setToast({ message: 'İşlem eklendi!', type: 'success' })
-      setShowAddModal(false)
-      setForm({ type: 'income', category: 'Satış', amount: '', description: '', date: new Date().toISOString().split('T')[0] })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+    var data = {
+      type: type,
+      category: category,
+      amount: amount,
+      description: description,
+      date: date,
     }
-  }
-
-  const openEditModal = (transaction: any) => {
-    setEditForm({
-      id: transaction.id, type: transaction.type || 'income',
-      category: transaction.category || '', amount: transaction.amount?.toString() || '',
-      description: transaction.description || '', date: transaction.date || ''
-    })
-    setShowEditModal(true)
-  }
-
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const amount = parseFloat(editForm.amount) || 0
-      const { error } = await supabase.from('transactions').update({
-        type: editForm.type, category: editForm.category, amount: amount,
-        description: editForm.description, date: editForm.date
-      }).eq('id', editForm.id)
-      if (error) throw error
-      setToast({ message: 'İşlem güncellendi!', type: 'success' })
-      setShowEditModal(false)
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+    if (editTransaction) {
+      await supabase.from("transactions").update(data).eq("id", editTransaction.id)
+    } else {
+      await supabase.from("transactions").insert([data])
     }
+    resetForm()
+    setShowForm(false)
+    fetchTransactions()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return
-    try {
-      const { error } = await supabase.from('transactions').delete().eq('id', id)
-      if (error) throw error
-      setToast({ message: 'İşlem silindi!', type: 'success' })
-      loadData()
-    } catch (err: any) {
-      setToast({ message: `HATA: ${err.message}`, type: 'error' })
+  function handleEdit(t: Transaction) {
+    setEditTransaction(t)
+    setType(t.type)
+    setCategory(t.category || "")
+    setAmount(t.amount)
+    setDescription(t.description || "")
+    setDate(t.date ? t.date.split("T")[0] : "")
+    setShowForm(true)
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Silmek istediğinize emin misiniz?")) return
+    await supabase.from("transactions").delete().eq("id", id)
+    fetchTransactions()
+  }
+
+  function getFilteredTransactions() {
+    var filtered: Transaction[] = []
+    for (var i = 0; i < transactions.length; i++) {
+      var t = transactions[i]
+      if (filterType !== "all" && t.type !== filterType) continue
+      if (dateFrom && t.date && t.date < dateFrom) continue
+      if (dateTo && t.date && t.date > dateTo) continue
+      if (search) {
+        var lowerSearch = search.toLowerCase()
+        var match = false
+        if (t.category && t.category.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (t.description && t.description.toLowerCase().indexOf(lowerSearch) !== -1) match = true
+        if (!match) continue
+      }
+      filtered.push(t)
     }
+    return filtered
   }
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0)
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0)
-  const balance = totalIncome - totalExpense
-
-  // Set yerine normal array kullan
-  const categories: string[] = []
-  transactions.forEach(t => {
-    if (t.category && !categories.includes(t.category)) {
-      categories.push(t.category)
+  function getCategories() {
+    var cats: string[] = []
+    for (var i = 0; i < transactions.length; i++) {
+      var cat = transactions[i].category
+      if (cat) {
+        var found = false
+        for (var j = 0; j < cats.length; j++) {
+          if (cats[j] === cat) {
+            found = true
+            break
+          }
+        }
+        if (!found) cats.push(cat)
+      }
     }
-  })
-
-  let filtered = transactions
-  if (search) {
-    const term = search.toLowerCase()
-    filtered = filtered.filter(t => t.description?.toLowerCase().includes(term) || t.category?.toLowerCase().includes(term))
+    return cats
   }
-  if (dateFilter) filtered = filtered.filter(t => t.date === dateFilter)
-  if (typeFilter) filtered = filtered.filter(t => t.type === typeFilter)
-  if (categoryFilter) filtered = filtered.filter(t => t.category === categoryFilter)
 
-  if (loading && transactions.length === 0) return <div className="flex items-center justify-center h-64"><div className="spinner" /></div>
+  function formatDate(dateStr: string) {
+    if (!dateStr) return "-"
+    var d = new Date(dateStr)
+    return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear()
+  }
+
+  function formatPrice(price: number) {
+    return price.toLocaleString("tr-TR") + " TL"
+  }
+
+  var filtered = getFilteredTransactions()
+  var totalIncome = 0
+  var totalExpense = 0
+  for (var i = 0; i < filtered.length; i++) {
+    if (filtered[i].type === "income") totalIncome = totalIncome + filtered[i].amount
+    else totalExpense = totalExpense + filtered[i].amount
+  }
+  var balance = totalIncome - totalExpense
 
   return (
-    <div className="space-y-4">
-      {toast && <InlineToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Kasa</h1>
-        <button onClick={() => setShowAddModal(true)} className="btn btn-primary">+ Yeni İşlem</button>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Finans</h1>
+        <button className="btn btn-primary" onClick={function() { resetForm(); setShowForm(true) }}>
+          + Yeni İşlem
+        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="text-2xl font-bold text-emerald-400">₺{totalIncome.toLocaleString('tr-TR')}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Gelir</div>
+      {/* İstatistik Kartları */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Toplam Gelir</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold text-green-600">{formatPrice(totalIncome)}</p></div>
         </div>
-        <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="text-2xl font-bold text-red-400">₺{totalExpense.toLocaleString('tr-TR')}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Toplam Gider</div>
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Toplam Gider</h3></div>
+          <div className="card-content"><p className="text-2xl font-bold text-red-600">{formatPrice(totalExpense)}</p></div>
         </div>
-        <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className={`text-2xl font-bold ${balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>₺{balance.toLocaleString('tr-TR')}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Bakiye</div>
-        </div>
-      </div>
-
-      <div className="flex gap-4 flex-wrap items-end">
-        <div className="form-group">
-          <label>Tarih</label>
-          <input className="input" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label>Tip</label>
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="">Tümü</option>
-            <option value="income">Gelir</option>
-            <option value="expense">Gider</option>
-          </select>
-        </div>
-        <div className="form-group">
-          <label>Kategori</label>
-          <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="">Tümü</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label>Ara</label>
-          <input className="input" placeholder="Ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Bakiye</h3></div>
+          <div className="card-content"><p className={"text-2xl font-bold " + (balance >= 0 ? "text-green-600" : "text-red-600")}>{formatPrice(balance)}</p></div>
         </div>
       </div>
 
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr><th>Tarih</th><th>Tip</th><th>Kategori</th><th>Tutar</th><th>Açıklama</th><th>İşlemler</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((t) => (
-              <tr key={t.id}>
-                <td>{new Date(t.date).toLocaleDateString('tr-TR')}</td>
-                <td><span className={`badge ${t.type === 'income' ? 'badge-green' : 'badge-red'}`}>{t.type === 'income' ? 'Gelir' : 'Gider'}</span></td>
-                <td>{t.category}</td>
-                <td className={`font-medium ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>₺{t.amount?.toLocaleString('tr-TR')}</td>
-                <td>{t.description}</td>
-                <td>
-                  <div className="flex gap-1">
-                    <button onClick={() => openEditModal(t)} className="btn btn-sm btn-secondary">Düzenle</button>
-                    <button onClick={() => handleDelete(t.id)} className="btn btn-sm btn-danger">Sil</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Filtreler */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input type="text" className="input w-full md:w-48" placeholder="Ara..." value={search} onChange={function(e) { setSearch(e.target.value) }} />
+        <select className="input" value={filterType} onChange={function(e) { setFilterType(e.target.value) }}>
+          <option value="all">Tümü</option>
+          <option value="income">Gelir</option>
+          <option value="expense">Gider</option>
+        </select>
+        <input type="date" className="input" value={dateFrom} onChange={function(e) { setDateFrom(e.target.value) }} />
+        <input type="date" className="input" value={dateTo} onChange={function(e) { setDateTo(e.target.value) }} />
       </div>
-      {filtered.length === 0 && <div className="empty-state"><p>İşlem bulunamadı</p></div>}
 
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+      {/* Form */}
+      {showForm && (
+        <div className="modal-overlay">
+          <div className="modal">
             <div className="modal-header">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Yeni İşlem Ekle</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
+              <h2 className="modal-title">{editTransaction ? "İşlem Düzenle" : "Yeni İşlem"}</h2>
+              <button className="modal-close" onClick={function() { setShowForm(false) }}>×</button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
+            <form onSubmit={handleSubmit} className="modal-body">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label>Tip</label>
-                  <select className="input" value={form.type} onChange={(e) => setForm({...form, type: e.target.value})}>
+                  <label className="label">Tür</label>
+                  <select className="input" value={type} onChange={function(e) { setType(e.target.value) }}>
                     <option value="income">Gelir</option>
                     <option value="expense">Gider</option>
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Kategori *</label>
-                  <input className="input" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})} required />
+                  <label className="label">Kategori</label>
+                  <input type="text" className="input" list="categories" value={category} onChange={function(e) { setCategory(e.target.value) }} required />
+                  <datalist id="categories">
+                    {getCategories().map(function(cat) {
+                      return <option key={cat} value={cat} />
+                    })}
+                  </datalist>
                 </div>
                 <div className="form-group">
-                  <label>Tutar *</label>
-                  <input className="input" type="number" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} required />
+                  <label className="label">Tutar (TL)</label>
+                  <input type="number" className="input" value={amount} min={0} onChange={function(e) { setAmount(Number(e.target.value)) }} required />
                 </div>
                 <div className="form-group">
-                  <label>Açıklama</label>
-                  <input className="input" value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} />
+                  <label className="label">Tarih</label>
+                  <input type="date" className="input" value={date} onChange={function(e) { setDate(e.target.value) }} required />
                 </div>
-                <div className="form-group">
-                  <label>Tarih</label>
-                  <input className="input" type="date" value={form.date} onChange={(e) => setForm({...form, date: e.target.value})} />
+                <div className="form-group md:col-span-2">
+                  <label className="label">Açıklama</label>
+                  <textarea className="input" rows={2} value={description} onChange={function(e) { setDescription(e.target.value) }} />
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
+                <button type="button" className="btn btn-secondary" onClick={function() { setShowForm(false) }}>İptal</button>
+                <button type="submit" className="btn btn-primary">{editTransaction ? "Güncelle" : "Kaydet"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {showEditModal && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>İşlem Düzenle</h2>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-xl">&times;</button>
-            </div>
-            <form onSubmit={handleEdit}>
-              <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label>Tip</label>
-                  <select className="input" value={editForm.type} onChange={(e) => setEditForm({...editForm, type: e.target.value})}>
-                    <option value="income">Gelir</option>
-                    <option value="expense">Gider</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Kategori *</label>
-                  <input className="input" value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Tutar *</label>
-                  <input className="input" type="number" value={editForm.amount} onChange={(e) => setEditForm({...editForm, amount: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Açıklama</label>
-                  <input className="input" value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>Tarih</label>
-                  <input className="input" type="date" value={editForm.date} onChange={(e) => setEditForm({...editForm, date: e.target.value})} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">İptal</button>
-                <button type="submit" className="btn btn-primary">Güncelle</button>
-              </div>
-            </form>
-          </div>
+      {/* Liste */}
+      {loading ? (
+        <div className="spinner"></div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">İşlem bulunamadı.</div>
+      ) : (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Tarih</th>
+                <th>Tür</th>
+                <th>Kategori</th>
+                <th>Açıklama</th>
+                <th>Tutar</th>
+                <th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(function(t) {
+                return (
+                  <tr key={t.id}>
+                    <td>{formatDate(t.date)}</td>
+                    <td>
+                      <span className={"badge " + (t.type === "income" ? "badge-green" : "badge-red")}>
+                        {t.type === "income" ? "Gelir" : "Gider"}
+                      </span>
+                    </td>
+                    <td>{t.category || "-"}</td>
+                    <td>{t.description || "-"}</td>
+                    <td className={t.type === "income" ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+                      {formatPrice(t.amount)}
+                    </td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button className="btn btn-sm btn-secondary" onClick={function() { handleEdit(t) }}>Düzenle</button>
+                        <button className="btn btn-sm btn-danger" onClick={function() { handleDelete(t.id) }}>Sil</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
