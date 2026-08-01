@@ -127,10 +127,10 @@ export default function CustomersPage() {
 
   const handleEditCustomer = () => {
     if (!selectedCustomer) return
-    
+
     const name = newCustomer.name || selectedCustomer.name
     const phone = newCustomer.phone || selectedCustomer.phone
-    
+
     setCustomers(customers.map(c => 
       c.id === selectedCustomer.id 
         ? { ...c, name, phone, phone2: newCustomer.phone2 || "", email: newCustomer.email || "", address: newCustomer.address || "", city: newCustomer.city || c.city, notes: newCustomer.notes || "" }

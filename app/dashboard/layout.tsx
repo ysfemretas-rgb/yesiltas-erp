@@ -22,7 +22,8 @@ import {
   LogOut,
   Moon,
   Sun,
-  Monitor
+  Monitor,
+  UserCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -42,27 +43,39 @@ const menuItems = [
   { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
 ]
 
+interface UserData {
+  username: string
+  name: string
+  role: string
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null)
 
   useEffect(() => {
     // Check saved theme
-    const saved = localStorage.getItem("yt_theme")
-    if (saved === "light") {
+    const savedTheme = localStorage.getItem("yt_theme")
+    if (savedTheme === "light") {
       setDarkMode(false)
       document.documentElement.classList.remove("dark")
     } else {
       setDarkMode(true)
       document.documentElement.classList.add("dark")
     }
+
+    // Check user
+    const userData = localStorage.getItem("yt_user")
+    if (userData) {
+      setCurrentUser(JSON.parse(userData))
+    }
   }, [])
 
   const handleLogout = () => {
     localStorage.removeItem("yt_user")
-    // Force navigation
     window.location.href = "/login"
   }
 
@@ -117,6 +130,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Button>
             </div>
           </div>
+
+          {/* User Greeting */}
+          {currentUser && !collapsed && (
+            <div className="border-b px-3 py-3">
+              <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
+                <UserCircle className="h-8 w-8 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Hos geldiniz,</p>
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {currentUser.role} {currentUser.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Menu */}
           <nav className="flex-1 overflow-y-auto py-2">
