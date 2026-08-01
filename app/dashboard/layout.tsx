@@ -1,10 +1,8 @@
-// app/dashboard/layout.tsx - Sidebar menüyü kompakt yap
-
 "use client"
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { 
   LayoutDashboard, 
   Wrench, 
@@ -21,7 +19,10 @@ import {
   FlaskConical,
   ChevronLeft,
   ChevronRight,
-  Menu
+  LogOut,
+  Moon,
+  Sun,
+  Monitor
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -41,31 +42,68 @@ const menuItems = [
   { href: "/dashboard/settings", icon: Settings, label: "Ayarlar" },
 ]
 
+type Theme = "dark" | "light" | "system"
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const [theme, setTheme] = useState<Theme>("dark")
+
+  const handleLogout = () => {
+    localStorage.removeItem("yt_user")
+    router.push("/login")
+  }
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark"
+    setTheme(next)
+    if (next === "dark") {
+      document.documentElement.classList.add("dark")
+      document.documentElement.classList.remove("light")
+    } else {
+      document.documentElement.classList.remove("dark")
+      document.documentElement.classList.add("light")
+    }
+  }
+
+  const ThemeIcon = theme === "dark" ? Moon : Sun
 
   return (
     <div className="flex h-screen bg-slate-950">
       {/* Sidebar */}
       <aside 
         className={`flex flex-col border-r border-slate-800 bg-slate-900 transition-all duration-300 ${
-          collapsed ? "w-16" : "w-56"
+          collapsed ? "w-16" : "w-60"
         }`}
       >
-        {/* Logo */}
+        {/* Logo + Theme Toggle */}
         <div className="flex h-14 items-center justify-between border-b border-slate-800 px-3">
           {!collapsed && (
-            <span className="text-lg font-bold text-white truncate">Yesiltas ERP</span>
+            <div className="flex items-center gap-2">
+              <Monitor className="h-5 w-5 text-blue-500" />
+              <span className="text-base font-bold text-white truncate">Teknik Servis</span>
+            </div>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCollapsed(!collapsed)}
-            className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
+              title={theme === "dark" ? "Aydinlik Mod" : "Karanlik Mod"}
+            >
+              <ThemeIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCollapsed(!collapsed)}
+              className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* Menu */}
@@ -96,14 +134,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* Footer */}
-        {!collapsed && (
-          <div className="border-t border-slate-800 p-3">
-            <div className="text-xs text-slate-500 text-center">
-              Yesiltas ERP v1.0
-            </div>
-          </div>
-        )}
+        {/* Footer - Logout */}
+        <div className="border-t border-slate-800 p-2">
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className={`w-full text-slate-400 hover:text-red-400 hover:bg-red-900/20 ${
+              collapsed ? "justify-center px-2 h-9" : "justify-start px-3 gap-3 h-9"
+            }`}
+            title={collapsed ? "Cikis Yap" : undefined}
+          >
+            <LogOut className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
+          </Button>
+        </div>
       </aside>
 
       {/* Main Content */}
