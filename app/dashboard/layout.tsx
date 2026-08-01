@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { 
@@ -27,133 +27,146 @@ import {
 import { Button } from "@/components/ui/button"
 
 const menuItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa" },
-  { href: "/dashboard/repairs", icon: Wrench, label: "Tamirler" },
-  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar" },
-  { href: "/dashboard/customers", icon: Users, label: "Musteriler" },
-  { href: "/dashboard/appointments", icon: Calendar, label: "Randevular" },
-  { href: "/dashboard/inventory", icon: Package, label: "Envanter" },
-  { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme" },
-  { href: "/dashboard/finance", icon: DollarSign, label: "Finans" },
-  { href: "/dashboard/warranties", icon: Shield, label: "Garantiler" },
-  { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar" },
-  { href: "/dashboard/staff", icon: Users2, label: "Personel" },
-  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler" },
-  { href: "/dashboard/settings", icon: Settings, label: "Ayarlar" },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
+  { href: "/dashboard/repairs", icon: Wrench, label: "Teknik Servis", color: "text-orange-400" },
+  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar", color: "text-cyan-400" },
+  { href: "/dashboard/customers", icon: Users, label: "Musteriler", color: "text-violet-400" },
+  { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
+  { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
+  { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
+  { href: "/dashboard/finance", icon: DollarSign, label: "Finans", color: "text-green-400" },
+  { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
+  { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
+  { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },
+  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler", color: "text-rose-400" },
+  { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
 ]
-
-type Theme = "dark" | "light" | "system"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
-  const [theme, setTheme] = useState<Theme>("dark")
+  const [darkMode, setDarkMode] = useState(true)
+
+  useEffect(() => {
+    // Check saved theme
+    const saved = localStorage.getItem("yt_theme")
+    if (saved === "light") {
+      setDarkMode(false)
+      document.documentElement.classList.remove("dark")
+    } else {
+      setDarkMode(true)
+      document.documentElement.classList.add("dark")
+    }
+  }, [])
 
   const handleLogout = () => {
     localStorage.removeItem("yt_user")
-    router.push("/login")
+    // Force navigation
+    window.location.href = "/login"
   }
 
   const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark"
-    setTheme(next)
-    if (next === "dark") {
+    const next = !darkMode
+    setDarkMode(next)
+    if (next) {
       document.documentElement.classList.add("dark")
       document.documentElement.classList.remove("light")
+      localStorage.setItem("yt_theme", "dark")
     } else {
       document.documentElement.classList.remove("dark")
       document.documentElement.classList.add("light")
+      localStorage.setItem("yt_theme", "light")
     }
   }
 
-  const ThemeIcon = theme === "dark" ? Moon : Sun
-
   return (
-    <div className="flex h-screen bg-slate-950">
-      {/* Sidebar */}
-      <aside 
-        className={`flex flex-col border-r border-slate-800 bg-slate-900 transition-all duration-300 ${
-          collapsed ? "w-16" : "w-60"
-        }`}
-      >
-        {/* Logo + Theme Toggle */}
-        <div className="flex h-14 items-center justify-between border-b border-slate-800 px-3">
-          {!collapsed && (
-            <div className="flex items-center gap-2">
-              <Monitor className="h-5 w-5 text-blue-500" />
-              <span className="text-base font-bold text-white truncate">Teknik Servis</span>
+    <div className={darkMode ? "dark" : ""}>
+      <div className="flex h-screen bg-background transition-colors">
+        {/* Sidebar */}
+        <aside 
+          className={`flex flex-col border-r bg-card transition-all duration-300 ${
+            collapsed ? "w-16" : "w-60"
+          }`}
+        >
+          {/* Logo + Theme Toggle */}
+          <div className="flex h-14 items-center justify-between border-b px-3">
+            {!collapsed && (
+              <div className="flex items-center gap-2">
+                <Monitor className="h-5 w-5 text-blue-500" />
+                <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleTheme}
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+                title={darkMode ? "Aydinlik Mod" : "Karanlik Mod"}
+              >
+                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCollapsed(!collapsed)}
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </Button>
             </div>
-          )}
-          <div className="flex items-center gap-1">
+          </div>
+
+          {/* Menu */}
+          <nav className="flex-1 overflow-y-auto py-2">
+            {menuItems.map((item) => {
+              const isActive = pathname === item.href
+              const Icon = item.icon
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center mx-2 rounded-md transition-colors ${
+                    collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2 gap-3"
+                  } ${
+                    isActive 
+                      ? "bg-primary/10 text-primary border border-primary/20" 
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? "" : item.color}`} />
+                  {!collapsed && (
+                    <span className="text-sm font-medium truncate">{item.label}</span>
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* Footer - Logout */}
+          <div className="border-t p-2">
             <Button
               variant="ghost"
-              size="sm"
-              onClick={toggleTheme}
-              className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
-              title={theme === "dark" ? "Aydinlik Mod" : "Karanlik Mod"}
+              onClick={handleLogout}
+              className={`w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 ${
+                collapsed ? "justify-center px-2 h-9" : "justify-start px-3 gap-3 h-9"
+              }`}
+              title={collapsed ? "Cikis Yap" : undefined}
             >
-              <ThemeIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCollapsed(!collapsed)}
-              className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              <LogOut className="h-[18px] w-[18px] shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
             </Button>
           </div>
-        </div>
+        </aside>
 
-        {/* Menu */}
-        <nav className="flex-1 overflow-y-auto py-2">
-          {menuItems.map((item) => {
-            const isActive = pathname === item.href
-            const Icon = item.icon
-            
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center mx-2 rounded-md transition-colors ${
-                  collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2 gap-3"
-                } ${
-                  isActive 
-                    ? "bg-blue-600/20 text-blue-400 border border-blue-600/30" 
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-                title={collapsed ? item.label : undefined}
-              >
-                <Icon className="h-[18px] w-[18px] shrink-0" />
-                {!collapsed && (
-                  <span className="text-sm font-medium truncate">{item.label}</span>
-                )}
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* Footer - Logout */}
-        <div className="border-t border-slate-800 p-2">
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            className={`w-full text-slate-400 hover:text-red-400 hover:bg-red-900/20 ${
-              collapsed ? "justify-center px-2 h-9" : "justify-start px-3 gap-3 h-9"
-            }`}
-            title={collapsed ? "Cikis Yap" : undefined}
-          >
-            <LogOut className="h-[18px] w-[18px] shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
-          </Button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-6">{children}</div>
-      </main>
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto bg-background">
+          <div className="p-6">{children}</div>
+        </main>
+      </div>
     </div>
   )
 }
