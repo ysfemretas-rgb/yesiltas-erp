@@ -1,124 +1,114 @@
-'use client'
+// app/dashboard/layout.tsx - Sidebar menüyü kompakt yap
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { 
+  LayoutDashboard, 
+  Wrench, 
+  Package, 
+  ShoppingCart, 
+  Users, 
+  Calendar, 
+  DollarSign, 
+  Shield, 
+  BarChart3, 
+  Users2, 
+  Truck, 
+  Settings,
+  FlaskConical,
+  ChevronLeft,
+  ChevronRight,
+  Menu
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 const menuItems = [
-  { href: '/dashboard', label: 'Ana Panel', icon: '📊' },
-  { href: '/dashboard/sales', label: 'Satış (POS)', icon: '💰' },
-  { href: '/dashboard/devices', label: 'Teknik Servis', icon: '🔧' },
-  { href: '/dashboard/customers', label: 'Müşteriler', icon: '👥' },
-  { href: '/dashboard/appointments', label: 'Randevular', icon: '📅' },
-  { href: '/dashboard/inventory', label: 'Stok', icon: '📦' },
-  { href: '/dashboard/consumables', label: 'Sarf Malzeme', icon: '🔩' },
-  { href: '/dashboard/finance', label: 'Kasa', icon: '💳' },
-  { href: '/dashboard/warranties', label: 'Garantiler', icon: '🛡️' },
-  { href: '/dashboard/staff', label: 'Personel', icon: '👨‍🔧' },
-  { href: '/dashboard/reports', label: 'Raporlar', icon: '📈' },
-  { href: '/dashboard/suppliers', label: 'Tedarikçiler', icon: '🏭' },
-  { href: '/dashboard/settings', label: 'Ayarlar', icon: '⚙️' },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa" },
+  { href: "/dashboard/repairs", icon: Wrench, label: "Tamirler" },
+  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar" },
+  { href: "/dashboard/customers", icon: Users, label: "Musteriler" },
+  { href: "/dashboard/appointments", icon: Calendar, label: "Randevular" },
+  { href: "/dashboard/inventory", icon: Package, label: "Envanter" },
+  { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme" },
+  { href: "/dashboard/finance", icon: DollarSign, label: "Finans" },
+  { href: "/dashboard/warranties", icon: Shield, label: "Garantiler" },
+  { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar" },
+  { href: "/dashboard/staff", icon: Users2, label: "Personel" },
+  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler" },
+  { href: "/dashboard/settings", icon: Settings, label: "Ayarlar" },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [logoUrl, setLogoUrl] = useState('')
-  const [companyName, setCompanyName] = useState('Yeşiltaş Teknoloji')
   const pathname = usePathname()
-  const router = useRouter()
-
-  useEffect(() => { loadSettings() }, [])
-
-  const loadSettings = async () => {
-    try {
-      const { data } = await supabase.from('settings').select('logo_url, company_name').single()
-      if (data) {
-        if (data.logo_url) setLogoUrl(data.logo_url)
-        if (data.company_name) setCompanyName(data.company_name)
-      }
-    } catch (e) {}
-  }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className="flex h-screen bg-[#0f172a]">
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 
-        bg-[#1e293b] border-r border-[#334155]
-        transform transition-transform duration-300 lg:transform-none
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        flex flex-col
-      `}>
-        <div className="p-4 border-b border-[#334155] flex-shrink-0">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
-            ) : (
-              <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-                YT
-              </div>
-            )}
-            <div>
-              <h1 className="font-bold text-sm leading-tight text-white">{companyName}</h1>
-              <p className="text-emerald-500 text-xs">Teknoloji ERP</p>
-            </div>
-          </Link>
+    <div className="flex h-screen bg-slate-950">
+      {/* Sidebar */}
+      <aside 
+        className={`flex flex-col border-r border-slate-800 bg-slate-900 transition-all duration-300 ${
+          collapsed ? "w-16" : "w-56"
+        }`}
+      >
+        {/* Logo */}
+        <div className="flex h-14 items-center justify-between border-b border-slate-800 px-3">
+          {!collapsed && (
+            <span className="text-lg font-bold text-white truncate">Yesiltas ERP</span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
-          {menuItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                pathname === item.href
-                  ? 'bg-emerald-500/15 text-emerald-500'
-                  : 'text-slate-400 hover:bg-[#334155] hover:text-white'
-              }`}
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+        {/* Menu */}
+        <nav className="flex-1 overflow-y-auto py-2">
+          {menuItems.map((item) => {
+            const isActive = pathname === item.href
+            const Icon = item.icon
+            
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center mx-2 rounded-md transition-colors ${
+                  collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2 gap-3"
+                } ${
+                  isActive 
+                    ? "bg-blue-600/20 text-blue-400 border border-blue-600/30" 
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon className="h-[18px] w-[18px] shrink-0" />
+                {!collapsed && (
+                  <span className="text-sm font-medium truncate">{item.label}</span>
+                )}
+              </Link>
+            )
+          })}
         </nav>
 
-        <div className="p-3 border-t border-[#334155] flex-shrink-0 space-y-2">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
-          >
-            <span className="text-lg">🚪</span>
-            <span>Çıkış Yap</span>
-          </button>
-        </div>
+        {/* Footer */}
+        {!collapsed && (
+          <div className="border-t border-slate-800 p-3">
+            <div className="text-xs text-slate-500 text-center">
+              Yesiltas ERP v1.0
+            </div>
+          </div>
+        )}
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-[#0f172a]">
-        <header className="lg:hidden p-4 flex items-center gap-3 border-b bg-[#1e293b] border-[#334155]">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg bg-[#334155] text-white"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <h1 className="font-semibold text-white">{companyName}</h1>
-        </header>
-
-        <div className="p-4 lg:p-6">
-          {children}
-        </div>
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
+        <div className="p-6">{children}</div>
       </main>
     </div>
   )
