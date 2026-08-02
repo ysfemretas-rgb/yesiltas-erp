@@ -139,7 +139,7 @@ export default function SalesPage() {
   }, [sales, isLoaded])
 
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers
+    if (!customerSearch || customerSearch.length < 1) return []
     const search = customerSearch.toLowerCase()
     return customers.filter(c =>
       (c.name && c.name.toLowerCase().includes(search)) ||
@@ -216,12 +216,19 @@ export default function SalesPage() {
     const customer = customers.find(c => c.id === Number(selectedCustomer))
     if (!customer) return
 
+    // Telefon numarası kontrolü
+    const phone = customer.phone || ""
+    if (!phone) {
+      alert("Müşterinin telefon numarası yok! Lütfen müşteri bilgilerini güncelleyin.")
+      return
+    }
+
     const saleId = Date.now()
     const sale: Sale = {
       id: saleId,
       customerId: customer.id,
       customerName: customer.name,
-      customerPhone: customer.phone,
+      customerPhone: phone,
       items: [...cart],
       totalAmount: cartTotal,
       paid: paid,
@@ -288,28 +295,48 @@ export default function SalesPage() {
 
   const sendWhatsApp = (sale: Sale) => {
     try {
-      if (!sale || !sale.customerId) {
+      if (!sale) {
         alert("Satış bilgisi bulunamadı!")
         return
       }
-      const customer = customers.find(c => c.id === sale.customerId)
-      if (!customer) {
-        alert("Müşteri bulunamadı!")
-        return
+
+      // Önce satıştaki telefonu dene, yoksa customers listesinden bul
+      let phone = ""
+      let customerName = sale.customerName || "Müşteri"
+
+      if (sale.customerPhone) {
+        phone = sale.customerPhone
       }
-      if (!customer.phone) {
-        alert("Müşteri telefon numarası yok!")
+
+      // Eğer hala boşsa customers listesinden bul
+      if (!phone && sale.customerId && customers.length > 0) {
+        const customer = customers.find(c => c.id === sale.customerId)
+        if (customer) {
+          phone = customer.phone || ""
+          customerName = customer.name
+        }
+      }
+
+      if (!phone) {
+        alert("Müşteri telefon numarası bulunamadı! Bu eski bir kayıt olabilir. Yeni satışlarda telefon otomatik kaydediliyor.")
         return
       }
 
-      const phone = String(customer.phone).replace(/\D/g, "")
-      if (!phone || phone.length < 10) {
-        alert("Geçersiz telefon numarası!")
+      // Telefon numarasını temizle
+      let cleanPhone = String(phone).replace(/\D/g, "")
+
+      // Başındaki 0'ı kaldır, 90 ekle
+      if (cleanPhone.startsWith("0")) {
+        cleanPhone = cleanPhone.substring(1)
+      }
+
+      if (!cleanPhone || cleanPhone.length < 10) {
+        alert("Geçersiz telefon numarası: " + phone)
         return
       }
 
       const items = (sale.items || []).map(i => `${i.name} (${i.quantity}x)`).join("%0A")
-      let message = `Merhaba ${customer.name},%0A%0A`
+      let message = `Merhaba ${customerName},%0A%0A`
       message += `Yeşiltaş Teknoloji'den satış işleminiz hakkında bilgi vermek istiyoruz.%0A%0A`
       message += `Satış Detayları:%0A${items || "Ürün bilgisi yok"}%0A%0A`
       message += `Toplam Tutar: ₺${(sale.totalAmount || 0).toLocaleString("tr-TR")}%0A`
@@ -321,7 +348,7 @@ export default function SalesPage() {
       }
       message += `%0ATeşekkür ederiz, iyi günler dileriz!%0AYeşiltaş Teknoloji`
 
-      const url = `https://wa.me/${phone}?text=${message}`
+      const url = `https://wa.me/90${cleanPhone}?text=${message}`
       window.open(url, "_blank")
     } catch (err) {
       console.error("WhatsApp error:", err)
@@ -388,13 +415,11 @@ export default function SalesPage() {
                 />
               </div>
 
-              {/* Customer List - Always show if search or customers exist */}
-              {(customerSearch || customers.length > 0) && (
+              {/* Customer List - SADECE arama yapınca göster */}
+              {customerSearch.length > 0 && (
                 <div className="bg-slate-800 border border-slate-600 rounded-lg max-h-40 overflow-y-auto">
                   {filteredCustomers.length === 0 ? (
-                    <div className="p-3 text-sm text-slate-500">
-                      {customerSearch ? "Müşteri bulunamadı" : "Henüz müşteri yok. Yeni müşteri ekleyin."}
-                    </div>
+                    <div className="p-3 text-sm text-slate-500">Müşteri bulunamadı</div>
                   ) : (
                     filteredCustomers.map(c => (
                       <button
