@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,13 +25,17 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [shouldRedirect, setShouldRedirect] = useState(false)
+
+  // Redirect effect - runs AFTER React render completes
+  useEffect(() => {
+    if (shouldRedirect) {
+      console.log("Effect redirecting...")
+      window.location.href = "/dashboard"
+    }
+  }, [shouldRedirect])
 
   const handleLogin = () => {
-    console.log("=== LOGIN CLICKED ===")
-    console.log("Username:", username)
-    console.log("Password:", password)
-
     if (!username || !password) {
       setError("Lutfen kullanici adi ve sifre girin!")
       setSuccess("")
@@ -40,44 +44,28 @@ export default function LoginForm() {
 
     setError("")
     setSuccess("")
-    setLoading(true)
 
     const user = users.find(
       (u) => u.username === username && u.password === password
     )
 
-    console.log("User found:", user)
-
     if (user) {
-      console.log("Login SUCCESS for:", user.name)
+      localStorage.setItem("yt_user", JSON.stringify({
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        loginTime: new Date().toISOString()
+      }))
 
-      try {
-        localStorage.setItem("yt_user", JSON.stringify({
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          loginTime: new Date().toISOString()
-        }))
-        console.log("localStorage set successfully")
+      setSuccess(`Giris basarili! Hos geldiniz, ${user.role} ${user.name}. Yonlendiriliyorsunuz...`)
 
-        setSuccess(`Giris basarili! Hos geldiniz, ${user.role} ${user.name}. Yonlendiriliyorsunuz...`)
-
-        // Delay redirect to show success message
-        setTimeout(() => {
-          console.log("Redirecting now...")
-          window.location.replace("/dashboard")
-        }, 1500)
-
-      } catch (err) {
-        console.error("localStorage error:", err)
-        setError("Tarayici depolama hatasi!")
-        setLoading(false)
-      }
+      // Trigger redirect via effect after 1 second
+      setTimeout(() => {
+        setShouldRedirect(true)
+      }, 1000)
     } else {
-      console.log("Login FAILED - Invalid credentials")
       setError("Kullanici adi veya sifre hatali!")
       setSuccess("")
-      setLoading(false)
     }
   }
 
@@ -153,10 +141,9 @@ export default function LoginForm() {
         {/* Login Button */}
         <button
           onClick={handleLogin}
-          disabled={loading}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
-          {loading ? "Giris yapiliyor..." : "Giris Yap"}
+          Giris Yap
         </button>
 
         {/* Demo accounts */}
