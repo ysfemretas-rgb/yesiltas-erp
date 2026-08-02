@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +21,6 @@ const users: UserAccount[] = [
 ]
 
 export default function LoginPage() {
-  const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -34,25 +32,23 @@ export default function LoginPage() {
     setError("")
     setLoading(true)
 
-    // Simulate network delay
-    setTimeout(() => {
-      const user = users.find(
-        (u) => u.username === username && u.password === password
-      )
+    const user = users.find(
+      (u) => u.username === username && u.password === password
+    )
 
-      if (user) {
-        localStorage.setItem("yt_user", JSON.stringify({
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          loginTime: new Date().toISOString()
-        }))
-        router.push("/dashboard")
-      } else {
-        setError("Kullanici adi veya sifre hatali!")
-        setLoading(false)
-      }
-    }, 500)
+    if (user) {
+      localStorage.setItem("yt_user", JSON.stringify({
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        loginTime: new Date().toISOString()
+      }))
+      // Use window.location for hard redirect instead of router.push
+      window.location.href = "/dashboard"
+    } else {
+      setError("Kullanici adi veya sifre hatali!")
+      setLoading(false)
+    }
   }
 
   return (
@@ -149,7 +145,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-600">
-          Yesiltas Teknoloji © 2026 - Tum haklari saklidir.
+          Yesiltas Teknoloji &copy; 2026 - Tum haklari saklidir.
         </p>
       </div>
     </div>
