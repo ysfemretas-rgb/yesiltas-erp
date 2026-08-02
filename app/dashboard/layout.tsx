@@ -25,8 +25,6 @@ import {
   Monitor,
   UserCircle,
   RefreshCw,
-  TrendingUp,
-  TrendingDown,
   ArrowRightLeft
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -75,8 +73,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     loading: true,
     error: null
   })
-  const [tlAmount, setTlAmount] = useState<string>("")
-  const [usdResult, setUsdResult] = useState<string>("")
+  const [usdAmount, setUsdAmount] = useState<string>("")
+  const [tlResult, setTlResult] = useState<string>("")
 
   const fetchCurrency = useCallback(async () => {
     setCurrency(prev => ({ ...prev, loading: true, error: null }))
@@ -114,20 +112,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
-  // TL -> USD çevirme (otomatik)
+  // USD -> TL çevirme (otomatik)
   useEffect(() => {
-    if (tlAmount && currency.rate > 0) {
-      const tl = parseFloat(tlAmount.replace(/,/g, "."))
-      if (!isNaN(tl) && tl > 0) {
-        const usd = tl / currency.rate
-        setUsdResult(usd.toFixed(2))
+    if (usdAmount && currency.rate > 0) {
+      const usd = parseFloat(usdAmount.replace(/,/g, "."))
+      if (!isNaN(usd) && usd > 0) {
+        const tl = usd * currency.rate
+        setTlResult(tl.toFixed(2))
       } else {
-        setUsdResult("")
+        setTlResult("")
       }
     } else {
-      setUsdResult("")
+      setTlResult("")
     }
-  }, [tlAmount, currency.rate])
+  }, [usdAmount, currency.rate])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -156,12 +154,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     } catch (e) {}
 
-    // İlk kur çekme
     fetchCurrency()
-
-    // 30 saniyede bir otomatik yenileme
     const interval = setInterval(fetchCurrency, 30000)
-
     return () => clearInterval(interval)
   }, [fetchCurrency])
 
@@ -282,7 +276,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-auto bg-background">
           {/* Döviz Widget - Sağ Üst */}
           <div className="flex justify-end px-6 pt-4 pb-2">
@@ -310,21 +303,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {/* Ayraç */}
                 <div className="h-8 w-px bg-slate-700" />
 
-                {/* TL -> USD Çevirici */}
+                {/* USD -> TL Çevirici */}
                 <div className="flex items-center gap-2">
                   <ArrowRightLeft className="h-3 w-3 text-slate-500" />
                   <div className="flex items-center gap-1.5">
                     <Input
                       type="text"
-                      placeholder="TL"
-                      value={tlAmount}
-                      onChange={(e) => setTlAmount(e.target.value)}
+                      placeholder="USD"
+                      value={usdAmount}
+                      onChange={(e) => setUsdAmount(e.target.value)}
                       className="h-7 w-20 border-slate-600 bg-slate-900 text-xs text-white placeholder:text-slate-600"
                     />
-                    <span className="text-xs text-slate-400">₺</span>
+                    <span className="text-xs text-slate-400">$</span>
                     <span className="text-xs text-slate-500">=</span>
                     <span className="min-w-[50px] text-sm font-semibold text-green-400">
-                      {usdResult ? `$${usdResult}` : "--"}
+                      {tlResult ? `₺${tlResult}` : "--"}
                     </span>
                   </div>
                 </div>
