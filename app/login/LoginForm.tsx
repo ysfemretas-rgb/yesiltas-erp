@@ -27,10 +27,8 @@ export default function LoginForm() {
   const [success, setSuccess] = useState("")
   const [shouldRedirect, setShouldRedirect] = useState(false)
 
-  // Redirect effect - runs AFTER React render completes
   useEffect(() => {
     if (shouldRedirect) {
-      console.log("Effect redirecting...")
       window.location.href = "/dashboard"
     }
   }, [shouldRedirect])
@@ -56,10 +54,9 @@ export default function LoginForm() {
         role: user.role,
         loginTime: new Date().toISOString()
       }))
-
+      
       setSuccess(`Giris basarili! Hos geldiniz, ${user.role} ${user.name}. Yonlendiriliyorsunuz...`)
-
-      // Trigger redirect via effect after 1 second
+      
       setTimeout(() => {
         setShouldRedirect(true)
       }, 1000)
@@ -81,7 +78,6 @@ export default function LoginForm() {
         <CardTitle className="text-center text-xl text-white">Giris Yap</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Username */}
         <div className="space-y-2">
           <Label htmlFor="username" className="text-slate-300">Kullanici Adi</Label>
           <div className="relative">
@@ -98,7 +94,6 @@ export default function LoginForm() {
           </div>
         </div>
 
-        {/* Password */}
         <div className="space-y-2">
           <Label htmlFor="password" className="text-slate-300">Sifre</Label>
           <div className="relative">
@@ -122,7 +117,6 @@ export default function LoginForm() {
           </div>
         </div>
 
-        {/* Success Message */}
         {success && (
           <div className="flex items-center gap-2 rounded-lg border border-green-800 bg-green-900/20 p-3 text-sm text-green-300">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -130,7 +124,6 @@ export default function LoginForm() {
           </div>
         )}
 
-        {/* Error Message */}
         {error && (
           <div className="flex items-center gap-2 rounded-lg border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">
             <XCircle className="h-4 w-4 shrink-0" />
@@ -138,7 +131,6 @@ export default function LoginForm() {
           </div>
         )}
 
-        {/* Login Button */}
         <button
           onClick={handleLogin}
           className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
@@ -146,7 +138,6 @@ export default function LoginForm() {
           Giris Yap
         </button>
 
-        {/* Demo accounts */}
         <div className="border-t border-slate-800 pt-4">
           <p className="mb-2 text-xs font-medium text-slate-500">Demo Hesaplar:</p>
           <div className="space-y-1 text-xs text-slate-400">

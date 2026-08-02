@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
   Wrench, 
@@ -51,13 +51,20 @@ interface UserData {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
   useEffect(() => {
-    // Check saved theme
+    const userData = localStorage.getItem("yt_user")
+    if (!userData) {
+      window.location.href = "/login"
+      return
+    }
+    setCurrentUser(JSON.parse(userData))
+    setCheckingAuth(false)
+
     const savedTheme = localStorage.getItem("yt_theme")
     if (savedTheme === "light") {
       setDarkMode(false)
@@ -65,12 +72,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } else {
       setDarkMode(true)
       document.documentElement.classList.add("dark")
-    }
-
-    // Check user
-    const userData = localStorage.getItem("yt_user")
-    if (userData) {
-      setCurrentUser(JSON.parse(userData))
     }
   }, [])
 
@@ -93,16 +94,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }
 
+  if (checkingAuth) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <div className="text-white">Yukleniyor...</div>
+      </div>
+    )
+  }
+
   return (
     <div className={darkMode ? "dark" : ""}>
       <div className="flex h-screen bg-background transition-colors">
-        {/* Sidebar */}
         <aside 
           className={`flex flex-col border-r bg-card transition-all duration-300 ${
             collapsed ? "w-16" : "w-60"
           }`}
         >
-          {/* Logo + Theme Toggle */}
           <div className="flex h-14 items-center justify-between border-b px-3">
             {!collapsed && (
               <div className="flex items-center gap-2">
@@ -116,7 +123,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 size="sm"
                 onClick={toggleTheme}
                 className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-                title={darkMode ? "Aydinlik Mod" : "Karanlik Mod"}
               >
                 {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               </Button>
@@ -131,7 +137,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          {/* User Greeting */}
           {currentUser && !collapsed && (
             <div className="border-b px-3 py-3">
               <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
@@ -146,12 +151,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           )}
 
-          {/* Menu */}
           <nav className="flex-1 overflow-y-auto py-2">
             {menuItems.map((item) => {
               const isActive = pathname === item.href
               const Icon = item.icon
-
+              
               return (
                 <Link
                   key={item.href}
@@ -174,7 +178,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             })}
           </nav>
 
-          {/* Footer - Logout */}
           <div className="border-t p-2">
             <Button
               variant="ghost"
@@ -182,7 +185,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className={`w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 ${
                 collapsed ? "justify-center px-2 h-9" : "justify-start px-3 gap-3 h-9"
               }`}
-              title={collapsed ? "Cikis Yap" : undefined}
             >
               <LogOut className="h-[18px] w-[18px] shrink-0" />
               {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
@@ -190,7 +192,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-auto bg-background">
           <div className="p-6">{children}</div>
         </main>
