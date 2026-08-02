@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus } from "lucide-react"
 
 interface Product {
@@ -82,49 +81,68 @@ export default function SalesPage() {
   const [newCustomerPhone, setNewCustomerPhone] = useState("")
   const [newCustomerPhone2, setNewCustomerPhone2] = useState("")
   const [showNewCustomer, setShowNewCustomer] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedProducts = localStorage.getItem("yt_products")
-      const savedCustomers = localStorage.getItem("yt_customers")
-      const savedSales = localStorage.getItem("yt_sales")
+      try {
+        const savedProducts = localStorage.getItem("yt_products")
+        const savedCustomers = localStorage.getItem("yt_customers")
+        const savedSales = localStorage.getItem("yt_sales")
 
-      if (savedProducts) {
-        try { setProducts(JSON.parse(savedProducts)) } catch (e) {}
-      } else {
-        localStorage.setItem("yt_products", JSON.stringify(initialProducts))
+        if (savedProducts) {
+          const parsed = JSON.parse(savedProducts)
+          if (Array.isArray(parsed) && parsed.length > 0) setProducts(parsed)
+        } else {
+          localStorage.setItem("yt_products", JSON.stringify(initialProducts))
+        }
+
+        if (savedCustomers) {
+          const parsed = JSON.parse(savedCustomers)
+          if (Array.isArray(parsed)) setCustomers(parsed)
+        }
+
+        if (savedSales) {
+          const parsed = JSON.parse(savedSales)
+          if (Array.isArray(parsed)) setSales(parsed)
+        }
+      } catch (e) {
+        console.error("Load error:", e)
       }
-      if (savedCustomers) {
-        try { setCustomers(JSON.parse(savedCustomers)) } catch (e) {}
-      }
-      if (savedSales) {
-        try { setSales(JSON.parse(savedSales)) } catch (e) {}
-      }
+      setIsLoaded(true)
     }
   }, [])
 
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers
+    if (!customerSearch || !Array.isArray(customers)) return customers || []
     return customers.filter(c =>
-      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      c.phone.includes(customerSearch)
+      c && c.name && c.phone && (
+        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        c.phone.includes(customerSearch)
+      )
     )
   }, [customers, customerSearch])
 
   const filteredProducts = useMemo(() => {
-    if (!searchTerm) return products
+    if (!searchTerm || !Array.isArray(products)) return products || []
     return products.filter(p =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchTerm.toLowerCase())
+      p && p.name && p.category && (
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.category.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     )
   }, [products, searchTerm])
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const cartTotal = useMemo(() => {
+    if (!Array.isArray(cart)) return 0
+    return cart.reduce((sum, item) => sum + (item?.price || 0) * (item?.quantity || 0), 0)
+  }, [cart])
+
   const paid = paymentMethod === "partial" ? Number(paidAmount) || 0 : cartTotal
   const remaining = cartTotal - paid
 
   const addToCart = (product: Product, quantity: number = 1) => {
-    if (quantity < 1) return
+    if (!product || quantity < 1) return
     const existing = cart.find(item => item.productId === product.id)
     if (existing) {
       setCart(cart.map(item =>
@@ -177,8 +195,9 @@ export default function SalesPage() {
     const customer = customers.find(c => c.id === Number(selectedCustomer))
     if (!customer) return
 
+    const saleId = Date.now()
     const sale: Sale = {
-      id: Date.now(),
+      id: saleId,
       customerId: customer.id,
       customerName: customer.name,
       customerPhone: customer.phone,
@@ -205,7 +224,7 @@ export default function SalesPage() {
     const updatedProducts = products.map(p => {
       const cartItem = cart.find(item => item.productId === p.id)
       if (cartItem) {
-        return { ...p, stock: p.stock - cartItem.quantity }
+        return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) }
       }
       return p
     })
@@ -218,20 +237,28 @@ export default function SalesPage() {
     localStorage.setItem("yt_sales", JSON.stringify(updatedSales))
 
     // Add to finance
-    const financeRecord = {
-      id: Date.now(),
-      type: "income" as const,
-      category: "Satış",
-      amount: paid,
-      description: `Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
-      date: new Date().toISOString().split("T")[0],
-      source: "sales" as const,
-      sourceId: sale.id,
+    try {
+      const financeRecord = {
+        id: Date.now() + 1,
+        type: "income" as const,
+        category: "Satış",
+        amount: paid,
+        description: `Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
+        date: new Date().toISOString().split("T")[0],
+        source: "sales" as const,
+        sourceId: saleId,
+      }
+      const savedFinance = localStorage.getItem("yt_finance")
+      const financeData = savedFinance ? JSON.parse(savedFinance) : []
+      if (!Array.isArray(financeData)) {
+        localStorage.setItem("yt_finance", JSON.stringify([financeRecord]))
+      } else {
+        financeData.push(financeRecord)
+        localStorage.setItem("yt_finance", JSON.stringify(financeData))
+      }
+    } catch (e) {
+      console.error("Finance save error:", e)
     }
-    const savedFinance = localStorage.getItem("yt_finance")
-    const financeData = savedFinance ? JSON.parse(savedFinance) : []
-    financeData.push(financeRecord)
-    localStorage.setItem("yt_finance", JSON.stringify(financeData))
 
     // Reset
     setCart([])
@@ -242,28 +269,37 @@ export default function SalesPage() {
   }
 
   const sendWhatsApp = (sale: Sale) => {
+    if (!sale) return
     const customer = customers.find(c => c.id === sale.customerId)
-    if (!customer) return
-    const phone = customer.phone.replace(/[^0-9]/g, "")
+    if (!customer || !customer.phone) return
+    const phone = String(customer.phone).replace(/[^0-9]/g, "")
+    if (!phone) return
+
     const items = sale.items.map(i => `${i.name} (${i.quantity}x)`).join("%0A")
     let message = `Merhaba ${customer.name},%0A%0A`
     message += `Yeşiltaş Teknoloji'den satış işleminiz hakkında bilgi vermek istiyoruz.%0A%0A`
-    message += `Satış Detayları:%0A`
-    message += `${items}%0A%0A`
-    message += `Toplam Tutar: ₺${sale.totalAmount.toLocaleString("tr-TR")}%0A`
+    message += `Satış Detayları:%0A${items}%0A%0A`
+    message += `Toplam Tutar: ₺${(sale.totalAmount || 0).toLocaleString("tr-TR")}%0A`
     if (sale.remaining > 0) {
-      message += `Alınan: ₺${sale.paid.toLocaleString("tr-TR")}%0A`
-      message += `Kalan Borç: ₺${sale.remaining.toLocaleString("tr-TR")}%0A`
+      message += `Alınan: ₺${(sale.paid || 0).toLocaleString("tr-TR")}%0A`
+      message += `Kalan Borç: ₺${(sale.remaining || 0).toLocaleString("tr-TR")}%0A`
     } else {
       message += `Ödeme: Tamamlandı%0A`
     }
-    message += `%0ATeşekkür ederiz, iyi günler dileriz!%0A`
-    message += `Yeşiltaş Teknoloji`
+    message += `%0ATeşekkür ederiz, iyi günler dileriz!%0AYeşiltaş Teknoloji`
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank")
   }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount || 0)
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yükleniyor...</div>
+      </div>
+    )
   }
 
   return (
@@ -287,7 +323,7 @@ export default function SalesPage() {
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Toplam Gelir</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-green-400">{formatCurrency(sales.reduce((sum, s) => sum + s.paid, 0))}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-green-400">{formatCurrency(sales.reduce((sum, s) => sum + (s.paid || 0), 0))}</div></CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Bekleyen Tahsilat</CardTitle></CardHeader>
@@ -332,7 +368,7 @@ export default function SalesPage() {
               {selectedCustomer && (
                 <div className="flex items-center gap-2 text-sm text-emerald-400">
                   <Badge className="bg-emerald-600/20 text-emerald-400">
-                    {customers.find(c => c.id === Number(selectedCustomer))?.name}
+                    {customers.find(c => c.id === Number(selectedCustomer))?.name || "Müşteri"}
                   </Badge>
                   <button onClick={() => setSelectedCustomer("")} className="text-slate-500 hover:text-red-400">
                     <X className="w-3 h-3" />
@@ -392,7 +428,7 @@ export default function SalesPage() {
                       size="sm"
                       onClick={() => {
                         const input = document.getElementById(`qty-${product.id}`) as HTMLInputElement
-                        addToCart(product, Number(input.value) || 1)
+                        addToCart(product, Number(input?.value) || 1)
                       }}
                       className="bg-emerald-600 hover:bg-emerald-700 h-8 px-2"
                     >
@@ -502,7 +538,7 @@ export default function SalesPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-medium text-white">{sale.customerName}</div>
-                      <div className="text-xs text-slate-400">{sale.date} | {sale.items.length} ürün</div>
+                      <div className="text-xs text-slate-400">{sale.date} | {sale.items?.length || 0} ürün</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">{formatCurrency(sale.totalAmount)}</div>
