@@ -22,14 +22,13 @@ import {
   LogOut,
   Moon,
   Sun,
-  Monitor,
-  UserCircle,
   Menu,
   X,
   RefreshCw
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import Image from "next/image"
 
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
@@ -168,11 +167,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             collapsed ? "w-16" : "w-60"
           } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         >
+          {/* Logo Header */}
           <div className="flex h-14 items-center justify-between border-b px-3">
             {!collapsed && (
-              <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-blue-500" />
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="relative h-8 w-8 shrink-0">
+                  <Image 
+                    src="/logo-yesiltas.svg" 
+                    alt="Yesiltas Logo" 
+                    fill 
+                    className="object-contain"
+                    priority
+                  />
+                </div>
                 <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
+              </div>
+            )}
+            {collapsed && (
+              <div className="relative h-8 w-8 mx-auto">
+                <Image 
+                  src="/logo-yesiltas.svg" 
+                  alt="Yesiltas Logo" 
+                  fill 
+                  className="object-contain"
+                  priority
+                />
               </div>
             )}
             <div className="flex items-center gap-1">
@@ -206,7 +225,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {currentUser && !collapsed && (
             <div className="border-b px-3 py-3">
               <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
-                <UserCircle className="h-8 w-8 text-primary" />
+                <div className="relative h-8 w-8 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
+                  <span className="text-sm font-bold text-primary">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Hos geldiniz,</p>
                   <p className="truncate text-sm font-semibold text-foreground">
@@ -260,6 +283,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </aside>
 
         <main className="flex-1 overflow-auto bg-background min-w-0">
+          {/* Mobile Header */}
           <div className="lg:hidden flex items-center justify-between h-14 border-b px-4 bg-card">
             <div className="flex items-center gap-2">
               <Button
@@ -270,7 +294,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <Monitor className="h-5 w-5 text-blue-500" />
+              <div className="relative h-7 w-7">
+                <Image 
+                  src="/logo-yesiltas.svg" 
+                  alt="Yesiltas Logo" 
+                  fill 
+                  className="object-contain"
+                  priority
+                />
+              </div>
               <span className="text-sm font-bold text-foreground">Yesiltas</span>
             </div>
             <div className="flex items-center gap-2">
@@ -285,6 +317,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
+          {/* Currency Widget - Desktop */}
           <div className="hidden lg:flex items-center justify-end gap-3 px-6 pt-4 pb-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
               <Input
@@ -319,6 +352,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </div>
 
+          {/* Currency Widget - Mobile */}
           <div className="lg:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Input
