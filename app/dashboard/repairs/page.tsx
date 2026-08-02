@@ -1,739 +1,898 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import {
-  Plus,
-  Wrench,
-  Search,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  Phone,
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { 
+  Wrench, 
+  Plus, 
+  Search, 
+  Clock, 
+  CheckCircle, 
+  AlertCircle, 
+  ArrowRight,
   MessageCircle,
+  Phone,
   CreditCard,
-  Edit3,
+  Banknote,
+  Receipt,
+  Pencil,
   Trash2,
-  ChevronDown,
-  Check,
-  UserPlus
+  X
 } from "lucide-react"
-
-interface Customer {
-  id: number
-  name: string
-  phone: string
-  phone2?: string
-}
 
 interface Repair {
   id: number
-  customerId: number
   customerName: string
-  customerPhone: string
-  customerPhone2?: string
+  phone1: string
+  phone2: string
   device: string
   brand: string
   model: string
   issue: string
-  status: "waiting" | "in_progress" | "completed" | "cancelled"
+  status: "waiting" | "in_progress" | "completed"
   cost: number
-  paidAmount: number
-  paymentStatus: "unpaid" | "partial" | "paid"
+  paid: number
+  paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
   notes: string
   createdAt: string
   completedAt?: string
 }
 
-const initialCustomers: Customer[] = [
-  { id: 1, name: "Ahmet Yılmaz", phone: "0555 123 4567", phone2: "0555 987 6543" },
-  { id: 2, name: "Mehmet Kaya", phone: "0555 234 5678" },
-  { id: 3, name: "Ayşe Demir", phone: "0555 345 6789", phone2: "0555 111 2222" },
-  { id: 4, name: "Fatma Şahin", phone: "0555 456 7890" },
-  { id: 5, name: "Ali Veli", phone: "0555 567 8901" },
-]
+interface Customer {
+  id: number
+  name: string
+  phone1: string
+  phone2: string
+  email: string
+  address: string
+}
+
+interface Note {
+  id: number
+  repairId: number
+  text: string
+  createdAt: string
+  author: string
+}
 
 const initialRepairs: Repair[] = [
-  { id: 1, customerId: 1, customerName: "Ahmet Yılmaz", customerPhone: "0555 123 4567", customerPhone2: "0555 987 6543", device: "iPhone", brand: "Apple", model: "14 Pro", issue: "Ekran kırık", status: "completed", cost: 2500, paidAmount: 2500, paymentStatus: "paid", notes: "Orijinal ekran takıldı", createdAt: "2024-01-15", completedAt: "2024-01-16" },
-  { id: 2, customerId: 2, customerName: "Mehmet Kaya", customerPhone: "0555 234 5678", device: "Samsung", brand: "Samsung", model: "S23", issue: "Batarya şişme", status: "in_progress", cost: 1800, paidAmount: 0, paymentStatus: "unpaid", notes: "Batarya değişimi yapılıyor", createdAt: "2024-01-18" },
-  { id: 3, customerId: 3, customerName: "Ayşe Demir", customerPhone: "0555 345 6789", customerPhone2: "0555 111 2222", device: "iPad", brand: "Apple", model: "Air 5", issue: "Şarj almıyor", status: "waiting", cost: 1200, paidAmount: 0, paymentStatus: "unpaid", notes: "", createdAt: "2024-01-20" },
+  {
+    id: 1,
+    customerName: "Ahmet Yilmaz",
+    phone1: "0532 123 4567",
+    phone2: "",
+    device: "Telefon",
+    brand: "Apple",
+    model: "iPhone 14 Pro",
+    issue: "Ekran kirildi",
+    status: "completed",
+    cost: 4500,
+    paid: 4500,
+    paymentType: "cash",
+    notes: "Ekran degistirildi, test edildi.",
+    createdAt: "2026-07-28",
+    completedAt: "2026-07-29",
+  },
+  {
+    id: 2,
+    customerName: "Mehmet Demir",
+    phone1: "0533 987 6543",
+    phone2: "0544 111 2222",
+    device: "Laptop",
+    brand: "Dell",
+    model: "XPS 15",
+    issue: "Sarj olmuyor",
+    status: "in_progress",
+    cost: 1200,
+    paid: 0,
+    paymentType: "unpaid",
+    notes: "Sarj soketi kontrol ediliyor.",
+    createdAt: "2026-07-30",
+  },
+  {
+    id: 3,
+    customerName: "Ayse Kaya",
+    phone1: "0555 444 3333",
+    phone2: "",
+    device: "Tablet",
+    brand: "Samsung",
+    model: "Galaxy Tab S8",
+    issue: "Dokunmatik calismiyor",
+    status: "waiting",
+    cost: 800,
+    paid: 0,
+    paymentType: "unpaid",
+    notes: "Parca siparisi verildi.",
+    createdAt: "2026-08-01",
+  },
+]
+
+const initialCustomers: Customer[] = [
+  { id: 1, name: "Ahmet Yilmaz", phone1: "0532 123 4567", phone2: "", email: "ahmet@email.com", address: "Istanbul" },
+  { id: 2, name: "Mehmet Demir", phone1: "0533 987 6543", phone2: "0544 111 2222", email: "mehmet@email.com", address: "Ankara" },
+  { id: 3, name: "Ayse Kaya", phone1: "0555 444 3333", phone2: "", email: "ayse@email.com", address: "Izmir" },
+]
+
+const initialNotes: Note[] = [
+  { id: 1, repairId: 2, text: "Parca siparisi verildi, 2 gun surecek.", createdAt: "2026-07-30 10:00", author: "Teknisyen" },
 ]
 
 export default function RepairsPage() {
   const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
+  const [notes, setNotes] = useState<Note[]>(initialNotes)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false)
+  const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false)
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null)
-  const [customerOpen, setCustomerOpen] = useState(false)
+  const [noteText, setNoteText] = useState("")
+
+  // Form states
+  const [customerId, setCustomerId] = useState<string>("")
+  const [customerName, setCustomerName] = useState("")
+  const [phone1, setPhone1] = useState("")
+  const [phone2, setPhone2] = useState("")
+  const [device, setDevice] = useState("")
+  const [brand, setBrand] = useState("")
+  const [model, setModel] = useState("")
+  const [issue, setIssue] = useState("")
+  const [cost, setCost] = useState("")
+  const [paymentType, setPaymentType] = useState<string>("unpaid")
+  const [paidAmount, setPaidAmount] = useState("")
+  const [notesInput, setNotesInput] = useState("")
   const [isNewCustomer, setIsNewCustomer] = useState(false)
 
-  const [newRepair, setNewRepair] = useState<Partial<Repair>>({
-    status: "waiting",
-    paymentStatus: "unpaid",
-    paidAmount: 0,
-  })
+  // New customer form
+  const [newCustomerName, setNewCustomerName] = useState("")
+  const [newCustomerPhone1, setNewCustomerPhone1] = useState("")
+  const [newCustomerPhone2, setNewCustomerPhone2] = useState("")
+  const [newCustomerEmail, setNewCustomerEmail] = useState("")
+  const [newCustomerAddress, setNewCustomerAddress] = useState("")
 
-  const [newCustomer, setNewCustomer] = useState({
-    name: "",
-    phone: "",
-    phone2: "",
-  })
+  // Load from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedRepairs = localStorage.getItem("yt_repairs")
+        const savedCustomers = localStorage.getItem("yt_customers")
+        const savedNotes = localStorage.getItem("yt_repair_notes")
+        if (savedRepairs) setRepairs(JSON.parse(savedRepairs))
+        if (savedCustomers) setCustomers(JSON.parse(savedCustomers))
+        if (savedNotes) setNotes(JSON.parse(savedNotes))
+      } catch (e) {
+        console.error("Load error:", e)
+      }
+    }
+  }, [])
 
-  const filteredRepairs = repairs.filter((r) => {
-    const matchesSearch = 
-      r.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.customerPhone.includes(searchTerm) ||
-      r.device.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.issue.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || r.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
+  // Save to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("yt_repairs", JSON.stringify(repairs))
+      localStorage.setItem("yt_customers", JSON.stringify(customers))
+      localStorage.setItem("yt_repair_notes", JSON.stringify(notes))
+    }
+  }, [repairs, customers, notes])
 
-  const stats = {
-    total: repairs.length,
-    waiting: repairs.filter(r => r.status === "waiting").length,
-    inProgress: repairs.filter(r => r.status === "in_progress").length,
-    completed: repairs.filter(r => r.status === "completed").length,
-    totalRevenue: repairs.reduce((sum, r) => sum + r.paidAmount, 0),
-    pendingRevenue: repairs.reduce((sum, r) => sum + (r.cost - r.paidAmount), 0),
+  const filteredRepairs = useMemo(() => {
+    return repairs.filter((r) => {
+      const matchesSearch =
+        search === "" ||
+        r.customerName.toLowerCase().includes(search.toLowerCase()) ||
+        r.phone1.includes(search) ||
+        r.phone2.includes(search) ||
+        r.device.toLowerCase().includes(search.toLowerCase()) ||
+        r.brand.toLowerCase().includes(search.toLowerCase()) ||
+        r.model.toLowerCase().includes(search.toLowerCase())
+      const matchesStatus = statusFilter === "all" || r.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [repairs, search, statusFilter])
+
+  const stats = useMemo(() => {
+    const total = repairs.length
+    const waiting = repairs.filter((r) => r.status === "waiting").length
+    const inProgress = repairs.filter((r) => r.status === "in_progress").length
+    const completed = repairs.filter((r) => r.status === "completed").length
+    const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
+    return { total, waiting, inProgress, completed, totalRevenue }
+  }, [repairs])
+
+  const handleCustomerSelect = (value: string) => {
+    if (value === "new") {
+      setIsNewCustomer(true)
+      setCustomerId("")
+      setCustomerName("")
+      setPhone1("")
+      setPhone2("")
+    } else {
+      setIsNewCustomer(false)
+      setCustomerId(value)
+      const customer = customers.find((c) => c.id.toString() === value)
+      if (customer) {
+        setCustomerName(customer.name)
+        setPhone1(customer.phone1)
+        setPhone2(customer.phone2)
+      }
+    }
+  }
+
+  const handleAddNewCustomer = () => {
+    if (!newCustomerName.trim() || !newCustomerPhone1.trim()) return
+    const newId = Math.max(...customers.map((c) => c.id), 0) + 1
+    const newCustomer: Customer = {
+      id: newId,
+      name: newCustomerName,
+      phone1: newCustomerPhone1,
+      phone2: newCustomerPhone2,
+      email: newCustomerEmail,
+      address: newCustomerAddress,
+    }
+    setCustomers([...customers, newCustomer])
+    setCustomerId(newId.toString())
+    setCustomerName(newCustomerName)
+    setPhone1(newCustomerPhone1)
+    setPhone2(newCustomerPhone2)
+    setIsNewCustomerDialogOpen(false)
+    setIsNewCustomer(false)
+    // Reset new customer form
+    setNewCustomerName("")
+    setNewCustomerPhone1("")
+    setNewCustomerPhone2("")
+    setNewCustomerEmail("")
+    setNewCustomerAddress("")
   }
 
   const handleAddRepair = () => {
-    let customerId: number
-    let customerName: string
-    let customerPhone: string
-    let customerPhone2: string | undefined
-
-    if (isNewCustomer) {
-      if (!newCustomer.name || !newCustomer.phone) return
-      const customer: Customer = {
-        id: Date.now(),
-        name: newCustomer.name,
-        phone: newCustomer.phone,
-        phone2: newCustomer.phone2 || undefined,
-      }
-      setCustomers([...customers, customer])
-      customerId = customer.id
-      customerName = customer.name
-      customerPhone = customer.phone
-      customerPhone2 = customer.phone2
-    } else {
-      const customer = customers.find(c => c.id === newRepair.customerId)
-      if (!customer) return
-      customerId = customer.id
-      customerName = customer.name
-      customerPhone = customer.phone
-      customerPhone2 = customer.phone2
-    }
-
-    if (!newRepair.device || !newRepair.issue) return
-
-    const repair: Repair = {
-      id: Date.now(),
-      customerId,
+    if (!customerName.trim() || !phone1.trim() || !device.trim() || !brand.trim() || !issue.trim()) return
+    const newId = Math.max(...repairs.map((r) => r.id), 0) + 1
+    const costNum = parseFloat(cost) || 0
+    const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
+    const newRepair: Repair = {
+      id: newId,
       customerName,
-      customerPhone,
-      customerPhone2,
-      device: newRepair.device,
-      brand: newRepair.brand || "",
-      model: newRepair.model || "",
-      issue: newRepair.issue,
+      phone1,
+      phone2,
+      device,
+      brand,
+      model,
+      issue,
       status: "waiting",
-      cost: Number(newRepair.cost) || 0,
-      paidAmount: 0,
-      paymentStatus: "unpaid",
-      notes: newRepair.notes || "",
+      cost: costNum,
+      paid: paidNum,
+      paymentType: paymentType as Repair["paymentType"],
+      notes: notesInput,
       createdAt: new Date().toISOString().split("T")[0],
     }
-
-    setRepairs([repair, ...repairs])
-    setNewRepair({ status: "waiting", paymentStatus: "unpaid", paidAmount: 0 })
-    setNewCustomer({ name: "", phone: "", phone2: "" })
-    setIsNewCustomer(false)
+    setRepairs([newRepair, ...repairs])
+    resetForm()
     setIsDialogOpen(false)
   }
 
-  const handleStatusChange = (id: number, status: Repair["status"]) => {
-    setRepairs(repairs.map(r => 
-      r.id === id 
-        ? { ...r, status, completedAt: status === "completed" ? new Date().toISOString().split("T")[0] : r.completedAt }
-        : r
-    ))
-  }
-
-  const handlePayment = (id: number, amount: number) => {
-    setRepairs(repairs.map(r => {
-      if (r.id !== id) return r
-      const newPaid = r.paidAmount + amount
-      const paymentStatus: Repair["paymentStatus"] = 
-        newPaid >= r.cost ? "paid" : newPaid > 0 ? "partial" : "unpaid"
-      return { ...r, paidAmount: newPaid, paymentStatus }
-    }))
-  }
-
-  const handleDelete = (id: number) => {
-    setRepairs(repairs.filter(r => r.id !== id))
-  }
-
-  const openEdit = (repair: Repair) => {
-    setSelectedRepair(repair)
-    setNewRepair({
-      customerId: repair.customerId,
-      device: repair.device,
-      brand: repair.brand,
-      model: repair.model,
-      issue: repair.issue,
-      cost: repair.cost,
-      notes: repair.notes,
-      paymentStatus: repair.paymentStatus,
-      paidAmount: repair.paidAmount,
-    })
-    setIsEditOpen(true)
-  }
-
-  const handleEditSave = () => {
+  const handleUpdateRepair = () => {
     if (!selectedRepair) return
+    const costNum = parseFloat(cost) || selectedRepair.cost
+    const paidNum = paymentType === "partial" 
+      ? (parseFloat(paidAmount) || selectedRepair.paid) 
+      : (paymentType === "unpaid" ? 0 : costNum)
 
-    const updatedCost = Number(newRepair.cost) || selectedRepair.cost
-    const updatedPaid = Number(newRepair.paidAmount) || selectedRepair.paidAmount
-
-    let paymentStatus: Repair["paymentStatus"] = "unpaid"
-    if (updatedPaid >= updatedCost && updatedCost > 0) {
-      paymentStatus = "paid"
-    } else if (updatedPaid > 0) {
-      paymentStatus = "partial"
-    }
-
-    setRepairs(repairs.map(r => 
-      r.id === selectedRepair.id 
-        ? { 
-            ...r, 
-            device: newRepair.device || r.device,
-            brand: newRepair.brand || r.brand,
-            model: newRepair.model || r.model,
-            issue: newRepair.issue || r.issue,
-            cost: updatedCost,
-            paidAmount: updatedPaid,
-            paymentStatus,
-            notes: newRepair.notes || r.notes,
-          }
-        : r
-    ))
-    setIsEditOpen(false)
+    setRepairs(
+      repairs.map((r) =>
+        r.id === selectedRepair.id
+          ? {
+              ...r,
+              customerName,
+              phone1,
+              phone2,
+              device,
+              brand,
+              model,
+              issue,
+              cost: costNum,
+              paid: paidNum,
+              paymentType: paymentType as Repair["paymentType"],
+              notes: notesInput,
+            }
+          : r
+      )
+    )
+    setIsEditDialogOpen(false)
     setSelectedRepair(null)
+  }
+
+  const handleStatusChange = (id: number, newStatus: Repair["status"]) => {
+    setRepairs(
+      repairs.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: newStatus,
+              completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : r.completedAt,
+            }
+          : r
+      )
+    )
+  }
+
+  const handleDeleteRepair = (id: number) => {
+    if (confirm("Bu tamir kaydini silmek istediginize emin misiniz?")) {
+      setRepairs(repairs.filter((r) => r.id !== id))
+      setNotes(notes.filter((n) => n.repairId !== id))
+    }
+  }
+
+  const handleAddNote = () => {
+    if (!noteText.trim() || !selectedRepair) return
+    const newNote: Note = {
+      id: Math.max(...notes.map((n) => n.id), 0) + 1,
+      repairId: selectedRepair.id,
+      text: noteText,
+      createdAt: new Date().toLocaleString("tr-TR"),
+      author: "Teknisyen",
+    }
+    setNotes([...notes, newNote])
+    setNoteText("")
+  }
+
+  const openEditDialog = (repair: Repair) => {
+    setSelectedRepair(repair)
+    setCustomerName(repair.customerName)
+    setPhone1(repair.phone1)
+    setPhone2(repair.phone2)
+    setDevice(repair.device)
+    setBrand(repair.brand)
+    setModel(repair.model)
+    setIssue(repair.issue)
+    setCost(repair.cost.toString())
+    setPaymentType(repair.paymentType)
+    setPaidAmount(repair.paid.toString())
+    setNotesInput(repair.notes)
+    setIsEditDialogOpen(true)
+  }
+
+  const openNoteDialog = (repair: Repair) => {
+    setSelectedRepair(repair)
+    setIsNoteDialogOpen(true)
+  }
+
+  const resetForm = () => {
+    setCustomerId("")
+    setCustomerName("")
+    setPhone1("")
+    setPhone2("")
+    setDevice("")
+    setBrand("")
+    setModel("")
+    setIssue("")
+    setCost("")
+    setPaymentType("unpaid")
+    setPaidAmount("")
+    setNotesInput("")
+    setIsNewCustomer(false)
   }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "waiting": return <Badge className="bg-yellow-900/50 text-yellow-300 border-yellow-700">Bekliyor</Badge>
-      case "in_progress": return <Badge className="bg-blue-900/50 text-blue-300 border-blue-700">Devam Ediyor</Badge>
-      case "completed": return <Badge className="bg-green-900/50 text-green-300 border-green-700">Tamamlandı</Badge>
-      case "cancelled": return <Badge className="bg-red-900/50 text-red-300 border-red-700">İptal</Badge>
-      default: return null
+      case "waiting":
+        return <Badge variant="outline" className="border-amber-500 text-amber-400"><Clock className="h-3 w-3 mr-1" />Bekliyor</Badge>
+      case "in_progress":
+        return <Badge variant="outline" className="border-blue-500 text-blue-400"><AlertCircle className="h-3 w-3 mr-1" />Devam Ediyor</Badge>
+      case "completed":
+        return <Badge variant="outline" className="border-emerald-500 text-emerald-400"><CheckCircle className="h-3 w-3 mr-1" />Tamamlandi</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
     }
   }
 
-  const getPaymentBadge = (status: string) => {
-    switch (status) {
-      case "paid": return <Badge className="bg-green-900/50 text-green-300 border-green-700">Ödendi</Badge>
-      case "partial": return <Badge className="bg-orange-900/50 text-orange-300 border-orange-700">Kısmi</Badge>
-      case "unpaid": return <Badge className="bg-red-900/50 text-red-300 border-red-700">Ödenmedi</Badge>
-      default: return null
+  const getPaymentBadge = (type: string) => {
+    switch (type) {
+      case "cash": return <Badge className="bg-emerald-600"><Banknote className="h-3 w-3 mr-1" />Nakit</Badge>
+      case "card": return <Badge className="bg-blue-600"><CreditCard className="h-3 w-3 mr-1" />Kart</Badge>
+      case "transfer": return <Badge className="bg-violet-600"><Receipt className="h-3 w-3 mr-1" />Havale</Badge>
+      case "partial": return <Badge className="bg-amber-600"><Banknote className="h-3 w-3 mr-1" />Kismi</Badge>
+      default: return <Badge variant="secondary">Odenmedi</Badge>
     }
   }
+
+  const getRepairNotes = (repairId: number) => notes.filter((n) => n.repairId === repairId)
 
   const sendWhatsApp = (phone: string, customerName: string, device: string) => {
     const cleanPhone = phone.replace(/\D/g, "")
-    const message = encodeURIComponent(`Merhaba ${customerName}, ${device} cihazınızın tamiri tamamlanmıştır. Cihazınızı teslim alabilirsiniz. Yeşiltaş Teknoloji`)
+    const message = encodeURIComponent(`Merhaba ${customerName}, ${device} cihazinizin tamiri tamamlanmistir. Hemen teslim alabilirsiniz. Yesiltas Teknoloji`)
     window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-white">Teknik Servis</h1>
+        <h1 className="text-2xl font-bold text-white">Teknik Servis</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Yeni Tamir
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />Yeni Tamir
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
             <DialogHeader>
-              <DialogTitle className="text-white">Yeni Tamir Kaydı</DialogTitle>
+              <DialogTitle className="text-white">Yeni Tamir Kaydi</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              {/* Müşteri Seçimi / Yeni Müşteri */}
+            <div className="space-y-4 py-4">
+              {/* Customer Selection */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-slate-300">Müşteri</label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsNewCustomer(!isNewCustomer)}
-                    className="h-7 text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    {isNewCustomer ? "Mevcut Müşteri Seç" : "Yeni Müşteri Ekle"}
-                  </Button>
-                </div>
+                <Label className="text-slate-300">Musteri Secimi</Label>
+                <Select value={customerId} onValueChange={handleCustomerSelect}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue placeholder="Musteri secin veya yeni ekleyin" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="new" className="text-emerald-400 font-semibold">
+                      + Yeni Musteri Ekle
+                    </SelectItem>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id.toString()} className="text-white">
+                        {c.name} - {c.phone1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {isNewCustomer ? (
-                  <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <div className="space-y-2">
-                      <label className="text-xs text-slate-400">Ad Soyad *</label>
-                      <Input
-                        value={newCustomer.name}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                        placeholder="Ahmet Yılmaz"
-                        className="bg-slate-800 border-slate-700 text-white"
+              {/* New Customer Quick Add */}
+              {isNewCustomer && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-emerald-400 font-semibold">Yeni Musteri Bilgileri</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setIsNewCustomerDialogOpen(true)}
+                      className="text-emerald-400 hover:text-emerald-300"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />Detayli Ekle
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-slate-300 text-xs">Ad Soyad *</Label>
+                      <Input 
+                        value={customerName} 
+                        onChange={(e) => setCustomerName(e.target.value)} 
+                        className="bg-slate-800 border-slate-600 text-white"
+                        placeholder="Orn: Ahmet Yilmaz"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <label className="text-xs text-slate-400">Cep Telefonu *</label>
-                        <Input
-                          value={newCustomer.phone}
-                          onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                          placeholder="0555 123 4567"
-                          className="bg-slate-800 border-slate-700 text-white"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs text-slate-400">Cep Telefonu 2</label>
-                        <Input
-                          value={newCustomer.phone2}
-                          onChange={(e) => setNewCustomer({ ...newCustomer, phone2: e.target.value })}
-                          placeholder="0555 987 6543"
-                          className="bg-slate-800 border-slate-700 text-white"
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <Label className="text-slate-300 text-xs">Telefon 1 *</Label>
+                      <Input 
+                        value={phone1} 
+                        onChange={(e) => setPhone1(e.target.value)} 
+                        className="bg-slate-800 border-slate-600 text-white"
+                        placeholder="0532 123 4567"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-slate-300 text-xs">Telefon 2</Label>
+                      <Input 
+                        value={phone2} 
+                        onChange={(e) => setPhone2(e.target.value)} 
+                        className="bg-slate-800 border-slate-600 text-white"
+                        placeholder="0544 987 6543"
+                      />
                     </div>
                   </div>
-                ) : (
-                  <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={customerOpen}
-                        className="w-full justify-between bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
-                      >
-                        {newRepair.customerId
-                          ? customers.find((c) => c.id === newRepair.customerId)?.name
-                          : "Müşteri seçin..."}
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0 bg-slate-800 border-slate-700">
-                      <Command className="bg-slate-800">
-                        <CommandInput placeholder="Müşteri ara..." className="text-white" />
-                        <CommandList>
-                          <CommandEmpty className="text-slate-400">Müşteri bulunamadı.</CommandEmpty>
-                          <CommandGroup>
-                            {customers.map((customer) => (
-                              <CommandItem
-                                key={customer.id}
-                                value={customer.name}
-                                onSelect={() => {
-                                  setNewRepair({ ...newRepair, customerId: customer.id })
-                                  setCustomerOpen(false)
-                                }}
-                                className="text-white hover:bg-slate-700"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    newRepair.customerId === customer.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <div>
-                                  <div>{customer.name}</div>
-                                  <div className="text-xs text-slate-400">{customer.phone}</div>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                </div>
+              )}
+
+              {/* Existing Customer Info Display */}
+              {!isNewCustomer && customerName && (
+                <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3">
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div><span className="text-slate-400">Ad:</span> <span className="text-white">{customerName}</span></div>
+                    <div><span className="text-slate-400">Tel 1:</span> <span className="text-white">{phone1}</span></div>
+                    {phone2 && <div><span className="text-slate-400">Tel 2:</span> <span className="text-white">{phone2}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Cihaz Turu</Label>
+                  <Select value={device} onValueChange={setDevice}>
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                      <SelectValue placeholder="Secin" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="Telefon">Telefon</SelectItem>
+                      <SelectItem value="Tablet">Tablet</SelectItem>
+                      <SelectItem value="Laptop">Laptop</SelectItem>
+                      <SelectItem value="Bilgisayar">Bilgisayar</SelectItem>
+                      <SelectItem value="Monitor">Monitor</SelectItem>
+                      <SelectItem value="Diger">Diger</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Marka</Label>
+                  <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: Apple" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Model</Label>
+                  <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Ucret (TL)</Label>
+                  <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">Ariza Aciklamasi</Label>
+                <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white min-h-[80px]" placeholder="Cihazda yasanan sorunu detayli aciklayin..." />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Odeme Sekli</Label>
+                  <Select value={paymentType} onValueChange={setPaymentType}>
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                      <SelectValue placeholder="Secin" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="unpaid">Odenmedi</SelectItem>
+                      <SelectItem value="cash">Nakit</SelectItem>
+                      <SelectItem value="card">Kredi Karti</SelectItem>
+                      <SelectItem value="transfer">Havale/EFT</SelectItem>
+                      <SelectItem value="partial">Kismi Odeme</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {paymentType === "partial" && (
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">Alinan Tutar (TL)</Label>
+                    <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: 2000" />
+                  </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Cihaz *</label>
-                  <Input
-                    value={newRepair.device || ""}
-                    onChange={(e) => setNewRepair({ ...newRepair, device: e.target.value })}
-                    placeholder="Telefon, Tablet, Laptop..."
-                    className="bg-slate-800 border-slate-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Marka</label>
-                  <Input
-                    value={newRepair.brand || ""}
-                    onChange={(e) => setNewRepair({ ...newRepair, brand: e.target.value })}
-                    placeholder="Apple, Samsung..."
-                    className="bg-slate-800 border-slate-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Model</label>
-                  <Input
-                    value={newRepair.model || ""}
-                    onChange={(e) => setNewRepair({ ...newRepair, model: e.target.value })}
-                    placeholder="iPhone 14 Pro..."
-                    className="bg-slate-800 border-slate-700 text-white"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Arıza Açıklaması *</label>
-                <Textarea
-                  value={newRepair.issue || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, issue: e.target.value })}
-                  placeholder="Cihazın arızasını detaylı açıklayın..."
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
+                <Label className="text-slate-300">Notlar</Label>
+                <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ekstra notlar..." />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Tahmini Ücret (₺)</label>
-                <Input
-                  type="number"
-                  value={newRepair.cost || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, cost: Number(e.target.value) })}
-                  placeholder="0"
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Notlar</label>
-                <Textarea
-                  value={newRepair.notes || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, notes: e.target.value })}
-                  placeholder="Teknisyen notları..."
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
-              </div>
-
-              <Button 
-                onClick={handleAddRepair}
-                disabled={isNewCustomer ? (!newCustomer.name || !newCustomer.phone || !newRepair.device || !newRepair.issue) : (!newRepair.customerId || !newRepair.device || !newRepair.issue)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Kaydet
+              <Button onClick={handleAddRepair} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />Kaydet
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* İstatistikler */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Toplam Tamir</CardTitle>
-            <Wrench className="h-4 w-4 text-blue-500" />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-400">Toplam Tamir</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-3xl font-bold text-white">{stats.total}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Bekleyen</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-400">Bekleyen</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">{stats.waiting}</div>
+            <div className="text-3xl font-bold text-amber-400">{stats.waiting}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Devam Eden</CardTitle>
-            <AlertCircle className="h-4 w-4 text-blue-500" />
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-400">Devam Eden</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{stats.inProgress}</div>
+            <div className="text-3xl font-bold text-blue-400">{stats.inProgress}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Tamamlanan</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-400">Toplam Gelir</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{stats.completed}</div>
+            <div className="text-3xl font-bold text-emerald-400">{formatCurrency(stats.totalRevenue)}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Arama ve Filtre */}
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-white">Tamir Kayıtları</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4 text-slate-500" />
-              <Input
-                placeholder="Müşteri, telefon, cihaz veya arıza ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-              />
-            </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[160px] bg-slate-800 border-slate-700 text-white">
-                <SelectValue placeholder="Durum" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
-                <SelectItem value="all" className="text-white">Tümü</SelectItem>
-                <SelectItem value="waiting" className="text-white">Bekliyor</SelectItem>
-                <SelectItem value="in_progress" className="text-white">Devam Ediyor</SelectItem>
-                <SelectItem value="completed" className="text-white">Tamamlandı</SelectItem>
-                <SelectItem value="cancelled" className="text-white">İptal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Search and Filter */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input 
+            placeholder="Musteri, telefon, cihaz, marka, model ara..." 
+            value={search} 
+            onChange={(e) => setSearch(e.target.value)} 
+            className="pl-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px] bg-slate-900 border-slate-700 text-white">
+            <SelectValue placeholder="Durum filtresi" />
+          </SelectTrigger>
+          <SelectContent className="bg-slate-900 border-slate-700">
+            <SelectItem value="all">Tumu</SelectItem>
+            <SelectItem value="waiting">Bekliyor</SelectItem>
+            <SelectItem value="in_progress">Devam Ediyor</SelectItem>
+            <SelectItem value="completed">Tamamlandi</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-          <div className="space-y-3">
-            {filteredRepairs.map((repair) => (
-              <div key={repair.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-lg text-white">{repair.customerName}</span>
-                      {getStatusBadge(repair.status)}
-                      {getPaymentBadge(repair.paymentStatus)}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {repair.customerPhone}
-                        {repair.customerPhone2 && ` / ${repair.customerPhone2}`}
-                      </span>
-                      <span>{repair.brand} {repair.model}</span>
-                      <span className="text-slate-500">{repair.createdAt}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold text-white">₺{repair.cost.toLocaleString("tr-TR")}</div>
-                    <div className="text-sm text-slate-400">
-                      Alınan: <span className="text-green-400">₺{repair.paidAmount.toLocaleString("tr-TR")}</span>
-                    </div>
-                    {repair.paymentStatus !== "paid" && (
-                      <div className="text-sm text-red-400">
-                        Kalan: ₺{(repair.cost - repair.paidAmount).toLocaleString("tr-TR")}
+      {/* Repairs Table */}
+      <Card className="bg-slate-900 border-slate-700">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-700 hover:bg-transparent">
+                <TableHead className="text-slate-400">ID</TableHead>
+                <TableHead className="text-slate-400">Musteri</TableHead>
+                <TableHead className="text-slate-400">Telefon</TableHead>
+                <TableHead className="text-slate-400">Cihaz</TableHead>
+                <TableHead className="text-slate-400">Ariza</TableHead>
+                <TableHead className="text-slate-400">Durum</TableHead>
+                <TableHead className="text-slate-400">Ucret</TableHead>
+                <TableHead className="text-slate-400">Odeme</TableHead>
+                <TableHead className="text-slate-400">Tarih</TableHead>
+                <TableHead className="text-slate-400 text-right">Islemler</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRepairs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center text-slate-500 py-8">
+                    Kayit bulunamadi.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredRepairs.map((repair) => (
+                  <TableRow key={repair.id} className="border-slate-700 hover:bg-slate-800/50">
+                    <TableCell className="text-slate-300 font-mono">#{repair.id}</TableCell>
+                    <TableCell className="text-white font-medium">{repair.customerName}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-slate-300 text-sm">{repair.phone1}</span>
+                        {repair.phone2 && <span className="text-slate-400 text-xs">{repair.phone2}</span>}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <p className="text-sm text-slate-300">
-                    <span className="text-slate-500">Arıza:</span> {repair.issue}
-                  </p>
-                  {repair.notes && (
-                    <p className="text-sm text-slate-400 mt-1">
-                      <span className="text-slate-500">Not:</span> {repair.notes}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <Select
-                      value={repair.status}
-                      onValueChange={(value) => handleStatusChange(repair.id, value as Repair["status"])}
-                    >
-                      <SelectTrigger className="w-[140px] h-8 text-xs bg-slate-800 border-slate-700 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
-                        <SelectItem value="waiting" className="text-white">Bekliyor</SelectItem>
-                        <SelectItem value="in_progress" className="text-white">Devam Ediyor</SelectItem>
-                        <SelectItem value="completed" className="text-white">Tamamlandı</SelectItem>
-                        <SelectItem value="cancelled" className="text-white">İptal</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {repair.status === "completed" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => sendWhatsApp(repair.customerPhone, repair.customerName, `${repair.brand} ${repair.model}`)}
-                        className="border-green-700 text-green-400 hover:bg-green-900/20 hover:text-green-300"
-                      >
-                        <MessageCircle className="mr-1 h-3 w-3" />
-                        WhatsApp
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openEdit(repair)}
-                      className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDelete(repair.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                    </TableCell>
+                    <TableCell className="text-slate-300">{repair.brand} {repair.model}</TableCell>
+                    <TableCell className="text-slate-300 max-w-[200px] truncate">{repair.issue}</TableCell>
+                    <TableCell>{getStatusBadge(repair.status)}</TableCell>
+                    <TableCell className="text-white font-medium">{formatCurrency(repair.cost)}</TableCell>
+                    <TableCell>{getPaymentBadge(repair.paymentType)}</TableCell>
+                    <TableCell className="text-slate-400 text-sm">{repair.createdAt}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {/* WhatsApp Button for completed repairs */}
+                        {repair.status === "completed" && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => sendWhatsApp(repair.phone1, repair.customerName, `${repair.brand} ${repair.model}`)}
+                            className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                            title="WhatsApp ile bilgilendir"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {/* Status Change */}
+                        <Select 
+                          value={repair.status} 
+                          onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
+                        >
+                          <SelectTrigger className="h-8 w-[130px] bg-slate-800 border-slate-600 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-600">
+                            <SelectItem value="waiting">Bekliyor</SelectItem>
+                            <SelectItem value="in_progress">Devam Ediyor</SelectItem>
+                            <SelectItem value="completed">Tamamlandi</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="sm" onClick={() => openNoteDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+                          <AlertCircle className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRepair(repair.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-400">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      {/* Düzenleme Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Tamir Düzenle</DialogTitle>
+            <DialogTitle className="text-white">Tamir Duzenle #{selectedRepair?.id}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Cihaz</label>
-                <Input
-                  value={newRepair.device || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, device: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
+                <Label className="text-slate-300">Musteri Adi</Label>
+                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Marka</label>
-                <Input
-                  value={newRepair.brand || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, brand: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
+                <Label className="text-slate-300">Telefon 1</Label>
+                <Input value={phone1} onChange={(e) => setPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Telefon 2</Label>
+              <Input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ikinci telefon (opsiyonel)" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Cihaz Turu</Label>
+                <Select value={device} onValueChange={setDevice}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="Telefon">Telefon</SelectItem>
+                    <SelectItem value="Tablet">Tablet</SelectItem>
+                    <SelectItem value="Laptop">Laptop</SelectItem>
+                    <SelectItem value="Bilgisayar">Bilgisayar</SelectItem>
+                    <SelectItem value="Monitor">Monitor</SelectItem>
+                    <SelectItem value="Diger">Diger</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Model</label>
-                <Input
-                  value={newRepair.model || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, model: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
+                <Label className="text-slate-300">Marka</Label>
+                <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Arıza</label>
-              <Textarea
-                value={newRepair.issue || ""}
-                onChange={(e) => setNewRepair({ ...newRepair, issue: e.target.value })}
-                className="bg-slate-800 border-slate-700 text-white"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Toplam Ücret (₺)</label>
-              <Input
-                type="number"
-                value={newRepair.cost || ""}
-                onChange={(e) => setNewRepair({ ...newRepair, cost: Number(e.target.value) })}
-                className="bg-slate-800 border-slate-700 text-white"
-              />
-            </div>
-
-            {/* Ödeme Durumu */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Ödeme Durumu</label>
-              <Select
-                value={newRepair.paymentStatus}
-                onValueChange={(value) => setNewRepair({ ...newRepair, paymentStatus: value as Repair["paymentStatus"] })}
-              >
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="unpaid" className="text-white">Ödenmedi</SelectItem>
-                  <SelectItem value="partial" className="text-white">Kısmi Ödeme</SelectItem>
-                  <SelectItem value="paid" className="text-white">Ödendi</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Kısmi ödeme seçilince göster */}
-            {newRepair.paymentStatus === "partial" && (
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Alınan Tutar (₺)</label>
-                <Input
-                  type="number"
-                  value={newRepair.paidAmount || ""}
-                  onChange={(e) => setNewRepair({ ...newRepair, paidAmount: Number(e.target.value) })}
-                  placeholder="Ne kadar alındı?"
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
+                <Label className="text-slate-300">Model</Label>
+                <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Notlar</label>
-              <Textarea
-                value={newRepair.notes || ""}
-                onChange={(e) => setNewRepair({ ...newRepair, notes: e.target.value })}
-                className="bg-slate-800 border-slate-700 text-white"
-              />
+              <div className="space-y-2">
+                <Label className="text-slate-300">Ucret (TL)</Label>
+                <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+              </div>
             </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Ariza Aciklamasi</Label>
+              <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Odeme Sekli</Label>
+                <Select value={paymentType} onValueChange={setPaymentType}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="unpaid">Odenmedi</SelectItem>
+                    <SelectItem value="cash">Nakit</SelectItem>
+                    <SelectItem value="card">Kredi Karti</SelectItem>
+                    <SelectItem value="transfer">Havale/EFT</SelectItem>
+                    <SelectItem value="partial">Kismi Odeme</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {paymentType === "partial" && (
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Alinan Tutar (TL)</Label>
+                  <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ne kadar alindi?" />
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Notlar</Label>
+              <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+            </div>
+            <Button onClick={handleUpdateRepair} className="w-full bg-blue-600 hover:bg-blue-700">
+              <CheckCircle className="h-4 w-4 mr-2" />Guncelle
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            <Button onClick={handleEditSave}>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Güncelle
+      {/* Notes Dialog */}
+      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Notlar - {selectedRepair?.customerName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-300">Yeni Not Ekle</Label>
+              <div className="flex gap-2">
+                <Textarea 
+                  value={noteText} 
+                  onChange={(e) => setNoteText(e.target.value)} 
+                  className="bg-slate-800 border-slate-600 text-white flex-1" 
+                  placeholder="Not yazin..."
+                />
+                <Button onClick={handleAddNote} className="bg-blue-600 hover:bg-blue-700 self-end">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <Label className="text-slate-300">Gecmis Notlar</Label>
+              {getRepairNotes(selectedRepair?.id || 0).length === 0 ? (
+                <p className="text-slate-500 text-sm">Heniz not eklenmemis.</p>
+              ) : (
+                getRepairNotes(selectedRepair?.id || 0).map((note) => (
+                  <div key={note.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                    <p className="text-white text-sm">{note.text}</p>
+                    <p className="text-slate-500 text-xs mt-1">{note.author} - {note.createdAt}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Customer Detail Dialog */}
+      <Dialog open={isNewCustomerDialogOpen} onOpenChange={setIsNewCustomerDialogOpen}>
+        <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Yeni Musteri Ekle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-300">Ad Soyad *</Label>
+              <Input value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Telefon 1 *</Label>
+              <Input value={newCustomerPhone1} onChange={(e) => setNewCustomerPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0532 123 4567" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Telefon 2</Label>
+              <Input value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0544 987 6543" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">E-posta</Label>
+              <Input value={newCustomerEmail} onChange={(e) => setNewCustomerEmail(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="ornek@email.com" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Adres</Label>
+              <Textarea value={newCustomerAddress} onChange={(e) => setNewCustomerAddress(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Adres..." />
+            </div>
+            <Button onClick={handleAddNewCustomer} className="w-full bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="h-4 w-4 mr-2" />Musteri Ekle
             </Button>
           </div>
         </DialogContent>
