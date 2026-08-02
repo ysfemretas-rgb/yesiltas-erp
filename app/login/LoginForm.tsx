@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Monitor, Eye, EyeOff, Lock, User } from "lucide-react"
+import { Monitor, Eye, EyeOff, Lock, User, CheckCircle2, XCircle } from "lucide-react"
 
 interface UserAccount {
   username: string
@@ -24,17 +24,22 @@ export default function LoginForm() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
   const [loading, setLoading] = useState(false)
 
   const handleLogin = () => {
-    console.log("Login clicked", username, password)
+    console.log("=== LOGIN CLICKED ===")
+    console.log("Username:", username)
+    console.log("Password:", password)
 
     if (!username || !password) {
       setError("Lutfen kullanici adi ve sifre girin!")
+      setSuccess("")
       return
     }
 
     setError("")
+    setSuccess("")
     setLoading(true)
 
     const user = users.find(
@@ -44,17 +49,34 @@ export default function LoginForm() {
     console.log("User found:", user)
 
     if (user) {
-      localStorage.setItem("yt_user", JSON.stringify({
-        username: user.username,
-        name: user.name,
-        role: user.role,
-        loginTime: new Date().toISOString()
-      }))
+      console.log("Login SUCCESS for:", user.name)
 
-      console.log("Redirecting to dashboard...")
-      window.location.href = "/dashboard"
+      try {
+        localStorage.setItem("yt_user", JSON.stringify({
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          loginTime: new Date().toISOString()
+        }))
+        console.log("localStorage set successfully")
+
+        setSuccess(`Giris basarili! Hos geldiniz, ${user.role} ${user.name}. Yonlendiriliyorsunuz...`)
+
+        // Delay redirect to show success message
+        setTimeout(() => {
+          console.log("Redirecting now...")
+          window.location.replace("/dashboard")
+        }, 1500)
+
+      } catch (err) {
+        console.error("localStorage error:", err)
+        setError("Tarayici depolama hatasi!")
+        setLoading(false)
+      }
     } else {
+      console.log("Login FAILED - Invalid credentials")
       setError("Kullanici adi veya sifre hatali!")
+      setSuccess("")
       setLoading(false)
     }
   }
@@ -112,9 +134,18 @@ export default function LoginForm() {
           </div>
         </div>
 
-        {/* Error */}
+        {/* Success Message */}
+        {success && (
+          <div className="flex items-center gap-2 rounded-lg border border-green-800 bg-green-900/20 p-3 text-sm text-green-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {success}
+          </div>
+        )}
+
+        {/* Error Message */}
         {error && (
-          <div className="rounded-lg border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">
+          <div className="flex items-center gap-2 rounded-lg border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">
+            <XCircle className="h-4 w-4 shrink-0" />
             {error}
           </div>
         )}
@@ -134,21 +165,21 @@ export default function LoginForm() {
           <div className="space-y-1 text-xs text-slate-400">
             <div 
               className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
-              onClick={() => { setUsername("admin"); setPassword("admin123"); setError(""); }}
+              onClick={() => { setUsername("admin"); setPassword("admin123"); setError(""); setSuccess(""); }}
             >
               <span>admin / admin123</span>
               <span className="text-blue-400">Yonetici</span>
             </div>
             <div 
               className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
-              onClick={() => { setUsername("teknisyen"); setPassword("tek123"); setError(""); }}
+              onClick={() => { setUsername("teknisyen"); setPassword("tek123"); setError(""); setSuccess(""); }}
             >
               <span>teknisyen / tek123</span>
               <span className="text-green-400">Teknisyen</span>
             </div>
             <div 
               className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
-              onClick={() => { setUsername("kasa"); setPassword("kasa123"); setError(""); }}
+              onClick={() => { setUsername("kasa"); setPassword("kasa123"); setError(""); setSuccess(""); }}
             >
               <span>kasa / kasa123</span>
               <span className="text-purple-400">Kasiyer</span>
