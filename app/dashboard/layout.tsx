@@ -30,8 +30,8 @@ import { Button } from "@/components/ui/button"
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
   { href: "/dashboard/repairs", icon: Wrench, label: "Teknik Servis", color: "text-orange-400" },
-  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar", color: "text-cyan-400" },
-  { href: "/dashboard/customers", icon: Users, label: "Musteriler", color: "text-violet-400" },
+  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satışlar", color: "text-cyan-400" },
+  { href: "/dashboard/customers", icon: Users, label: "Müşteriler", color: "text-violet-400" },
   { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
   { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
   { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
@@ -39,7 +39,7 @@ const menuItems = [
   { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
   { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
   { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },
-  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler", color: "text-rose-400" },
+  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikçiler", color: "text-rose-400" },
   { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
 ]
 
@@ -57,30 +57,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [checkingAuth, setCheckingAuth] = useState(true)
 
   useEffect(() => {
-    // Client-side only
     if (typeof window === "undefined") return
-    
+
     try {
       const userData = localStorage.getItem("yt_user")
-      console.log("Dashboard auth check:", userData)
-      
       if (!userData) {
-        console.log("No user found, redirecting to login")
         window.location.href = "/login"
         return
       }
-      
-      const parsed = JSON.parse(userData)
-      setCurrentUser(parsed)
-      console.log("User found:", parsed.name)
+      setCurrentUser(JSON.parse(userData))
     } catch (err) {
-      console.error("Auth error:", err)
       window.location.href = "/login"
     } finally {
       setCheckingAuth(false)
     }
 
-    // Theme
     try {
       const savedTheme = localStorage.getItem("yt_theme")
       if (savedTheme === "light") {
@@ -90,9 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setDarkMode(true)
         document.documentElement.classList.add("dark")
       }
-    } catch (e) {
-      console.log("Theme error:", e)
-    }
+    } catch (e) {}
   }, [])
 
   const handleLogout = () => {
@@ -117,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (checkingAuth) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-950">
-        <div className="text-white">Yukleniyor...</div>
+        <div className="text-white">Yükleniyor...</div>
       </div>
     )
   }
@@ -134,7 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {!collapsed && (
               <div className="flex items-center gap-2">
                 <Monitor className="h-5 w-5 text-blue-500" />
-                <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
+                <span className="text-base font-bold text-foreground truncate">Yeşiltaş Teknoloji</span>
               </div>
             )}
             <div className="flex items-center gap-1">
@@ -162,7 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
                 <UserCircle className="h-8 w-8 text-primary" />
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Hos geldiniz,</p>
+                  <p className="text-xs text-muted-foreground">Hoş geldiniz,</p>
                   <p className="truncate text-sm font-semibold text-foreground">
                     {currentUser.role} {currentUser.name}
                   </p>
@@ -175,7 +164,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {menuItems.map((item) => {
               const isActive = pathname === item.href
               const Icon = item.icon
-              
+
               return (
                 <Link
                   key={item.href}
@@ -207,7 +196,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               }`}
             >
               <LogOut className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
+              {!collapsed && <span className="text-sm font-medium">Çıkış Yap</span>}
             </Button>
           </div>
         </aside>
