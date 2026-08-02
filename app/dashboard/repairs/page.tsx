@@ -10,23 +10,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   Wrench, 
   Plus, 
   Search, 
   Clock, 
   CheckCircle, 
-  AlertCircle, 
-  ArrowRight,
+  AlertCircle,
   MessageCircle,
-  Phone,
   CreditCard,
   Banknote,
   Receipt,
   Pencil,
   Trash2,
-  X
+  Wallet
 } from "lucide-react"
 
 interface Repair {
@@ -41,6 +38,7 @@ interface Repair {
   status: "waiting" | "in_progress" | "completed"
   cost: number
   paid: number
+  remaining: number
   paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
   notes: string
   createdAt: string
@@ -64,6 +62,18 @@ interface Note {
   author: string
 }
 
+interface FinanceTransaction {
+  id: number
+  description: string
+  amount: number
+  type: "income" | "expense"
+  category: string
+  date: string
+  customer?: string
+  source: "repair" | "sale" | "manual"
+  sourceId?: number
+}
+
 const initialRepairs: Repair[] = [
   {
     id: 1,
@@ -77,6 +87,7 @@ const initialRepairs: Repair[] = [
     status: "completed",
     cost: 4500,
     paid: 4500,
+    remaining: 0,
     paymentType: "cash",
     notes: "Ekran degistirildi, test edildi.",
     createdAt: "2026-07-28",
@@ -94,6 +105,7 @@ const initialRepairs: Repair[] = [
     status: "in_progress",
     cost: 1200,
     paid: 0,
+    remaining: 1200,
     paymentType: "unpaid",
     notes: "Sarj soketi kontrol ediliyor.",
     createdAt: "2026-07-30",
@@ -110,6 +122,7 @@ const initialRepairs: Repair[] = [
     status: "waiting",
     cost: 800,
     paid: 0,
+    remaining: 800,
     paymentType: "unpaid",
     notes: "Parca siparisi verildi.",
     createdAt: "2026-08-01",
@@ -126,10 +139,15 @@ const initialNotes: Note[] = [
   { id: 1, repairId: 2, text: "Parca siparisi verildi, 2 gun surecek.", createdAt: "2026-07-30 10:00", author: "Teknisyen" },
 ]
 
+const initialFinance: FinanceTransaction[] = [
+  { id: 1, description: "iPhone 14 Pro Ekran Degisimi", amount: 4500, type: "income", category: "Tamir Geliri", date: "2026-07-29", customer: "Ahmet Yilmaz", source: "repair", sourceId: 1 },
+]
+
 export default function RepairsPage() {
   const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [notes, setNotes] = useState<Note[]>(initialNotes)
+  const [financeTransactions, setFinanceTransactions] = useState<FinanceTransaction[]>(initialFinance)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -168,9 +186,11 @@ export default function RepairsPage() {
         const savedRepairs = localStorage.getItem("yt_repairs")
         const savedCustomers = localStorage.getItem("yt_customers")
         const savedNotes = localStorage.getItem("yt_repair_notes")
+        const savedFinance = localStorage.getItem("yt_finance")
         if (savedRepairs) setRepairs(JSON.parse(savedRepairs))
         if (savedCustomers) setCustomers(JSON.parse(savedCustomers))
         if (savedNotes) setNotes(JSON.parse(savedNotes))
+        if (savedFinance) setFinanceTransactions(JSON.parse(savedFinance))
       } catch (e) {
         console.error("Load error:", e)
       }
@@ -183,8 +203,9 @@ export default function RepairsPage() {
       localStorage.setItem("yt_repairs", JSON.stringify(repairs))
       localStorage.setItem("yt_customers", JSON.stringify(customers))
       localStorage.setItem("yt_repair_notes", JSON.stringify(notes))
+      localStorage.setItem("yt_finance", JSON.stringify(financeTransactions))
     }
-  }, [repairs, customers, notes])
+  }, [repairs, customers, notes, financeTransactions])
 
   const filteredRepairs = useMemo(() => {
     return repairs.filter((r) => {
@@ -207,7 +228,8 @@ export default function RepairsPage() {
     const inProgress = repairs.filter((r) => r.status === "in_progress").length
     const completed = repairs.filter((r) => r.status === "completed").length
     const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
-    return { total, waiting, inProgress, completed, totalRevenue }
+    const totalRemaining = repairs.reduce((sum, r) => sum + r.remaining, 0)
+    return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
   }, [repairs])
 
   const handleCustomerSelect = (value: string) => {
@@ -247,7 +269,6 @@ export default function RepairsPage() {
     setPhone2(newCustomerPhone2)
     setIsNewCustomerDialogOpen(false)
     setIsNewCustomer(false)
-    // Reset new customer form
     setNewCustomerName("")
     setNewCustomerPhone1("")
     setNewCustomerPhone2("")
@@ -255,11 +276,32 @@ export default function RepairsPage() {
     setNewCustomerAddress("")
   }
 
+  const calculateRemaining = (totalCost: number, paid: number) => {
+    return Math.max(0, totalCost - paid)
+  }
+
+  const addFinanceTransaction = (repair: Repair) => {
+    if (repair.paid <= 0) return
+    const newTransaction: FinanceTransaction = {
+      id: Date.now(),
+      description: `${repair.brand} ${repair.model} ${repair.device} Tamiri`,
+      amount: repair.paid,
+      type: "income",
+      category: "Tamir Geliri",
+      date: new Date().toISOString().split("T")[0],
+      customer: repair.customerName,
+      source: "repair",
+      sourceId: repair.id,
+    }
+    setFinanceTransactions(prev => [newTransaction, ...prev])
+  }
+
   const handleAddRepair = () => {
     if (!customerName.trim() || !phone1.trim() || !device.trim() || !brand.trim() || !issue.trim()) return
     const newId = Math.max(...repairs.map((r) => r.id), 0) + 1
     const costNum = parseFloat(cost) || 0
     const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
+    const remainingNum = calculateRemaining(costNum, paidNum)
     const newRepair: Repair = {
       id: newId,
       customerName,
@@ -272,11 +314,18 @@ export default function RepairsPage() {
       status: "waiting",
       cost: costNum,
       paid: paidNum,
+      remaining: remainingNum,
       paymentType: paymentType as Repair["paymentType"],
       notes: notesInput,
       createdAt: new Date().toISOString().split("T")[0],
     }
     setRepairs([newRepair, ...repairs])
+
+    // Add to finance if payment made
+    if (paidNum > 0) {
+      addFinanceTransaction({ ...newRepair, id: newId })
+    }
+
     resetForm()
     setIsDialogOpen(false)
   }
@@ -287,49 +336,94 @@ export default function RepairsPage() {
     const paidNum = paymentType === "partial" 
       ? (parseFloat(paidAmount) || selectedRepair.paid) 
       : (paymentType === "unpaid" ? 0 : costNum)
+    const remainingNum = calculateRemaining(costNum, paidNum)
+
+    const updatedRepair: Repair = {
+      ...selectedRepair,
+      customerName,
+      phone1,
+      phone2,
+      device,
+      brand,
+      model,
+      issue,
+      cost: costNum,
+      paid: paidNum,
+      remaining: remainingNum,
+      paymentType: paymentType as Repair["paymentType"],
+      notes: notesInput,
+    }
 
     setRepairs(
       repairs.map((r) =>
-        r.id === selectedRepair.id
-          ? {
-              ...r,
-              customerName,
-              phone1,
-              phone2,
-              device,
-              brand,
-              model,
-              issue,
-              cost: costNum,
-              paid: paidNum,
-              paymentType: paymentType as Repair["paymentType"],
-              notes: notesInput,
-            }
-          : r
+        r.id === selectedRepair.id ? updatedRepair : r
       )
     )
+
+    // Update finance if payment changed
+    if (paidNum > selectedRepair.paid) {
+      const diff = paidNum - selectedRepair.paid
+      const newTransaction: FinanceTransaction = {
+        id: Date.now(),
+        description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Odeme`,
+        amount: diff,
+        type: "income",
+        category: "Tamir Geliri",
+        date: new Date().toISOString().split("T")[0],
+        customer: updatedRepair.customerName,
+        source: "repair",
+        sourceId: updatedRepair.id,
+      }
+      setFinanceTransactions(prev => [newTransaction, ...prev])
+    }
+
     setIsEditDialogOpen(false)
     setSelectedRepair(null)
   }
 
   const handleStatusChange = (id: number, newStatus: Repair["status"]) => {
+    const repair = repairs.find(r => r.id === id)
+    if (!repair) return
+
+    const updatedRepair = {
+      ...repair,
+      status: newStatus,
+      completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : repair.completedAt,
+    }
+
     setRepairs(
       repairs.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: newStatus,
-              completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : r.completedAt,
-            }
-          : r
+        r.id === id ? updatedRepair : r
       )
     )
+
+    // Add to finance when completed and has payment
+    if (newStatus === "completed" && repair.paid > 0) {
+      // Check if already added
+      const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandi"))
+      if (!alreadyAdded) {
+        const newTransaction: FinanceTransaction = {
+          id: Date.now(),
+          description: `${repair.brand} ${repair.model} - Tamir Tamamlandi`,
+          amount: repair.paid,
+          type: "income",
+          category: "Tamir Geliri",
+          date: new Date().toISOString().split("T")[0],
+          customer: repair.customerName,
+          source: "repair",
+          sourceId: repair.id,
+        }
+        setFinanceTransactions(prev => [newTransaction, ...prev])
+      }
+    }
   }
 
   const handleDeleteRepair = (id: number) => {
     if (confirm("Bu tamir kaydini silmek istediginize emin misiniz?")) {
       setRepairs(repairs.filter((r) => r.id !== id))
       setNotes(notes.filter((n) => n.repairId !== id))
+      // Remove related finance transactions
+      setFinanceTransactions(financeTransactions.filter(t => !(t.source === "repair" && t.sourceId === id)))
     }
   }
 
@@ -396,22 +490,35 @@ export default function RepairsPage() {
     }
   }
 
-  const getPaymentBadge = (type: string) => {
+  const getPaymentBadge = (type: string, remaining: number) => {
+    if (remaining > 0 && type !== "unpaid") {
+      return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi ({formatCurrency(remaining)} kaldi)</Badge>
+    }
     switch (type) {
       case "cash": return <Badge className="bg-emerald-600"><Banknote className="h-3 w-3 mr-1" />Nakit</Badge>
       case "card": return <Badge className="bg-blue-600"><CreditCard className="h-3 w-3 mr-1" />Kart</Badge>
       case "transfer": return <Badge className="bg-violet-600"><Receipt className="h-3 w-3 mr-1" />Havale</Badge>
-      case "partial": return <Badge className="bg-amber-600"><Banknote className="h-3 w-3 mr-1" />Kismi</Badge>
+      case "partial": return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi</Badge>
       default: return <Badge variant="secondary">Odenmedi</Badge>
     }
   }
 
   const getRepairNotes = (repairId: number) => notes.filter((n) => n.repairId === repairId)
 
-  const sendWhatsApp = (phone: string, customerName: string, device: string) => {
-    const cleanPhone = phone.replace(/\D/g, "")
-    const message = encodeURIComponent(`Merhaba ${customerName}, ${device} cihazinizin tamiri tamamlanmistir. Hemen teslim alabilirsiniz. Yesiltas Teknoloji`)
-    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+  const sendWhatsApp = (repair: Repair) => {
+    const cleanPhone = repair.phone1.replace(/\D/g, "")
+    let message = `Merhaba ${repair.customerName}, ${repair.brand} ${repair.model} cihazinizin tamiri tamamlanmistir.`
+
+    if (repair.remaining > 0) {
+      message += ` Toplam ucret: ${formatCurrency(repair.cost)}, alinan: ${formatCurrency(repair.paid)}, kalan bakiye: ${formatCurrency(repair.remaining)}. Lutfen kalan tutari getirin.`
+    } else {
+      message += ` Ucret tamamen odenmistir (${formatCurrency(repair.cost)}). Hemen teslim alabilirsiniz.`
+    }
+
+    message += ` Yesiltas Teknoloji`
+
+    const encodedMessage = encodeURIComponent(message)
+    window.open(`https://wa.me/90${cleanPhone}?text=${encodedMessage}`, "_blank")
   }
 
   const formatCurrency = (amount: number) => {
@@ -433,7 +540,6 @@ export default function RepairsPage() {
               <DialogTitle className="text-white">Yeni Tamir Kaydi</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              {/* Customer Selection */}
               <div className="space-y-2">
                 <Label className="text-slate-300">Musteri Secimi</Label>
                 <Select value={customerId} onValueChange={handleCustomerSelect}>
@@ -453,7 +559,6 @@ export default function RepairsPage() {
                 </Select>
               </div>
 
-              {/* New Customer Quick Add */}
               {isNewCustomer && (
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -499,7 +604,6 @@ export default function RepairsPage() {
                 </div>
               )}
 
-              {/* Existing Customer Info Display */}
               {!isNewCustomer && customerName && (
                 <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3">
                   <div className="grid grid-cols-3 gap-2 text-sm">
@@ -573,6 +677,16 @@ export default function RepairsPage() {
                 )}
               </div>
 
+              {paymentType === "partial" && cost && paidAmount && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
+                    <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
+                    <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label className="text-slate-300">Notlar</Label>
                 <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ekstra notlar..." />
@@ -586,8 +700,7 @@ export default function RepairsPage() {
         </Dialog>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-400">Toplam Tamir</CardTitle>
@@ -620,9 +733,16 @@ export default function RepairsPage() {
             <div className="text-3xl font-bold text-emerald-400">{formatCurrency(stats.totalRevenue)}</div>
           </CardContent>
         </Card>
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-400">Bekleyen Tahsilat</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-amber-400">{formatCurrency(stats.totalRemaining)}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Search and Filter */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -646,7 +766,6 @@ export default function RepairsPage() {
         </Select>
       </div>
 
-      {/* Repairs Table */}
       <Card className="bg-slate-900 border-slate-700">
         <CardContent className="p-0">
           <Table>
@@ -685,24 +804,29 @@ export default function RepairsPage() {
                     <TableCell className="text-slate-300">{repair.brand} {repair.model}</TableCell>
                     <TableCell className="text-slate-300 max-w-[200px] truncate">{repair.issue}</TableCell>
                     <TableCell>{getStatusBadge(repair.status)}</TableCell>
-                    <TableCell className="text-white font-medium">{formatCurrency(repair.cost)}</TableCell>
-                    <TableCell>{getPaymentBadge(repair.paymentType)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-white font-medium">{formatCurrency(repair.cost)}</span>
+                        {repair.remaining > 0 && (
+                          <span className="text-amber-400 text-xs">Kalan: {formatCurrency(repair.remaining)}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{getPaymentBadge(repair.paymentType, repair.remaining)}</TableCell>
                     <TableCell className="text-slate-400 text-sm">{repair.createdAt}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {/* WhatsApp Button for completed repairs */}
                         {repair.status === "completed" && (
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => sendWhatsApp(repair.phone1, repair.customerName, `${repair.brand} ${repair.model}`)}
+                            onClick={() => sendWhatsApp(repair)}
                             className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
                             title="WhatsApp ile bilgilendir"
                           >
                             <MessageCircle className="h-4 w-4" />
                           </Button>
                         )}
-                        {/* Status Change */}
                         <Select 
                           value={repair.status} 
                           onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
@@ -735,7 +859,6 @@ export default function RepairsPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
@@ -815,6 +938,17 @@ export default function RepairsPage() {
                 </div>
               )}
             </div>
+
+            {paymentType === "partial" && cost && paidAmount && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
+                  <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
+                  <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-slate-300">Notlar</Label>
               <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
@@ -826,7 +960,6 @@ export default function RepairsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Notes Dialog */}
       <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
         <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
@@ -864,7 +997,6 @@ export default function RepairsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* New Customer Detail Dialog */}
       <Dialog open={isNewCustomerDialogOpen} onOpenChange={setIsNewCustomerDialogOpen}>
         <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
