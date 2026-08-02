@@ -15,7 +15,7 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight,
+  Monitor,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -29,46 +29,6 @@ const navItems = [
   { href: "/dashboard/analytics", label: "Raporlar", icon: BarChart3 },
   { href: "/dashboard/settings", label: "Ayarlar", icon: Settings },
 ]
-
-function YesiltasLogo({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 188.42 217.57"
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id="lg1" x1="94.21" y1="217.12" x2="94.21" y2="2.15">
-          <stop offset="0" stopColor="#e8b218" />
-          <stop offset="0" stopColor="#00361c" />
-          <stop offset=".32" stopColor="#01984c" />
-          <stop offset=".51" stopColor="#7ae8a9" />
-          <stop offset=".76" stopColor="#3ac276" />
-          <stop offset=".93" stopColor="#1b3f29" />
-        </linearGradient>
-        <linearGradient id="lg2" x1="94.21" y1="191.35" x2="94.21" y2="-119.65">
-          <stop offset="0" stopColor="#bbb" />
-          <stop offset=".67" stopColor="#fff" />
-          <stop offset="1" stopColor="#bbb" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M94.21,0L0,54.39v108.78l94.21,54.39,94.21-54.39V54.39L94.21,0ZM169.69,152.36l-75.48,43.58-75.48-43.58v-87.15L94.21,21.63l75.48,43.58v87.15Z"
-        fill="url(#lg1)"
-      />
-      <g>
-        <path
-          d="M53.91,65.99h-24.59l38.06,49.88.26,52.34,18.03,16.98v-69.16l16.05-23.39h11.61v73.77l17.76-17.59v-55.67l.51-.51h15.2l12.29-18.44h-65.06l-16.08,22.51-.97.7-23.09-31.41Z"
-          fill="url(#lg2)"
-        />
-        <polygon
-          points="53.91 65.99 77 97.39 77.96 96.7 94.04 74.18 159.1 74.18 146.8 92.63 131.61 92.63 131.09 93.14 131.09 148.81 113.33 166.39 113.33 92.63 101.72 92.63 85.67 116.02 85.67 185.18 67.64 168.2 67.38 115.86 29.32 65.99 53.91 65.99"
-          fill="url(#lg2)"
-        />
-      </g>
-    </svg>
-  )
-}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -88,7 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <YesiltasLogo className="w-8 h-8" />
+          <Monitor className="w-6 h-6 text-emerald-400" />
           <span className="font-bold text-sm text-white">Yeşiltaş Teknoloji</span>
         </div>
         <Button
@@ -122,7 +82,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Logo */}
           <div className="p-4 border-b border-slate-800">
             <Link href="/dashboard" className="flex items-center gap-3">
-              <YesiltasLogo className="w-10 h-10" />
+              <Monitor className="w-8 h-8 text-emerald-400" />
               <div>
                 <h1 className="font-bold text-white text-sm leading-tight">Yeşiltaş</h1>
                 <p className="text-xs text-slate-400">Teknoloji</p>
@@ -150,7 +110,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
-                  {isActive && <ChevronRight className="w-3 h-3 ml-auto text-emerald-400" />}
                 </Link>
               )
             })}
