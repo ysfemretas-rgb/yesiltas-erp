@@ -83,59 +83,81 @@ export default function SalesPage() {
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
+  // Load data from localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const savedProducts = localStorage.getItem("yt_products")
-        const savedCustomers = localStorage.getItem("yt_customers")
-        const savedSales = localStorage.getItem("yt_sales")
+    if (typeof window === "undefined") return
 
-        if (savedProducts) {
-          const parsed = JSON.parse(savedProducts)
-          if (Array.isArray(parsed) && parsed.length > 0) setProducts(parsed)
+    try {
+      const savedProducts = localStorage.getItem("yt_products")
+      const savedCustomers = localStorage.getItem("yt_customers")
+      const savedSales = localStorage.getItem("yt_sales")
+
+      if (savedProducts) {
+        const parsed = JSON.parse(savedProducts)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProducts(parsed)
         } else {
           localStorage.setItem("yt_products", JSON.stringify(initialProducts))
         }
-
-        if (savedCustomers) {
-          const parsed = JSON.parse(savedCustomers)
-          if (Array.isArray(parsed)) setCustomers(parsed)
-        }
-
-        if (savedSales) {
-          const parsed = JSON.parse(savedSales)
-          if (Array.isArray(parsed)) setSales(parsed)
-        }
-      } catch (e) {
-        console.error("Load error:", e)
+      } else {
+        localStorage.setItem("yt_products", JSON.stringify(initialProducts))
       }
-      setIsLoaded(true)
+
+      if (savedCustomers) {
+        const parsed = JSON.parse(savedCustomers)
+        if (Array.isArray(parsed)) {
+          setCustomers(parsed)
+        }
+      }
+
+      if (savedSales) {
+        const parsed = JSON.parse(savedSales)
+        if (Array.isArray(parsed)) {
+          setSales(parsed)
+        }
+      }
+    } catch (e) {
+      console.error("Load error:", e)
     }
+    setIsLoaded(true)
   }, [])
 
+  // Save to localStorage when data changes
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_products", JSON.stringify(products))
+  }, [products, isLoaded])
+
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_customers", JSON.stringify(customers))
+  }, [customers, isLoaded])
+
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_sales", JSON.stringify(sales))
+  }, [sales, isLoaded])
+
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch || !Array.isArray(customers)) return customers || []
+    if (!customerSearch) return customers
+    const search = customerSearch.toLowerCase()
     return customers.filter(c =>
-      c && c.name && c.phone && (
-        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.phone.includes(customerSearch)
-      )
+      (c.name && c.name.toLowerCase().includes(search)) ||
+      (c.phone && c.phone.includes(search))
     )
   }, [customers, customerSearch])
 
   const filteredProducts = useMemo(() => {
-    if (!searchTerm || !Array.isArray(products)) return products || []
+    if (!searchTerm) return products
+    const search = searchTerm.toLowerCase()
     return products.filter(p =>
-      p && p.name && p.category && (
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      (p.name && p.name.toLowerCase().includes(search)) ||
+      (p.category && p.category.toLowerCase().includes(search))
     )
   }, [products, searchTerm])
 
   const cartTotal = useMemo(() => {
-    if (!Array.isArray(cart)) return 0
-    return cart.reduce((sum, item) => sum + (item?.price || 0) * (item?.quantity || 0), 0)
+    return cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
   }, [cart])
 
   const paid = paymentMethod === "partial" ? Number(paidAmount) || 0 : cartTotal
@@ -182,7 +204,6 @@ export default function SalesPage() {
     }
     const updated = [...customers, newCustomer]
     setCustomers(updated)
-    localStorage.setItem("yt_customers", JSON.stringify(updated))
     setSelectedCustomer(String(newCustomer.id))
     setNewCustomerName("")
     setNewCustomerPhone("")
@@ -218,7 +239,6 @@ export default function SalesPage() {
       return c
     })
     setCustomers(updatedCustomers)
-    localStorage.setItem("yt_customers", JSON.stringify(updatedCustomers))
 
     // Update product stock
     const updatedProducts = products.map(p => {
@@ -229,12 +249,10 @@ export default function SalesPage() {
       return p
     })
     setProducts(updatedProducts)
-    localStorage.setItem("yt_products", JSON.stringify(updatedProducts))
 
     // Save sale
     const updatedSales = [sale, ...sales]
     setSales(updatedSales)
-    localStorage.setItem("yt_sales", JSON.stringify(updatedSales))
 
     // Add to finance
     try {
@@ -250,11 +268,11 @@ export default function SalesPage() {
       }
       const savedFinance = localStorage.getItem("yt_finance")
       const financeData = savedFinance ? JSON.parse(savedFinance) : []
-      if (!Array.isArray(financeData)) {
-        localStorage.setItem("yt_finance", JSON.stringify([financeRecord]))
-      } else {
+      if (Array.isArray(financeData)) {
         financeData.push(financeRecord)
         localStorage.setItem("yt_finance", JSON.stringify(financeData))
+      } else {
+        localStorage.setItem("yt_finance", JSON.stringify([financeRecord]))
       }
     } catch (e) {
       console.error("Finance save error:", e)
@@ -269,25 +287,46 @@ export default function SalesPage() {
   }
 
   const sendWhatsApp = (sale: Sale) => {
-    if (!sale) return
-    const customer = customers.find(c => c.id === sale.customerId)
-    if (!customer || !customer.phone) return
-    const phone = String(customer.phone).replace(/[^0-9]/g, "")
-    if (!phone) return
+    try {
+      if (!sale || !sale.customerId) {
+        alert("Satış bilgisi bulunamadı!")
+        return
+      }
+      const customer = customers.find(c => c.id === sale.customerId)
+      if (!customer) {
+        alert("Müşteri bulunamadı!")
+        return
+      }
+      if (!customer.phone) {
+        alert("Müşteri telefon numarası yok!")
+        return
+      }
 
-    const items = sale.items.map(i => `${i.name} (${i.quantity}x)`).join("%0A")
-    let message = `Merhaba ${customer.name},%0A%0A`
-    message += `Yeşiltaş Teknoloji'den satış işleminiz hakkında bilgi vermek istiyoruz.%0A%0A`
-    message += `Satış Detayları:%0A${items}%0A%0A`
-    message += `Toplam Tutar: ₺${(sale.totalAmount || 0).toLocaleString("tr-TR")}%0A`
-    if (sale.remaining > 0) {
-      message += `Alınan: ₺${(sale.paid || 0).toLocaleString("tr-TR")}%0A`
-      message += `Kalan Borç: ₺${(sale.remaining || 0).toLocaleString("tr-TR")}%0A`
-    } else {
-      message += `Ödeme: Tamamlandı%0A`
+      const phone = String(customer.phone).replace(/\D/g, "")
+      if (!phone || phone.length < 10) {
+        alert("Geçersiz telefon numarası!")
+        return
+      }
+
+      const items = (sale.items || []).map(i => `${i.name} (${i.quantity}x)`).join("%0A")
+      let message = `Merhaba ${customer.name},%0A%0A`
+      message += `Yeşiltaş Teknoloji'den satış işleminiz hakkında bilgi vermek istiyoruz.%0A%0A`
+      message += `Satış Detayları:%0A${items || "Ürün bilgisi yok"}%0A%0A`
+      message += `Toplam Tutar: ₺${(sale.totalAmount || 0).toLocaleString("tr-TR")}%0A`
+      if (sale.remaining > 0) {
+        message += `Alınan: ₺${(sale.paid || 0).toLocaleString("tr-TR")}%0A`
+        message += `Kalan Borç: ₺${(sale.remaining || 0).toLocaleString("tr-TR")}%0A`
+      } else {
+        message += `Ödeme: Tamamlandı%0A`
+      }
+      message += `%0ATeşekkür ederiz, iyi günler dileriz!%0AYeşiltaş Teknoloji`
+
+      const url = `https://wa.me/${phone}?text=${message}`
+      window.open(url, "_blank")
+    } catch (err) {
+      console.error("WhatsApp error:", err)
+      alert("WhatsApp gönderilirken hata oluştu!")
     }
-    message += `%0ATeşekkür ederiz, iyi günler dileriz!%0AYeşiltaş Teknoloji`
-    window.open(`https://wa.me/${phone}?text=${message}`, "_blank")
   }
 
   const formatCurrency = (amount: number) => {
@@ -348,10 +387,14 @@ export default function SalesPage() {
                   className="pl-10 bg-slate-800 border-slate-600 text-white"
                 />
               </div>
-              {customerSearch && (
+
+              {/* Customer List - Always show if search or customers exist */}
+              {(customerSearch || customers.length > 0) && (
                 <div className="bg-slate-800 border border-slate-600 rounded-lg max-h-40 overflow-y-auto">
                   {filteredCustomers.length === 0 ? (
-                    <div className="p-3 text-sm text-slate-500">Müşteri bulunamadı</div>
+                    <div className="p-3 text-sm text-slate-500">
+                      {customerSearch ? "Müşteri bulunamadı" : "Henüz müşteri yok. Yeni müşteri ekleyin."}
+                    </div>
                   ) : (
                     filteredCustomers.map(c => (
                       <button
@@ -365,6 +408,7 @@ export default function SalesPage() {
                   )}
                 </div>
               )}
+
               {selectedCustomer && (
                 <div className="flex items-center gap-2 text-sm text-emerald-400">
                   <Badge className="bg-emerald-600/20 text-emerald-400">
@@ -375,6 +419,7 @@ export default function SalesPage() {
                   </button>
                 </div>
               )}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -383,6 +428,7 @@ export default function SalesPage() {
               >
                 <UserPlus className="w-3 h-3 mr-1" />{showNewCustomer ? "İptal" : "Yeni Müşteri"}
               </Button>
+
               {showNewCustomer && (
                 <div className="space-y-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <Input placeholder="Ad Soyad *" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
@@ -538,17 +584,22 @@ export default function SalesPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-medium text-white">{sale.customerName}</div>
-                      <div className="text-xs text-slate-400">{sale.date} | {sale.items?.length || 0} ürün</div>
+                      <div className="text-xs text-slate-400">{sale.date} | {(sale.items || []).length} ürün</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">{formatCurrency(sale.totalAmount)}</div>
-                      <Badge variant={sale.remaining > 0 ? "default" : "secondary"} className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : "bg-emerald-600/20 text-emerald-400"}>
+                      <Badge className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : "bg-emerald-600/20 text-emerald-400"}>
                         {sale.remaining > 0 ? `Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : "Tamamlandı"}
                       </Badge>
                     </div>
                   </div>
                   <div className="mt-2 flex gap-2">
-                    <Button size="sm" variant="ghost" className="text-green-400 hover:text-green-300 hover:bg-green-500/10" onClick={() => sendWhatsApp(sale)}>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="text-green-400 hover:text-green-300 hover:bg-green-500/10" 
+                      onClick={() => sendWhatsApp(sale)}
+                    >
                       <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
                     </Button>
                   </div>
