@@ -57,21 +57,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [checkingAuth, setCheckingAuth] = useState(true)
 
   useEffect(() => {
-    const userData = localStorage.getItem("yt_user")
-    if (!userData) {
+    // Client-side only
+    if (typeof window === "undefined") return
+    
+    try {
+      const userData = localStorage.getItem("yt_user")
+      console.log("Dashboard auth check:", userData)
+      
+      if (!userData) {
+        console.log("No user found, redirecting to login")
+        window.location.href = "/login"
+        return
+      }
+      
+      const parsed = JSON.parse(userData)
+      setCurrentUser(parsed)
+      console.log("User found:", parsed.name)
+    } catch (err) {
+      console.error("Auth error:", err)
       window.location.href = "/login"
-      return
+    } finally {
+      setCheckingAuth(false)
     }
-    setCurrentUser(JSON.parse(userData))
-    setCheckingAuth(false)
 
-    const savedTheme = localStorage.getItem("yt_theme")
-    if (savedTheme === "light") {
-      setDarkMode(false)
-      document.documentElement.classList.remove("dark")
-    } else {
-      setDarkMode(true)
-      document.documentElement.classList.add("dark")
+    // Theme
+    try {
+      const savedTheme = localStorage.getItem("yt_theme")
+      if (savedTheme === "light") {
+        setDarkMode(false)
+        document.documentElement.classList.remove("dark")
+      } else {
+        setDarkMode(true)
+        document.documentElement.classList.add("dark")
+      }
+    } catch (e) {
+      console.log("Theme error:", e)
     }
   }, [])
 
