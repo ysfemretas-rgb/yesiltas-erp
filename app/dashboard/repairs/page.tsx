@@ -38,7 +38,7 @@ interface Repair {
   status: "waiting" | "in_progress" | "completed"
   cost: number
   paid: number
-  remaining: number
+  remaining?: number
   paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
   notes: string
   createdAt: string
@@ -143,6 +143,14 @@ const initialFinance: FinanceTransaction[] = [
   { id: 1, description: "iPhone 14 Pro Ekran Degisimi", amount: 4500, type: "income", category: "Tamir Geliri", date: "2026-07-29", customer: "Ahmet Yilmaz", source: "repair", sourceId: 1 },
 ]
 
+// Helper: remaining degerini guvenli hesapla
+const getRemaining = (repair: Repair): number => {
+  if (typeof repair.remaining === "number" && !isNaN(repair.remaining)) {
+    return repair.remaining
+  }
+  return Math.max(0, (repair.cost || 0) - (repair.paid || 0))
+}
+
 export default function RepairsPage() {
   const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
@@ -187,7 +195,18 @@ export default function RepairsPage() {
         const savedCustomers = localStorage.getItem("yt_customers")
         const savedNotes = localStorage.getItem("yt_repair_notes")
         const savedFinance = localStorage.getItem("yt_finance")
-        if (savedRepairs) setRepairs(JSON.parse(savedRepairs))
+
+        if (savedRepairs) {
+          const parsed = JSON.parse(savedRepairs)
+          // Eski kayitlara remaining alani ekle
+          const fixed = parsed.map((r: Repair) => ({
+            ...r,
+            remaining: getRemaining(r),
+            cost: r.cost || 0,
+            paid: r.paid || 0,
+          }))
+          setRepairs(fixed)
+        }
         if (savedCustomers) setCustomers(JSON.parse(savedCustomers))
         if (savedNotes) setNotes(JSON.parse(savedNotes))
         if (savedFinance) setFinanceTransactions(JSON.parse(savedFinance))
@@ -227,8 +246,13 @@ export default function RepairsPage() {
     const waiting = repairs.filter((r) => r.status === "waiting").length
     const inProgress = repairs.filter((r) => r.status === "in_progress").length
     const completed = repairs.filter((r) => r.status === "completed").length
-    const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
-    const totalRemaining = repairs.reduce((sum, r) => sum + r.remaining, 0)
+    const totalRevenue = repairs
+      .filter((r) => r.status === "completed")
+      .reduce((sum, r) => sum + (r.paid || 0), 0)
+    const totalRemaining = repairs.reduce((sum, r) => {
+      const rem = getRemaining(r)
+      return sum + (isNaN(rem) ? 0 : rem)
+    }, 0)
     return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
   }, [repairs])
 
@@ -277,15 +301,18 @@ export default function RepairsPage() {
   }
 
   const calculateRemaining = (totalCost: number, paid: number) => {
-    return Math.max(0, totalCost - paid)
+    const costNum = Number(totalCost) || 0
+    const paidNum = Number(paid) || 0
+    return Math.max(0, costNum - paidNum)
   }
 
   const addFinanceTransaction = (repair: Repair) => {
-    if (repair.paid <= 0) return
+    const paid = Number(repair.paid) || 0
+    if (paid <= 0) return
     const newTransaction: FinanceTransaction = {
       id: Date.now(),
       description: `${repair.brand} ${repair.model} ${repair.device} Tamiri`,
-      amount: repair.paid,
+      amount: paid,
       type: "income",
       category: "Tamir Geliri",
       date: new Date().toISOString().split("T")[0],
@@ -299,9 +326,10 @@ export default function RepairsPage() {
   const handleAddRepair = () => {
     if (!customerName.trim() || !phone1.trim() || !device.trim() || !brand.trim() || !issue.trim()) return
     const newId = Math.max(...repairs.map((r) => r.id), 0) + 1
-    const costNum = parseFloat(cost) || 0
-    const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
+    const costNum = Number(cost) || 0
+    const paidNum = paymentType === "partial" ? (Number(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
     const remainingNum = calculateRemaining(costNum, paidNum)
+
     const newRepair: Repair = {
       id: newId,
       customerName,
@@ -319,11 +347,11 @@ export default function RepairsPage() {
       notes: notesInput,
       createdAt: new Date().toISOString().split("T")[0],
     }
+
     setRepairs([newRepair, ...repairs])
 
-    // Add to finance if payment made
     if (paidNum > 0) {
-      addFinanceTransaction({ ...newRepair, id: newId })
+      addFinanceTransaction(newRepair)
     }
 
     resetForm()
@@ -332,9 +360,9 @@ export default function RepairsPage() {
 
   const handleUpdateRepair = () => {
     if (!selectedRepair) return
-    const costNum = parseFloat(cost) || selectedRepair.cost
+    const costNum = Number(cost) || selectedRepair.cost || 0
     const paidNum = paymentType === "partial" 
-      ? (parseFloat(paidAmount) || selectedRepair.paid) 
+      ? (Number(paidAmount) || selectedRepair.paid || 0) 
       : (paymentType === "unpaid" ? 0 : costNum)
     const remainingNum = calculateRemaining(costNum, paidNum)
 
@@ -354,15 +382,11 @@ export default function RepairsPage() {
       notes: notesInput,
     }
 
-    setRepairs(
-      repairs.map((r) =>
-        r.id === selectedRepair.id ? updatedRepair : r
-      )
-    )
+    setRepairs(repairs.map((r) => r.id === selectedRepair.id ? updatedRepair : r))
 
-    // Update finance if payment changed
-    if (paidNum > selectedRepair.paid) {
-      const diff = paidNum - selectedRepair.paid
+    const oldPaid = Number(selectedRepair.paid) || 0
+    if (paidNum > oldPaid) {
+      const diff = paidNum - oldPaid
       const newTransaction: FinanceTransaction = {
         id: Date.now(),
         description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Odeme`,
@@ -391,29 +415,26 @@ export default function RepairsPage() {
       completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : repair.completedAt,
     }
 
-    setRepairs(
-      repairs.map((r) =>
-        r.id === id ? updatedRepair : r
-      )
-    )
+    setRepairs(repairs.map((r) => r.id === id ? updatedRepair : r))
 
-    // Add to finance when completed and has payment
-    if (newStatus === "completed" && repair.paid > 0) {
-      // Check if already added
-      const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandi"))
-      if (!alreadyAdded) {
-        const newTransaction: FinanceTransaction = {
-          id: Date.now(),
-          description: `${repair.brand} ${repair.model} - Tamir Tamamlandi`,
-          amount: repair.paid,
-          type: "income",
-          category: "Tamir Geliri",
-          date: new Date().toISOString().split("T")[0],
-          customer: repair.customerName,
-          source: "repair",
-          sourceId: repair.id,
+    if (newStatus === "completed") {
+      const paid = Number(repair.paid) || 0
+      if (paid > 0) {
+        const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandi"))
+        if (!alreadyAdded) {
+          const newTransaction: FinanceTransaction = {
+            id: Date.now(),
+            description: `${repair.brand} ${repair.model} - Tamir Tamamlandi`,
+            amount: paid,
+            type: "income",
+            category: "Tamir Geliri",
+            date: new Date().toISOString().split("T")[0],
+            customer: repair.customerName,
+            source: "repair",
+            sourceId: repair.id,
+          }
+          setFinanceTransactions(prev => [newTransaction, ...prev])
         }
-        setFinanceTransactions(prev => [newTransaction, ...prev])
       }
     }
   }
@@ -422,7 +443,6 @@ export default function RepairsPage() {
     if (confirm("Bu tamir kaydini silmek istediginize emin misiniz?")) {
       setRepairs(repairs.filter((r) => r.id !== id))
       setNotes(notes.filter((n) => n.repairId !== id))
-      // Remove related finance transactions
       setFinanceTransactions(financeTransactions.filter(t => !(t.source === "repair" && t.sourceId === id)))
     }
   }
@@ -449,9 +469,9 @@ export default function RepairsPage() {
     setBrand(repair.brand)
     setModel(repair.model)
     setIssue(repair.issue)
-    setCost(repair.cost.toString())
+    setCost(String(repair.cost || 0))
     setPaymentType(repair.paymentType)
-    setPaidAmount(repair.paid.toString())
+    setPaidAmount(String(repair.paid || 0))
     setNotesInput(repair.notes)
     setIsEditDialogOpen(true)
   }
@@ -490,11 +510,12 @@ export default function RepairsPage() {
     }
   }
 
-  const getPaymentBadge = (type: string, remaining: number) => {
-    if (remaining > 0 && type !== "unpaid") {
+  const getPaymentBadge = (repair: Repair) => {
+    const remaining = getRemaining(repair)
+    if (remaining > 0 && repair.paymentType !== "unpaid") {
       return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi ({formatCurrency(remaining)} kaldi)</Badge>
     }
-    switch (type) {
+    switch (repair.paymentType) {
       case "cash": return <Badge className="bg-emerald-600"><Banknote className="h-3 w-3 mr-1" />Nakit</Badge>
       case "card": return <Badge className="bg-blue-600"><CreditCard className="h-3 w-3 mr-1" />Kart</Badge>
       case "transfer": return <Badge className="bg-violet-600"><Receipt className="h-3 w-3 mr-1" />Havale</Badge>
@@ -507,12 +528,13 @@ export default function RepairsPage() {
 
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
+    const remaining = getRemaining(repair)
     let message = `Merhaba ${repair.customerName}, ${repair.brand} ${repair.model} cihazinizin tamiri tamamlanmistir.`
 
-    if (repair.remaining > 0) {
-      message += ` Toplam ucret: ${formatCurrency(repair.cost)}, alinan: ${formatCurrency(repair.paid)}, kalan bakiye: ${formatCurrency(repair.remaining)}. Lutfen kalan tutari getirin.`
+    if (remaining > 0) {
+      message += ` Toplam ucret: ${formatCurrency(repair.cost || 0)}, alinan: ${formatCurrency(repair.paid || 0)}, kalan bakiye: ${formatCurrency(remaining)}. Lutfen kalan tutari getirin.`
     } else {
-      message += ` Ucret tamamen odenmistir (${formatCurrency(repair.cost)}). Hemen teslim alabilirsiniz.`
+      message += ` Ucret tamamen odenmistir (${formatCurrency(repair.cost || 0)}). Hemen teslim alabilirsiniz.`
     }
 
     message += ` Yesiltas Teknoloji`
@@ -522,7 +544,8 @@ export default function RepairsPage() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
+    const num = Number(amount) || 0
+    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(num)
   }
 
   return (
@@ -680,9 +703,9 @@ export default function RepairsPage() {
               {paymentType === "partial" && cost && paidAmount && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                   <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
-                    <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
-                    <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                    <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(Number(cost) || 0)}</span></div>
+                    <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(Number(paidAmount) || 0)}</span></div>
+                    <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(Number(cost) || 0, Number(paidAmount) || 0))}</span></div>
                   </div>
                 </div>
               )}
@@ -791,68 +814,71 @@ export default function RepairsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredRepairs.map((repair) => (
-                  <TableRow key={repair.id} className="border-slate-700 hover:bg-slate-800/50">
-                    <TableCell className="text-slate-300 font-mono">#{repair.id}</TableCell>
-                    <TableCell className="text-white font-medium">{repair.customerName}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-slate-300 text-sm">{repair.phone1}</span>
-                        {repair.phone2 && <span className="text-slate-400 text-xs">{repair.phone2}</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-300">{repair.brand} {repair.model}</TableCell>
-                    <TableCell className="text-slate-300 max-w-[200px] truncate">{repair.issue}</TableCell>
-                    <TableCell>{getStatusBadge(repair.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-white font-medium">{formatCurrency(repair.cost)}</span>
-                        {repair.remaining > 0 && (
-                          <span className="text-amber-400 text-xs">Kalan: {formatCurrency(repair.remaining)}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getPaymentBadge(repair.paymentType, repair.remaining)}</TableCell>
-                    <TableCell className="text-slate-400 text-sm">{repair.createdAt}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {repair.status === "completed" && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => sendWhatsApp(repair)}
-                            className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                            title="WhatsApp ile bilgilendir"
+                filteredRepairs.map((repair) => {
+                  const remaining = getRemaining(repair)
+                  return (
+                    <TableRow key={repair.id} className="border-slate-700 hover:bg-slate-800/50">
+                      <TableCell className="text-slate-300 font-mono">#{repair.id}</TableCell>
+                      <TableCell className="text-white font-medium">{repair.customerName}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-300 text-sm">{repair.phone1}</span>
+                          {repair.phone2 && <span className="text-slate-400 text-xs">{repair.phone2}</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-slate-300">{repair.brand} {repair.model}</TableCell>
+                      <TableCell className="text-slate-300 max-w-[200px] truncate">{repair.issue}</TableCell>
+                      <TableCell>{getStatusBadge(repair.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-white font-medium">{formatCurrency(repair.cost || 0)}</span>
+                          {remaining > 0 && (
+                            <span className="text-amber-400 text-xs">Kalan: {formatCurrency(remaining)}</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{getPaymentBadge(repair)}</TableCell>
+                      <TableCell className="text-slate-400 text-sm">{repair.createdAt}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {repair.status === "completed" && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => sendWhatsApp(repair)}
+                              className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                              title="WhatsApp ile bilgilendir"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Select 
+                            value={repair.status} 
+                            onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
                           >
-                            <MessageCircle className="h-4 w-4" />
+                            <SelectTrigger className="h-8 w-[130px] bg-slate-800 border-slate-600 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-800 border-slate-600">
+                              <SelectItem value="waiting">Bekliyor</SelectItem>
+                              <SelectItem value="in_progress">Devam Ediyor</SelectItem>
+                              <SelectItem value="completed">Tamamlandi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button variant="ghost" size="sm" onClick={() => openNoteDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+                            <AlertCircle className="h-4 w-4" />
                           </Button>
-                        )}
-                        <Select 
-                          value={repair.status} 
-                          onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
-                        >
-                          <SelectTrigger className="h-8 w-[130px] bg-slate-800 border-slate-600 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-600">
-                            <SelectItem value="waiting">Bekliyor</SelectItem>
-                            <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-                            <SelectItem value="completed">Tamamlandi</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button variant="ghost" size="sm" onClick={() => openNoteDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                          <AlertCircle className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRepair(repair.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-400">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteRepair(repair.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-400">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -942,9 +968,9 @@ export default function RepairsPage() {
             {paymentType === "partial" && cost && paidAmount && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                 <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
-                  <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
-                  <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                  <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(Number(cost) || 0)}</span></div>
+                  <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(Number(paidAmount) || 0)}</span></div>
+                  <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(Number(cost) || 0, Number(paidAmount) || 0))}</span></div>
                 </div>
               </div>
             )}
