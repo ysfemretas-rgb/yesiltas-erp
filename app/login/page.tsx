@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Monitor, Eye, EyeOff, Lock, User } from "lucide-react"
@@ -28,6 +27,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const handleLogin = () => {
+    console.log("Login clicked", username, password)
+
     if (!username || !password) {
       setError("Lutfen kullanici adi ve sifre girin!")
       return
@@ -36,27 +37,24 @@ export default function LoginPage() {
     setError("")
     setLoading(true)
 
-    try {
-      const user = users.find(
-        (u) => u.username === username && u.password === password
-      )
+    const user = users.find(
+      (u) => u.username === username && u.password === password
+    )
 
-      if (user) {
-        localStorage.setItem("yt_user", JSON.stringify({
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          loginTime: new Date().toISOString()
-        }))
+    console.log("User found:", user)
 
-        // Hard redirect - most reliable method
-        window.location.replace("/dashboard")
-      } else {
-        setError("Kullanici adi veya sifre hatali!")
-        setLoading(false)
-      }
-    } catch (err) {
-      setError("Bir hata olustu: " + String(err))
+    if (user) {
+      localStorage.setItem("yt_user", JSON.stringify({
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        loginTime: new Date().toISOString()
+      }))
+
+      console.log("Redirecting to dashboard...")
+      window.location.href = "/dashboard"
+    } else {
+      setError("Kullanici adi veya sifre hatali!")
       setLoading(false)
     }
   }
@@ -132,14 +130,14 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Login Button */}
-            <Button
+            {/* Login Button - Plain HTML button */}
+            <button
               onClick={handleLogin}
-              className="w-full"
               disabled={loading}
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? "Giris yapiliyor..." : "Giris Yap"}
-            </Button>
+            </button>
 
             {/* Demo accounts */}
             <div className="border-t border-slate-800 pt-4">
