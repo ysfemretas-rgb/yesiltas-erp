@@ -1,246 +1,371 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import {
-  Wrench,
-  ShoppingCart,
-  Users,
-  DollarSign,
-  Package,
-  Calendar,
-  AlertTriangle,
-  TrendingUp,
-  Clock,
-  ArrowRight,
-  Plus,
-  Monitor
+import { usePathname } from "next/navigation"
+import { 
+  LayoutDashboard, 
+  Wrench, 
+  Package, 
+  ShoppingCart, 
+  Users, 
+  Calendar, 
+  DollarSign, 
+  Shield, 
+  BarChart3, 
+  Users2, 
+  Truck, 
+  Settings,
+  FlaskConical,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Moon,
+  Sun,
+  Monitor,
+  UserCircle,
+  Menu,
+  X,
+  RefreshCw
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+const menuItems = [
+  { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
+  { href: "/dashboard/repairs", icon: Wrench, label: "Teknik Servis", color: "text-orange-400" },
+  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar", color: "text-cyan-400" },
+  { href: "/dashboard/customers", icon: Users, label: "Musteriler", color: "text-violet-400" },
+  { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
+  { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
+  { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
+  { href: "/dashboard/finance", icon: DollarSign, label: "Finans", color: "text-green-400" },
+  { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
+  { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
+  { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },
+  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler", color: "text-rose-400" },
+  { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
+]
 
 interface UserData {
+  username: string
   name: string
   role: string
 }
 
-interface Activity {
-  id: number
-  type: "repair" | "sale" | "appointment" | "customer"
-  title: string
-  description: string
-  date: string
-  status: string
-  amount?: number
+interface CurrencyData {
+  rate: number
+  lastUpdate: string
 }
 
-export default function DashboardPage() {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [darkMode, setDarkMode] = useState(true)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null)
-  const [greeting, setGreeting] = useState("")
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  // Currency widget states
+  const [usdRate, setUsdRate] = useState<number | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<string>("")
+  const [usdInput, setUsdInput] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const userData = localStorage.getItem("yt_user")
-    if (userData) {
-      setCurrentUser(JSON.parse(userData))
+    if (typeof window === "undefined") return
+
+    try {
+      const userData = localStorage.getItem("yt_user")
+      console.log("Dashboard auth check:", userData)
+
+      if (!userData) {
+        console.log("No user found, redirecting to login")
+        window.location.href = "/login"
+        return
+      }
+
+      const parsed = JSON.parse(userData)
+      setCurrentUser(parsed)
+      console.log("User found:", parsed.name)
+    } catch (err) {
+      console.error("Auth error:", err)
+      window.location.href = "/login"
+    } finally {
+      setCheckingAuth(false)
     }
 
-    const hour = new Date().getHours()
-    if (hour >= 5 && hour < 12) {
-      setGreeting("Günaydın")
-    } else if (hour >= 12 && hour < 18) {
-      setGreeting("İyi günler")
-    } else {
-      setGreeting("İyi akşamlar")
+    try {
+      const savedTheme = localStorage.getItem("yt_theme")
+      if (savedTheme === "light") {
+        setDarkMode(false)
+        document.documentElement.classList.remove("dark")
+      } else {
+        setDarkMode(true)
+        document.documentElement.classList.add("dark")
+      }
+    } catch (e) {
+      console.log("Theme error:", e)
     }
   }, [])
 
-  // Demo veriler - gerçek uygulamada API'den gelecek
-  const stats = [
-    {
-      title: "Toplam Müşteri",
-      value: "128",
-      icon: Users,
-      color: "text-blue-400",
-      bgColor: "bg-blue-500/10",
-      borderColor: "border-blue-500/20",
-      href: "/dashboard/customers"
-    },
-    {
-      title: "Aktif Tamir",
-      value: "24",
-      icon: Wrench,
-      color: "text-orange-400",
-      bgColor: "bg-orange-500/10",
-      borderColor: "border-orange-500/20",
-      href: "/dashboard/repairs"
-    },
-    {
-      title: "Bugünkü Satış",
-      value: "₺12.450",
-      icon: ShoppingCart,
-      color: "text-green-400",
-      bgColor: "bg-green-500/10",
-      borderColor: "border-green-500/20",
-      href: "/dashboard/sales"
-    },
-    {
-      title: "Bekleyen Randevu",
-      value: "8",
-      icon: Calendar,
-      color: "text-pink-400",
-      bgColor: "bg-pink-500/10",
-      borderColor: "border-pink-500/20",
-      href: "/dashboard/appointments"
-    },
-    {
-      title: "Kritik Stok",
-      value: "5",
-      icon: AlertTriangle,
-      color: "text-red-400",
-      bgColor: "bg-red-500/10",
-      borderColor: "border-red-500/20",
-      href: "/dashboard/consumables"
-    },
-    {
-      title: "Toplam Borç",
-      value: "₺8.320",
-      icon: DollarSign,
-      color: "text-yellow-400",
-      bgColor: "bg-yellow-500/10",
-      borderColor: "border-yellow-500/20",
-      href: "/dashboard/customers"
-    },
-    {
-      title: "Aylık Ciro",
-      value: "₺145.600",
-      icon: TrendingUp,
-      color: "text-emerald-400",
-      bgColor: "bg-emerald-500/10",
-      borderColor: "border-emerald-500/20",
-      href: "/dashboard/finance"
-    },
-  ]
-
-  const quickActions = [
-    { label: "Yeni Tamir", href: "/dashboard/repairs", icon: Wrench, color: "bg-orange-600 hover:bg-orange-700" },
-    { label: "Yeni Satış", href: "/dashboard/sales", icon: ShoppingCart, color: "bg-green-600 hover:bg-green-700" },
-    { label: "Yeni Müşteri", href: "/dashboard/customers", icon: Users, color: "bg-blue-600 hover:bg-blue-700" },
-    { label: "Yeni Randevu", href: "/dashboard/appointments", icon: Calendar, color: "bg-pink-600 hover:bg-pink-700" },
-    { label: "Yeni Garanti", href: "/dashboard/warranties", icon: AlertTriangle, color: "bg-purple-600 hover:bg-purple-700" },
-    { label: "Yeni Gelir/Gider", href: "/dashboard/finance", icon: DollarSign, color: "bg-emerald-600 hover:bg-emerald-700" },
-  ]
-
-  const recentActivities: Activity[] = [
-    { id: 1, type: "repair", title: "iPhone 14 Pro Ekran Değişimi", description: "Ahmet Yılmaz - ₺2.500", date: "10 dakika önce", status: "Tamamlandı", amount: 2500 },
-    { id: 2, type: "sale", title: "Samsung Şarj Aleti Satışı", description: "Mehmet Kaya - ₺450", date: "25 dakika önce", status: "Satış", amount: 450 },
-    { id: 3, type: "appointment", title: "iPad Air 5 Tamiri", description: "Ayşe Demir - Yarın 14:00", date: "1 saat önce", status: "Bekliyor" },
-    { id: 4, type: "customer", title: "Yeni Müşteri Kaydı", description: "Fatma Şahin - 0555 456 7890", date: "2 saat önce", status: "Yeni" },
-    { id: 5, type: "repair", title: "Samsung S23 Batarya Değişimi", description: "Ali Veli - ₺1.800", date: "3 saat önce", status: "Devam Ediyor", amount: 1800 },
-  ]
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "repair": return <Wrench className="h-4 w-4 text-orange-400" />
-      case "sale": return <ShoppingCart className="h-4 w-4 text-green-400" />
-      case "appointment": return <Calendar className="h-4 w-4 text-pink-400" />
-      case "customer": return <Users className="h-4 w-4 text-blue-400" />
-      default: return <Clock className="h-4 w-4 text-slate-400" />
+  // Currency fetch
+  const fetchCurrency = async () => {
+    setIsLoading(true)
+    try {
+      const res = await fetch("https://open.er-api.com/v6/latest/USD")
+      const data = await res.json()
+      if (data.rates && data.rates.TRY) {
+        setUsdRate(data.rates.TRY)
+        const now = new Date()
+        setLastUpdate(now.toLocaleString("tr-TR", { 
+          day: "2-digit", month: "2-digit", year: "numeric", 
+          hour: "2-digit", minute: "2-digit", second: "2-digit" 
+        }))
+      }
+    } catch (err) {
+      console.error("Currency fetch error:", err)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const getActivityHref = (type: string) => {
-    switch (type) {
-      case "repair": return "/dashboard/repairs"
-      case "sale": return "/dashboard/sales"
-      case "appointment": return "/dashboard/appointments"
-      case "customer": return "/dashboard/customers"
-      default: return "/dashboard"
+  useEffect(() => {
+    fetchCurrency()
+    const interval = setInterval(fetchCurrency, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem("yt_user")
+    window.location.href = "/login"
+  }
+
+  const toggleTheme = () => {
+    const next = !darkMode
+    setDarkMode(next)
+    if (next) {
+      document.documentElement.classList.add("dark")
+      document.documentElement.classList.remove("light")
+      localStorage.setItem("yt_theme", "dark")
+    } else {
+      document.documentElement.classList.remove("dark")
+      document.documentElement.classList.add("light")
+      localStorage.setItem("yt_theme", "light")
     }
+  }
+
+  const tlValue = usdRate && usdInput ? (parseFloat(usdInput) * usdRate).toFixed(2) : "--"
+
+  if (checkingAuth) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <div className="text-white">Yukleniyor...</div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Hoş Geldiniz */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">
-          {greeting}, {currentUser?.role} {currentUser?.name}
-        </h1>
-        <p className="mt-1 text-slate-400">
-          Yeşiltaş Teknoloji Teknik Servis Yönetim Sistemine hoş geldiniz.
-        </p>
-      </div>
+    <div className={darkMode ? "dark" : ""}>
+      <div className="flex h-screen bg-background transition-colors">
+        {/* Mobile overlay */}
+        {mobileOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
 
-      {/* Hızlı Erişim */}
-      <div className="flex flex-wrap gap-2">
-        {quickActions.map((action) => (
-          <Link key={action.label} href={action.href}>
-            <Button className={`${action.color} text-white`} size="sm">
-              <action.icon className="mr-2 h-4 w-4" />
-              {action.label}
-            </Button>
-          </Link>
-        ))}
-      </div>
-
-      {/* İstatistik Kartları */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Link key={stat.title} href={stat.href} className="block">
-            <Card className={`bg-slate-900 border-slate-800 hover:border-slate-600 transition-colors cursor-pointer ${stat.borderColor}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-300">{stat.title}</CardTitle>
-                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
-                <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      {/* Son İşlemler */}
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-white">Son İşlemler</CardTitle>
-          <Link href="/dashboard/repairs">
-            <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white">
-              Tümünü Gör
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {recentActivities.map((activity) => (
-              <Link key={activity.id} href={getActivityHref(activity.type)}>
-                <div className="flex items-center gap-4 rounded-lg border border-slate-800 bg-slate-800/50 p-3 hover:bg-slate-800 transition-colors cursor-pointer">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800">
-                    {getActivityIcon(activity.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-white truncate">{activity.title}</p>
-                      <Badge variant="outline" className="border-slate-700 text-slate-400 text-xs">
-                        {activity.status}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{activity.description}</p>
-                  </div>
-                  <div className="text-xs text-slate-500 whitespace-nowrap">
-                    <Clock className="inline h-3 w-3 mr-1" />
-                    {activity.date}
-                  </div>
-                </div>
-              </Link>
-            ))}
+        {/* Sidebar */}
+        <aside 
+          className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300 ${
+            collapsed ? "w-16" : "w-60"
+          } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+        >
+          <div className="flex h-14 items-center justify-between border-b px-3">
+            {!collapsed && (
+              <div className="flex items-center gap-2">
+                <Monitor className="h-5 w-5 text-blue-500" />
+                <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleTheme}
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCollapsed(!collapsed)}
+                className="hidden lg:flex h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMobileOpen(false)}
+                className="lg:hidden h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {currentUser && !collapsed && (
+            <div className="border-b px-3 py-3">
+              <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
+                <UserCircle className="h-8 w-8 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Hos geldiniz,</p>
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {currentUser.role} {currentUser.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <nav className="flex-1 overflow-y-auto py-2">
+            {menuItems.map((item) => {
+              const isActive = pathname === item.href
+              const Icon = item.icon
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center mx-2 rounded-md transition-colors ${
+                    collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2 gap-3"
+                  } ${
+                    isActive 
+                      ? "bg-primary/10 text-primary border border-primary/20" 
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? "" : item.color}`} />
+                  {!collapsed && (
+                    <span className="text-sm font-medium truncate">{item.label}</span>
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+
+          <div className="border-t p-2">
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className={`w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 ${
+                collapsed ? "justify-center px-2 h-9" : "justify-start px-3 gap-3 h-9"
+              }`}
+            >
+              <LogOut className="h-[18px] w-[18px] shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
+            </Button>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto bg-background min-w-0">
+          {/* Mobile Header */}
+          <div className="lg:hidden flex items-center justify-between h-14 border-b px-4 bg-card">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMobileOpen(true)}
+                className="h-8 w-8 p-0"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              <Monitor className="h-5 w-5 text-blue-500" />
+              <span className="text-sm font-bold text-foreground">Yesiltas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleTheme}
+                className="h-8 w-8 p-0"
+              >
+                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Currency Widget - Desktop */}
+          <div className="hidden lg:flex items-center justify-end gap-3 px-6 pt-4 pb-2">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
+              <Input
+                type="number"
+                value={usdInput}
+                onChange={(e) => setUsdInput(e.target.value)}
+                placeholder="USD"
+                className="w-20 h-7 bg-transparent border-0 text-white text-sm p-0 focus-visible:ring-0"
+              />
+              <span className="text-slate-400 text-sm">$</span>
+              <span className="text-slate-400 text-sm">=</span>
+              <span className="text-emerald-400 font-bold text-sm">{tlValue}</span>
+              <span className="text-slate-400 text-sm">₺</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
+              <span className="text-slate-400 text-xs">USD/TRY:</span>
+              <span className="text-blue-400 font-bold text-sm">
+                {usdRate ? `₺${usdRate.toFixed(2)}` : "--"}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchCurrency}
+                disabled={isLoading}
+                className="h-6 w-6 p-0 text-slate-400 hover:text-white"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+            {lastUpdate && (
+              <span className="text-slate-500 text-xs">{lastUpdate}</span>
+            )}
+          </div>
+
+          {/* Currency Widget - Mobile (Compact) */}
+          <div className="lg:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={usdInput}
+                onChange={(e) => setUsdInput(e.target.value)}
+                placeholder="USD"
+                className="w-16 h-7 bg-slate-800 border-slate-700 text-white text-xs"
+              />
+              <span className="text-emerald-400 font-bold text-xs">{tlValue}₺</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-blue-400 text-xs font-bold">
+                {usdRate ? `₺${usdRate.toFixed(2)}` : "--"}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchCurrency}
+                disabled={isLoading}
+                className="h-6 w-6 p-0 text-slate-400"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-4 lg:p-6">{children}</div>
+        </main>
+      </div>
     </div>
   )
 }
