@@ -27,8 +27,12 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLogin = () => {
+    if (!username || !password) {
+      setError("Lutfen kullanici adi ve sifre girin!")
+      return
+    }
+
     setError("")
     setLoading(true)
 
@@ -43,11 +47,16 @@ export default function LoginPage() {
         role: user.role,
         loginTime: new Date().toISOString()
       }))
-      // Use window.location for hard redirect instead of router.push
       window.location.href = "/dashboard"
     } else {
       setError("Kullanici adi veya sifre hatali!")
       setLoading(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleLogin()
     }
   }
 
@@ -67,75 +76,86 @@ export default function LoginPage() {
           <CardHeader className="pb-4">
             <CardTitle className="text-center text-xl text-white">Giris Yap</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-slate-300">Kullanici Adi</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="Kullanici adiniz"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="border-slate-700 bg-slate-800 pl-10 text-white placeholder:text-slate-500"
-                    required
-                  />
-                </div>
+          <CardContent className="space-y-4">
+            {/* Username */}
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-slate-300">Kullanici Adi</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Kullanici adiniz"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="border-slate-700 bg-slate-800 pl-10 text-white placeholder:text-slate-500"
+                />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-300">Sifre</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Sifreniz"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="border-slate-700 bg-slate-800 pl-10 pr-10 text-white placeholder:text-slate-500"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+            {/* Password */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-slate-300">Sifre</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Sifreniz"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="border-slate-700 bg-slate-800 pl-10 pr-10 text-white placeholder:text-slate-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
+            </div>
 
-              {error && (
-                <div className="rounded-lg border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">
-                  {error}
-                </div>
-              )}
+            {/* Error */}
+            {error && (
+              <div className="rounded-lg border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">
+                {error}
+              </div>
+            )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loading || !username || !password}
-              >
-                {loading ? "Giris yapiliyor..." : "Giris Yap"}
-              </Button>
-            </form>
+            {/* Login Button */}
+            <Button
+              onClick={handleLogin}
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? "Giris yapiliyor..." : "Giris Yap"}
+            </Button>
 
             {/* Demo accounts */}
-            <div className="mt-6 border-t border-slate-800 pt-4">
+            <div className="border-t border-slate-800 pt-4">
               <p className="mb-2 text-xs font-medium text-slate-500">Demo Hesaplar:</p>
               <div className="space-y-1 text-xs text-slate-400">
-                <div className="flex justify-between rounded bg-slate-800/50 px-2 py-1">
+                <div 
+                  className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
+                  onClick={() => { setUsername("admin"); setPassword("admin123"); }}
+                >
                   <span>admin / admin123</span>
                   <span className="text-blue-400">Yonetici</span>
                 </div>
-                <div className="flex justify-between rounded bg-slate-800/50 px-2 py-1">
+                <div 
+                  className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
+                  onClick={() => { setUsername("teknisyen"); setPassword("tek123"); }}
+                >
                   <span>teknisyen / tek123</span>
                   <span className="text-green-400">Teknisyen</span>
                 </div>
-                <div className="flex justify-between rounded bg-slate-800/50 px-2 py-1">
+                <div 
+                  className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
+                  onClick={() => { setUsername("kasa"); setPassword("kasa123"); }}
+                >
                   <span>kasa / kasa123</span>
                   <span className="text-purple-400">Kasiyer</span>
                 </div>
