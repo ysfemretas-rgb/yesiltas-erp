@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,11 +22,17 @@ const users: UserAccount[] = [
 ]
 
 export default function LoginPage() {
+  const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleLogin = () => {
     if (!username || !password) {
@@ -47,7 +54,11 @@ export default function LoginPage() {
         role: user.role,
         loginTime: new Date().toISOString()
       }))
-      window.location.href = "/dashboard"
+
+      // Use router.push with setTimeout to ensure localStorage is set
+      setTimeout(() => {
+        router.push("/dashboard")
+      }, 100)
     } else {
       setError("Kullanici adi veya sifre hatali!")
       setLoading(false)
@@ -58,6 +69,14 @@ export default function LoginPage() {
     if (e.key === "Enter") {
       handleLogin()
     }
+  }
+
+  if (!mounted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="text-white">Yukleniyor...</div>
+      </div>
+    )
   }
 
   return (
