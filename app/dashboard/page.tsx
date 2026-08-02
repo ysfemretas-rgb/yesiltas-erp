@@ -12,9 +12,7 @@ import {
   Calendar, 
   DollarSign, 
   Package,
-  ArrowRight,
   TrendingUp,
-  TrendingDown,
   Clock
 } from "lucide-react"
 
@@ -25,6 +23,7 @@ interface Repair {
   brand: string
   status: string
   cost: number
+  paid?: number
   createdAt: string
 }
 
@@ -32,6 +31,7 @@ interface Sale {
   id: number
   customerName: string
   totalAmount: number
+  status: "completed" | "cancelled"
   date: string
 }
 
