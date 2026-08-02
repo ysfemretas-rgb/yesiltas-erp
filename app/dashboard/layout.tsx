@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
@@ -23,9 +23,14 @@ import {
   Moon,
   Sun,
   Monitor,
-  UserCircle
+  UserCircle,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  ArrowRightLeft
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
@@ -49,12 +54,80 @@ interface UserData {
   role: string
 }
 
+interface CurrencyData {
+  rate: number
+  lastUpdate: string
+  loading: boolean
+  error: string | null
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
+
+  // Döviz state
+  const [currency, setCurrency] = useState<CurrencyData>({
+    rate: 0,
+    lastUpdate: "",
+    loading: true,
+    error: null
+  })
+  const [tlAmount, setTlAmount] = useState<string>("")
+  const [usdResult, setUsdResult] = useState<string>("")
+
+  const fetchCurrency = useCallback(async () => {
+    setCurrency(prev => ({ ...prev, loading: true, error: null }))
+    try {
+      const response = await fetch("https://open.er-api.com/v6/latest/USD")
+      const data = await response.json()
+
+      if (data.result === "success" && data.rates?.TRY) {
+        const tryRate = data.rates.TRY
+        const now = new Date()
+        const formatted = now.toLocaleString("tr-TR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        })
+
+        setCurrency({
+          rate: tryRate,
+          lastUpdate: formatted,
+          loading: false,
+          error: null
+        })
+      } else {
+        throw new Error("Kur alınamadı")
+      }
+    } catch (err) {
+      setCurrency(prev => ({
+        ...prev,
+        loading: false,
+        error: "Kur yüklenemedi"
+      }))
+    }
+  }, [])
+
+  // TL -> USD çevirme (otomatik)
+  useEffect(() => {
+    if (tlAmount && currency.rate > 0) {
+      const tl = parseFloat(tlAmount.replace(/,/g, "."))
+      if (!isNaN(tl) && tl > 0) {
+        const usd = tl / currency.rate
+        setUsdResult(usd.toFixed(2))
+      } else {
+        setUsdResult("")
+      }
+    } else {
+      setUsdResult("")
+    }
+  }, [tlAmount, currency.rate])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -82,7 +155,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         document.documentElement.classList.add("dark")
       }
     } catch (e) {}
-  }, [])
+
+    // İlk kur çekme
+    fetchCurrency()
+
+    // 30 saniyede bir otomatik yenileme
+    const interval = setInterval(fetchCurrency, 30000)
+
+    return () => clearInterval(interval)
+  }, [fetchCurrency])
 
   const handleLogout = () => {
     localStorage.removeItem("yt_user")
@@ -201,8 +282,72 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </aside>
 
+        {/* Main Content */}
         <main className="flex-1 overflow-auto bg-background">
-          <div className="p-6">{children}</div>
+          {/* Döviz Widget - Sağ Üst */}
+          <div className="flex justify-end px-6 pt-4 pb-2">
+            <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-3 shadow-lg backdrop-blur-sm">
+              <div className="flex items-center gap-4">
+                {/* Dolar Kuru */}
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
+                    <DollarSign className="h-4 w-4 text-green-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-white">
+                        {currency.loading ? "..." : currency.error ? "--" : `₺${currency.rate.toFixed(2)}`}
+                      </span>
+                      <span className="text-xs text-slate-400">/ USD</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                      <span>Son güncelleme:</span>
+                      <span className="text-slate-400">{currency.lastUpdate || "--"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ayraç */}
+                <div className="h-8 w-px bg-slate-700" />
+
+                {/* TL -> USD Çevirici */}
+                <div className="flex items-center gap-2">
+                  <ArrowRightLeft className="h-3 w-3 text-slate-500" />
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="text"
+                      placeholder="TL"
+                      value={tlAmount}
+                      onChange={(e) => setTlAmount(e.target.value)}
+                      className="h-7 w-20 border-slate-600 bg-slate-900 text-xs text-white placeholder:text-slate-600"
+                    />
+                    <span className="text-xs text-slate-400">₺</span>
+                    <span className="text-xs text-slate-500">=</span>
+                    <span className="min-w-[50px] text-sm font-semibold text-green-400">
+                      {usdResult ? `$${usdResult}` : "--"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ayraç */}
+                <div className="h-8 w-px bg-slate-700" />
+
+                {/* Güncelle Butonu */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={fetchCurrency}
+                  disabled={currency.loading}
+                  className="h-7 px-2 text-xs text-slate-400 hover:text-white hover:bg-slate-700"
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${currency.loading ? "animate-spin" : ""}`} />
+                  Güncelle
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 pb-6">{children}</div>
         </main>
       </div>
     </div>
