@@ -1,371 +1,339 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { 
-  LayoutDashboard, 
   Wrench, 
-  Package, 
   ShoppingCart, 
   Users, 
   Calendar, 
   DollarSign, 
-  Shield, 
-  BarChart3, 
-  Users2, 
-  Truck, 
-  Settings,
-  FlaskConical,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
-  Moon,
-  Sun,
-  Monitor,
-  UserCircle,
-  Menu,
-  X,
-  RefreshCw
+  Package,
+  ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  Clock
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
-const menuItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
-  { href: "/dashboard/repairs", icon: Wrench, label: "Teknik Servis", color: "text-orange-400" },
-  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar", color: "text-cyan-400" },
-  { href: "/dashboard/customers", icon: Users, label: "Musteriler", color: "text-violet-400" },
-  { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
-  { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
-  { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
-  { href: "/dashboard/finance", icon: DollarSign, label: "Finans", color: "text-green-400" },
-  { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
-  { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
-  { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },
-  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler", color: "text-rose-400" },
-  { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
-]
+interface Repair {
+  id: number
+  customerName: string
+  device: string
+  brand: string
+  status: string
+  cost: number
+  createdAt: string
+}
 
-interface UserData {
-  username: string
+interface Sale {
+  id: number
+  customerName: string
+  totalAmount: number
+  date: string
+}
+
+interface Customer {
+  id: number
   name: string
-  role: string
+  phone: string
 }
 
-interface CurrencyData {
-  rate: number
-  lastUpdate: string
+interface Appointment {
+  id: number
+  customerName: string
+  date: string
+  time: string
+  status: string
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [darkMode, setDarkMode] = useState(true)
-  const [currentUser, setCurrentUser] = useState<UserData | null>(null)
-  const [checkingAuth, setCheckingAuth] = useState(true)
-
-  // Currency widget states
-  const [usdRate, setUsdRate] = useState<number | null>(null)
-  const [lastUpdate, setLastUpdate] = useState<string>("")
-  const [usdInput, setUsdInput] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
+export default function DashboardPage() {
+  const [currentUser, setCurrentUser] = useState<{name: string, role: string} | null>(null)
+  const [repairs, setRepairs] = useState<Repair[]>([])
+  const [sales, setSales] = useState<Sale[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    try {
+    if (typeof window !== "undefined") {
       const userData = localStorage.getItem("yt_user")
-      console.log("Dashboard auth check:", userData)
-
-      if (!userData) {
-        console.log("No user found, redirecting to login")
-        window.location.href = "/login"
-        return
+      if (userData) {
+        try {
+          setCurrentUser(JSON.parse(userData))
+        } catch (e) {
+          console.error(e)
+        }
       }
 
-      const parsed = JSON.parse(userData)
-      setCurrentUser(parsed)
-      console.log("User found:", parsed.name)
-    } catch (err) {
-      console.error("Auth error:", err)
-      window.location.href = "/login"
-    } finally {
-      setCheckingAuth(false)
-    }
+      const savedRepairs = localStorage.getItem("yt_repairs")
+      const savedSales = localStorage.getItem("yt_sales")
+      const savedCustomers = localStorage.getItem("yt_customers")
+      const savedAppointments = localStorage.getItem("yt_appointments")
 
-    try {
-      const savedTheme = localStorage.getItem("yt_theme")
-      if (savedTheme === "light") {
-        setDarkMode(false)
-        document.documentElement.classList.remove("dark")
-      } else {
-        setDarkMode(true)
-        document.documentElement.classList.add("dark")
+      if (savedRepairs) {
+        try { setRepairs(JSON.parse(savedRepairs)) } catch (e) {}
       }
-    } catch (e) {
-      console.log("Theme error:", e)
+      if (savedSales) {
+        try { setSales(JSON.parse(savedSales)) } catch (e) {}
+      }
+      if (savedCustomers) {
+        try { setCustomers(JSON.parse(savedCustomers)) } catch (e) {}
+      }
+      if (savedAppointments) {
+        try { setAppointments(JSON.parse(savedAppointments)) } catch (e) {}
+      }
     }
   }, [])
 
-  // Currency fetch
-  const fetchCurrency = async () => {
-    setIsLoading(true)
-    try {
-      const res = await fetch("https://open.er-api.com/v6/latest/USD")
-      const data = await res.json()
-      if (data.rates && data.rates.TRY) {
-        setUsdRate(data.rates.TRY)
-        const now = new Date()
-        setLastUpdate(now.toLocaleString("tr-TR", { 
-          day: "2-digit", month: "2-digit", year: "numeric", 
-          hour: "2-digit", minute: "2-digit", second: "2-digit" 
-        }))
-      }
-    } catch (err) {
-      console.error("Currency fetch error:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchCurrency()
-    const interval = setInterval(fetchCurrency, 30000)
-    return () => clearInterval(interval)
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return "Gunaydin"
+    if (hour < 18) return "Iyi gunler"
+    return "Iyi aksamlar"
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem("yt_user")
-    window.location.href = "/login"
-  }
+  const stats = useMemo(() => {
+    const totalCustomers = customers.length
+    const activeRepairs = repairs.filter(r => r.status !== "completed").length
+    const completedRepairs = repairs.filter(r => r.status === "completed").length
+    const totalRevenue = sales.filter(s => s.status === "completed").reduce((sum, s) => sum + (s.totalAmount || 0), 0)
+    const repairRevenue = repairs.filter(r => r.status === "completed").reduce((sum, r) => sum + (r.paid || r.cost || 0), 0)
+    const totalIncome = totalRevenue + repairRevenue
+    const pendingRepairs = repairs.filter(r => r.status === "waiting").length
+    const todayAppointments = appointments.filter(a => a.date === new Date().toISOString().split("T")[0]).length
 
-  const toggleTheme = () => {
-    const next = !darkMode
-    setDarkMode(next)
-    if (next) {
-      document.documentElement.classList.add("dark")
-      document.documentElement.classList.remove("light")
-      localStorage.setItem("yt_theme", "dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-      document.documentElement.classList.add("light")
-      localStorage.setItem("yt_theme", "light")
+    return {
+      totalCustomers,
+      activeRepairs,
+      completedRepairs,
+      totalIncome,
+      pendingRepairs,
+      todayAppointments,
+      totalSales: sales.filter(s => s.status === "completed").length
     }
-  }
+  }, [customers, repairs, sales, appointments])
 
-  const tlValue = usdRate && usdInput ? (parseFloat(usdInput) * usdRate).toFixed(2) : "--"
+  const recentActivities = useMemo(() => {
+    const activities: {type: string, title: string, desc: string, date: string, link: string}[] = []
 
-  if (checkingAuth) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-950">
-        <div className="text-white">Yukleniyor...</div>
-      </div>
-    )
+    repairs.slice(0, 5).forEach(r => {
+      activities.push({
+        type: "repair",
+        title: `Tamir: ${r.customerName}`,
+        desc: `${r.brand} ${r.device} - ${r.status === "completed" ? "Tamamlandi" : r.status === "waiting" ? "Bekliyor" : "Devam Ediyor"}`,
+        date: r.createdAt,
+        link: "/dashboard/repairs"
+      })
+    })
+
+    sales.slice(0, 5).forEach(s => {
+      activities.push({
+        type: "sale",
+        title: `Satis: ${s.customerName}`,
+        desc: `Toplam: ₺${s.totalAmount}`,
+        date: s.date,
+        link: "/dashboard/sales"
+      })
+    })
+
+    return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)
+  }, [repairs, sales])
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount || 0)
   }
 
   return (
-    <div className={darkMode ? "dark" : ""}>
-      <div className="flex h-screen bg-background transition-colors">
-        {/* Mobile overlay */}
-        {mobileOpen && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
+    <div className="space-y-6">
+      {/* Greeting */}
+      <div>
+        <h1 className="text-2xl lg:text-3xl font-bold text-white">
+          {greeting}, {currentUser?.role} {currentUser?.name}
+        </h1>
+        <p className="text-slate-400 mt-1 text-sm lg:text-base">
+          Yesiltas Teknoloji Teknik Servis Yonetim Sistemine hos geldiniz.
+        </p>
+      </div>
 
-        {/* Sidebar */}
-        <aside 
-          className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300 ${
-            collapsed ? "w-16" : "w-60"
-          } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
-        >
-          <div className="flex h-14 items-center justify-between border-b px-3">
-            {!collapsed && (
-              <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-blue-500" />
-                <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
-              </div>
-            )}
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleTheme}
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCollapsed(!collapsed)}
-                className="hidden lg:flex h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMobileOpen(false)}
-                className="lg:hidden h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-3">
+        <Link href="/dashboard/repairs">
+          <Button className="w-full bg-orange-600 hover:bg-orange-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
+            <Wrench className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Tamir
+          </Button>
+        </Link>
+        <Link href="/dashboard/sales">
+          <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
+            <ShoppingCart className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Satis
+          </Button>
+        </Link>
+        <Link href="/dashboard/customers">
+          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
+            <Users className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Musteri
+          </Button>
+        </Link>
+        <Link href="/dashboard/appointments">
+          <Button className="w-full bg-pink-600 hover:bg-pink-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
+            <Calendar className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Randevu
+          </Button>
+        </Link>
+        <Link href="/dashboard/warranties">
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
+            <Package className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Garanti
+          </Button>
+        </Link>
+        <Link href="/dashboard/finance">
+          <Button className="w-full bg-green-600 hover:bg-green-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
+            <DollarSign className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Gelir/Gider
+          </Button>
+        </Link>
+      </div>
 
-          {currentUser && !collapsed && (
-            <div className="border-b px-3 py-3">
-              <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
-                <UserCircle className="h-8 w-8 text-primary" />
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Hos geldiniz,</p>
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {currentUser.role} {currentUser.name}
-                  </p>
-                </div>
-              </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <Link href="/dashboard/customers">
+          <Card className="bg-slate-900 border-slate-700 hover:border-blue-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Toplam Musteri
+                <Users className="h-3 w-3 lg:h-4 lg:w-4 text-blue-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-white">{stats.totalCustomers}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/repairs">
+          <Card className="bg-slate-900 border-slate-700 hover:border-orange-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Aktif Tamir
+                <Wrench className="h-3 w-3 lg:h-4 lg:w-4 text-orange-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-white">{stats.activeRepairs}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/repairs">
+          <Card className="bg-slate-900 border-slate-700 hover:border-emerald-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Tamamlanan
+                <TrendingUp className="h-3 w-3 lg:h-4 lg:w-4 text-emerald-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-emerald-400">{stats.completedRepairs}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/finance">
+          <Card className="bg-slate-900 border-slate-700 hover:border-green-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Toplam Gelir
+                <DollarSign className="h-3 w-3 lg:h-4 lg:w-4 text-green-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-green-400">{formatCurrency(stats.totalIncome)}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/repairs">
+          <Card className="bg-slate-900 border-slate-700 hover:border-amber-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Bekleyen Tamir
+                <Clock className="h-3 w-3 lg:h-4 lg:w-4 text-amber-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-amber-400">{stats.pendingRepairs}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/sales">
+          <Card className="bg-slate-900 border-slate-700 hover:border-cyan-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Toplam Satis
+                <ShoppingCart className="h-3 w-3 lg:h-4 lg:w-4 text-cyan-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-cyan-400">{stats.totalSales}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/appointments">
+          <Card className="bg-slate-900 border-slate-700 hover:border-pink-500/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-1 lg:pb-2">
+              <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
+                Bugun Randevu
+                <Calendar className="h-3 w-3 lg:h-4 lg:w-4 text-pink-500" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl lg:text-3xl font-bold text-pink-400">{stats.todayAppointments}</div>
+              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Recent Activities */}
+      <Card className="bg-slate-900 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white text-base lg:text-lg flex items-center justify-between">
+            <span>Son Islemler</span>
+            <Link href="/dashboard/repairs">
+              <span className="text-xs text-blue-400 hover:text-blue-300">Tumunu Gor →</span>
+            </Link>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentActivities.length === 0 ? (
+            <p className="text-slate-500 text-center py-4">Heniz islem bulunmuyor.</p>
+          ) : (
+            <div className="space-y-2">
+              {recentActivities.map((activity, idx) => (
+                <Link key={idx} href={activity.link}>
+                  <div className="flex items-center justify-between p-2 lg:p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2 lg:gap-3 min-w-0">
+                      <Badge variant={activity.type === "repair" ? "default" : "secondary"} className="text-xs shrink-0">
+                        {activity.type === "repair" ? "Tamir" : "Satis"}
+                      </Badge>
+                      <div className="min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{activity.title}</p>
+                        <p className="text-slate-400 text-xs truncate">{activity.desc}</p>
+                      </div>
+                    </div>
+                    <span className="text-slate-500 text-xs shrink-0 ml-2">{activity.date}</span>
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
-
-          <nav className="flex-1 overflow-y-auto py-2">
-            {menuItems.map((item) => {
-              const isActive = pathname === item.href
-              const Icon = item.icon
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center mx-2 rounded-md transition-colors ${
-                    collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2 gap-3"
-                  } ${
-                    isActive 
-                      ? "bg-primary/10 text-primary border border-primary/20" 
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? "" : item.color}`} />
-                  {!collapsed && (
-                    <span className="text-sm font-medium truncate">{item.label}</span>
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-
-          <div className="border-t p-2">
-            <Button
-              variant="ghost"
-              onClick={handleLogout}
-              className={`w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 ${
-                collapsed ? "justify-center px-2 h-9" : "justify-start px-3 gap-3 h-9"
-              }`}
-            >
-              <LogOut className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed && <span className="text-sm font-medium">Cikis Yap</span>}
-            </Button>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto bg-background min-w-0">
-          {/* Mobile Header */}
-          <div className="lg:hidden flex items-center justify-between h-14 border-b px-4 bg-card">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMobileOpen(true)}
-                className="h-8 w-8 p-0"
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-              <Monitor className="h-5 w-5 text-blue-500" />
-              <span className="text-sm font-bold text-foreground">Yesiltas</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleTheme}
-                className="h-8 w-8 p-0"
-              >
-                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Currency Widget - Desktop */}
-          <div className="hidden lg:flex items-center justify-end gap-3 px-6 pt-4 pb-2">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
-              <Input
-                type="number"
-                value={usdInput}
-                onChange={(e) => setUsdInput(e.target.value)}
-                placeholder="USD"
-                className="w-20 h-7 bg-transparent border-0 text-white text-sm p-0 focus-visible:ring-0"
-              />
-              <span className="text-slate-400 text-sm">$</span>
-              <span className="text-slate-400 text-sm">=</span>
-              <span className="text-emerald-400 font-bold text-sm">{tlValue}</span>
-              <span className="text-slate-400 text-sm">₺</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
-              <span className="text-slate-400 text-xs">USD/TRY:</span>
-              <span className="text-blue-400 font-bold text-sm">
-                {usdRate ? `₺${usdRate.toFixed(2)}` : "--"}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchCurrency}
-                disabled={isLoading}
-                className="h-6 w-6 p-0 text-slate-400 hover:text-white"
-              >
-                <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
-            {lastUpdate && (
-              <span className="text-slate-500 text-xs">{lastUpdate}</span>
-            )}
-          </div>
-
-          {/* Currency Widget - Mobile (Compact) */}
-          <div className="lg:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={usdInput}
-                onChange={(e) => setUsdInput(e.target.value)}
-                placeholder="USD"
-                className="w-16 h-7 bg-slate-800 border-slate-700 text-white text-xs"
-              />
-              <span className="text-emerald-400 font-bold text-xs">{tlValue}₺</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-blue-400 text-xs font-bold">
-                {usdRate ? `₺${usdRate.toFixed(2)}` : "--"}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchCurrency}
-                disabled={isLoading}
-                className="h-6 w-6 p-0 text-slate-400"
-              >
-                <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
-          </div>
-
-          <div className="p-4 lg:p-6">{children}</div>
-        </main>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
