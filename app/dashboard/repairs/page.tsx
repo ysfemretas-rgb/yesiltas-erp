@@ -262,11 +262,8 @@ export default function RepairsPage() {
       const customer = customers.find((c) => c.id.toString() === value)
       if (customer) {
         setCustomerName(customer.name)
-        // Use phone1 with fallback to phone/telefon fields
-        const primaryPhone = customer.phone1 || customer.phone || ""
-        const secondaryPhone = customer.phone2 || ""
-        setPhone1(primaryPhone)
-        setPhone2(secondaryPhone)
+        setPhone1(customer.phone1 || "")
+        setPhone2(customer.phone2 || "")
       }
     }
   }
@@ -602,7 +599,7 @@ export default function RepairsPage() {
                     </SelectItem>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id.toString()} className="text-white">
-                        {c.name} - {c.phone1 || c.phone || "Telefon yok"}
+                        {c.name} - {c.phone1 || "Telefon yok"}
                       </SelectItem>
                     ))}
                   </SelectContent>
