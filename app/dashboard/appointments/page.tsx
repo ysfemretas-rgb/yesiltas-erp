@@ -228,9 +228,9 @@ export default function AppointmentsPage() {
 
     let message = ""
     if (isPast) {
-      message = `Merhaba *${appointment.customerName}*,\n\n*Yesiltas Teknoloji*'den randevu hatirlatmasidir.\n\nRandevu tarihiniz (*${dateStr} - ${appointment.time}*) gecmistir.\n\nHizmet: *${appointment.service}*\n\nLutfen yeni bir randevu olusturmak icin bizimle iletisime geciniz.\n\nIyi gunler dileriz!\n*Yesiltas Teknoloji*`
+      message = `Merhaba *${appointment.customerName}*,\n\n*Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\nRandevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.\n\nHizmet: *${appointment.service}*\n\nLütfen yeni bir randevu oluşturmak için bizimle iletişime geçiniz.\n\nİyi günler dileriz!\n*Yeşiltaş Teknoloji*`
     } else {
-      message = `Merhaba *${appointment.customerName}*,\n\n*Yesiltas Teknoloji*'den randevu hatirlatmasidir.\n\nRandevu tarihiniz: *${dateStr} - ${appointment.time}*\n\nHizmet: *${appointment.service}*\n\nLutfen randevu saatinde gelmeyi unutmayiniz.\n\nIyi gunler dileriz!\n*Yesiltas Teknoloji*`
+      message = `Merhaba *${appointment.customerName}*,\n\n*Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\nRandevu tarihiniz: *${dateStr} - ${appointment.time}*\n\nHizmet: *${appointment.service}*\n\nLütfen randevu saatinde gelmeyi unutmayınız.\n\nİyi günler dileriz!\n*Yeşiltaş Teknoloji*`
     }
 
     if (appointment.notes) {
