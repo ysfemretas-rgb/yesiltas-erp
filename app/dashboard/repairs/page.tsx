@@ -316,14 +316,14 @@ export default function RepairsPage() {
   const validateForm = () => {
     const missingFields: string[] = []
 
-    if (!customerName.trim()) missingFields.push("Musteri Adi")
+    if (!customerName.trim()) missingFields.push("Müşteri Adi")
     if (!phone1.trim()) missingFields.push("Telefon 1")
-    if (!device.trim()) missingFields.push("Cihaz Turu")
+    if (!device.trim()) missingFields.push("Cihaz Türü")
     if (!brand.trim()) missingFields.push("Marka")
-    if (!issue.trim()) missingFields.push("Ariza Aciklamasi")
+    if (!issue.trim()) missingFields.push("Arıza Açıklaması")
 
     if (missingFields.length > 0) {
-      alert("Lutfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+      alert("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
       return false
     }
     return true
@@ -368,14 +368,14 @@ export default function RepairsPage() {
     if (!selectedRepair) return
 
     const missingFields: string[] = []
-    if (!customerName.trim()) missingFields.push("Musteri Adi")
+    if (!customerName.trim()) missingFields.push("Müşteri Adi")
     if (!phone1.trim()) missingFields.push("Telefon 1")
-    if (!device.trim()) missingFields.push("Cihaz Turu")
+    if (!device.trim()) missingFields.push("Cihaz Türü")
     if (!brand.trim()) missingFields.push("Marka")
-    if (!issue.trim()) missingFields.push("Ariza Aciklamasi")
+    if (!issue.trim()) missingFields.push("Arıza Açıklaması")
 
     if (missingFields.length > 0) {
-      alert("Lutfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+      alert("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
       return
     }
 
@@ -412,7 +412,7 @@ export default function RepairsPage() {
       const diff = paidNum - selectedRepair.paid
       const newTransaction: FinanceTransaction = {
         id: Date.now(),
-        description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Odeme`,
+        description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Ödeme`,
         amount: diff,
         type: "income",
         category: "Tamir Geliri",
@@ -447,11 +447,11 @@ export default function RepairsPage() {
     // Add to finance when completed and has payment
     if (newStatus === "completed" && repair.paid > 0) {
       // Check if already added
-      const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandi"))
+      const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandı"))
       if (!alreadyAdded) {
         const newTransaction: FinanceTransaction = {
           id: Date.now(),
-          description: `${repair.brand} ${repair.model} - Tamir Tamamlandi`,
+          description: `${repair.brand} ${repair.model} - Tamir Tamamlandı`,
           amount: repair.paid,
           type: "income",
           category: "Tamir Geliri",
@@ -531,7 +531,7 @@ export default function RepairsPage() {
       case "in_progress":
         return <Badge variant="outline" className="border-blue-500 text-blue-400"><AlertCircle className="h-3 w-3 mr-1" />Devam Ediyor</Badge>
       case "completed":
-        return <Badge variant="outline" className="border-emerald-500 text-emerald-400"><CheckCircle className="h-3 w-3 mr-1" />Tamamlandi</Badge>
+        return <Badge variant="outline" className="border-emerald-500 text-emerald-400"><CheckCircle className="h-3 w-3 mr-1" />Tamamlandı</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -558,8 +558,8 @@ export default function RepairsPage() {
     message += `\u2705 *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. \uD83D\uDD27%0A%0A`
 
     if (repair.remaining > 0) {
-      message += `\uD83D\uDCB0 *Toplam Ucret:* ${formatCurrency(repair.cost)}%0A`
-      message += `\uD83D\uDCB5 *Alinan:* ${formatCurrency(repair.paid)}%0A`
+      message += `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}%0A`
+      message += `\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}%0A`
       message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
       message += `\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
     } else {
@@ -588,18 +588,18 @@ export default function RepairsPage() {
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
             <DialogHeader>
-              <DialogTitle className="text-white">Yeni Tamir Kaydi</DialogTitle>
+              <DialogTitle className="text-white">Yeni Tamir Kaydı</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Musteri Secimi</Label>
+                <Label className="text-slate-300">Müşteri Seçimi</Label>
                 <Select value={customerId} onValueChange={handleCustomerSelect}>
                   <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                    <SelectValue placeholder="Musteri secin veya yeni ekleyin" />
+                    <SelectValue placeholder="Müşteri secin veya yeni ekleyin" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-600">
                     <SelectItem value="new" className="text-emerald-400 font-semibold">
-                      + Yeni Musteri Ekle
+                      + Yeni Müşteri Ekle
                     </SelectItem>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id.toString()} className="text-white">
@@ -613,7 +613,7 @@ export default function RepairsPage() {
               {isNewCustomer && (
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-emerald-400 font-semibold">Yeni Musteri Bilgileri</Label>
+                    <Label className="text-emerald-400 font-semibold">Yeni Müşteri Bilgileri</Label>
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -667,10 +667,10 @@ export default function RepairsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Cihaz Turu <span className="text-red-400">*</span></Label>
+                  <Label className="text-slate-300">Cihaz Türü <span className="text-red-400">*</span></Label>
                   <Select value={device} onValueChange={setDevice}>
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue placeholder="Secin" />
+                      <SelectValue placeholder="Seçin" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-600">
                       <SelectItem value="Telefon">Telefon</SelectItem>
@@ -694,35 +694,35 @@ export default function RepairsPage() {
                   <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Ucret (TL)</Label>
+                  <Label className="text-slate-300">Ücret (TL)</Label>
                   <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-slate-300">Ariza Aciklamasi <span className="text-red-400">*</span></Label>
+                <Label className="text-slate-300">Arıza Açıklaması <span className="text-red-400">*</span></Label>
                 <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white min-h-[80px]" placeholder="Cihazda yasanan sorunu detayli aciklayin..." />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Odeme Sekli</Label>
+                  <Label className="text-slate-300">Ödeme Sekli</Label>
                   <Select value={paymentType} onValueChange={setPaymentType}>
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue placeholder="Secin" />
+                      <SelectValue placeholder="Seçin" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-600">
                       <SelectItem value="unpaid">Odenmedi</SelectItem>
                       <SelectItem value="cash">Nakit</SelectItem>
                       <SelectItem value="card">Kredi Karti</SelectItem>
                       <SelectItem value="transfer">Havale/EFT</SelectItem>
-                      <SelectItem value="partial">Kismi Odeme</SelectItem>
+                      <SelectItem value="partial">Kismi Ödeme</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 {paymentType === "partial" && (
                   <div className="space-y-2">
-                    <Label className="text-slate-300">Alinan Tutar (TL)</Label>
+                    <Label className="text-slate-300">Alınan Tutar (TL)</Label>
                     <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: 2000" />
                   </div>
                 )}
@@ -732,7 +732,7 @@ export default function RepairsPage() {
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
-                    <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
+                    <div><span className="text-slate-400">Alınan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
                     <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
                   </div>
                 </div>
@@ -798,7 +798,7 @@ export default function RepairsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
-            placeholder="Musteri, telefon, cihaz, marka, model ara..." 
+            placeholder="Müşteri, telefon, cihaz, marka, model ara..." 
             value={search} 
             onChange={(e) => setSearch(e.target.value)} 
             className="pl-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
@@ -812,7 +812,7 @@ export default function RepairsPage() {
             <SelectItem value="all">Tumu</SelectItem>
             <SelectItem value="waiting">Bekliyor</SelectItem>
             <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-            <SelectItem value="completed">Tamamlandi</SelectItem>
+            <SelectItem value="completed">Tamamlandı</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -823,13 +823,13 @@ export default function RepairsPage() {
             <TableHeader>
               <TableRow className="border-slate-700 hover:bg-transparent">
                 <TableHead className="text-slate-400">ID</TableHead>
-                <TableHead className="text-slate-400">Musteri</TableHead>
+                <TableHead className="text-slate-400">Müşteri</TableHead>
                 <TableHead className="text-slate-400">Telefon</TableHead>
                 <TableHead className="text-slate-400">Cihaz</TableHead>
-                <TableHead className="text-slate-400">Ariza</TableHead>
+                <TableHead className="text-slate-400">Arıza</TableHead>
                 <TableHead className="text-slate-400">Durum</TableHead>
-                <TableHead className="text-slate-400">Ucret</TableHead>
-                <TableHead className="text-slate-400">Odeme</TableHead>
+                <TableHead className="text-slate-400">Ücret</TableHead>
+                <TableHead className="text-slate-400">Ödeme</TableHead>
                 <TableHead className="text-slate-400">Tarih</TableHead>
                 <TableHead className="text-slate-400 text-right">Islemler</TableHead>
               </TableRow>
@@ -888,7 +888,7 @@ export default function RepairsPage() {
                           <SelectContent className="bg-slate-800 border-slate-600">
                             <SelectItem value="waiting">Bekliyor</SelectItem>
                             <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-                            <SelectItem value="completed">Tamamlandi</SelectItem>
+                            <SelectItem value="completed">Tamamlandı</SelectItem>
                           </SelectContent>
                         </Select>
                         <Button variant="ghost" size="sm" onClick={() => openNoteDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
@@ -913,12 +913,12 @@ export default function RepairsPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Tamir Duzenle #{selectedRepair?.id}</DialogTitle>
+            <DialogTitle className="text-white">Tamir Düzenle #{selectedRepair?.id}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Musteri Adi <span className="text-red-400">*</span></Label>
+                <Label className="text-slate-300">Müşteri Adi <span className="text-red-400">*</span></Label>
                 <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
               <div className="space-y-2">
@@ -932,7 +932,7 @@ export default function RepairsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Cihaz Turu <span className="text-red-400">*</span></Label>
+                <Label className="text-slate-300">Cihaz Türü <span className="text-red-400">*</span></Label>
                 <Select value={device} onValueChange={setDevice}>
                   <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                     <SelectValue />
@@ -958,17 +958,17 @@ export default function RepairsPage() {
                 <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">Ucret (TL)</Label>
+                <Label className="text-slate-300">Ücret (TL)</Label>
                 <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">Ariza Aciklamasi <span className="text-red-400">*</span></Label>
+              <Label className="text-slate-300">Arıza Açıklaması <span className="text-red-400">*</span></Label>
               <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Odeme Sekli</Label>
+                <Label className="text-slate-300">Ödeme Sekli</Label>
                 <Select value={paymentType} onValueChange={setPaymentType}>
                   <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                     <SelectValue />
@@ -978,13 +978,13 @@ export default function RepairsPage() {
                     <SelectItem value="cash">Nakit</SelectItem>
                     <SelectItem value="card">Kredi Karti</SelectItem>
                     <SelectItem value="transfer">Havale/EFT</SelectItem>
-                    <SelectItem value="partial">Kismi Odeme</SelectItem>
+                    <SelectItem value="partial">Kismi Ödeme</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               {paymentType === "partial" && (
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Alinan Tutar (TL)</Label>
+                  <Label className="text-slate-300">Alınan Tutar (TL)</Label>
                   <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ne kadar alindi?" />
                 </div>
               )}
@@ -994,7 +994,7 @@ export default function RepairsPage() {
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
-                  <div><span className="text-slate-400">Alinan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
+                  <div><span className="text-slate-400">Alınan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
                   <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
                 </div>
               </div>
@@ -1005,7 +1005,7 @@ export default function RepairsPage() {
               <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <Button onClick={handleUpdateRepair} className="w-full bg-blue-600 hover:bg-blue-700">
-              <CheckCircle className="h-4 w-4 mr-2" />Guncelle
+              <CheckCircle className="h-4 w-4 mr-2" />Güncelle
             </Button>
           </div>
         </DialogContent>
@@ -1032,7 +1032,7 @@ export default function RepairsPage() {
               </div>
             </div>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              <Label className="text-slate-300">Gecmis Notlar</Label>
+              <Label className="text-slate-300">Geçmiş Notlar</Label>
               {getRepairNotes(selectedRepair?.id || 0).length === 0 ? (
                 <p className="text-slate-500 text-sm">Heniz not eklenmemis.</p>
               ) : (
@@ -1051,7 +1051,7 @@ export default function RepairsPage() {
       <Dialog open={isNewCustomerDialogOpen} onOpenChange={setIsNewCustomerDialogOpen}>
         <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Yeni Musteri Ekle</DialogTitle>
+            <DialogTitle className="text-white">Yeni Müşteri Ekle</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -1075,7 +1075,7 @@ export default function RepairsPage() {
               <Textarea value={newCustomerAddress} onChange={(e) => setNewCustomerAddress(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Adres..." />
             </div>
             <Button onClick={handleAddNewCustomer} className="w-full bg-emerald-600 hover:bg-emerald-700">
-              <Plus className="h-4 w-4 mr-2" />Musteri Ekle
+              <Plus className="h-4 w-4 mr-2" />Müşteri Ekle
             </Button>
           </div>
         </DialogContent>

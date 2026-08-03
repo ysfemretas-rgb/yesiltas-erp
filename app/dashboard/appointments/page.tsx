@@ -56,7 +56,7 @@ interface Appointment {
   notes: string
 }
 
-const services = ["Ekran Degisimi", "Batarya Degisimi", "Anakart Tamiri", "Yazilim Guncelleme", "Genel Bakim"]
+const services = ["Ekran Degisimi", "Batarya Degisimi", "Anakart Tamiri", "Yazilim Güncelleme", "Genel Bakim"]
 
 export default function AppointmentsPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -157,11 +157,11 @@ export default function AppointmentsPage() {
 
   const validateAppointment = (appt: Partial<Appointment>) => {
     const missing: string[] = []
-    if (!appt.customerId) missing.push("Musteri")
+    if (!appt.customerId) missing.push("Müşteri")
     if (!appt.date) missing.push("Tarih")
     if (!appt.time) missing.push("Saat")
     if (missing.length > 0) {
-      alert("Lutfen zorunlu alanlari doldurun: " + missing.join(", "))
+      alert("Lütfen zorunlu alanlari doldurun: " + missing.join(", "))
       return false
     }
     return true
@@ -172,7 +172,7 @@ export default function AppointmentsPage() {
 
     const customer = customers.find(c => c.id === Number(newAppointment.customerId))
     if (!customer) {
-      alert("Musteri bulunamadi!")
+      alert("Müşteri bulunamadi!")
       return
     }
 
@@ -229,7 +229,7 @@ export default function AppointmentsPage() {
       }
 
       let phone = appointment.customerPhone || ""
-      let customerName = appointment.customerName || "Musteri"
+      let customerName = appointment.customerName || "Müşteri"
 
       if (!phone && appointment.customerId && customers.length > 0) {
         const customer = customers.find(c => c.id === appointment.customerId)
@@ -240,7 +240,7 @@ export default function AppointmentsPage() {
       }
 
       if (!phone) {
-        alert("Musteri telefon numarasi bulunamadi!")
+        alert("Müşteri telefon numarasi bulunamadi!")
         return
       }
 
@@ -259,25 +259,25 @@ export default function AppointmentsPage() {
 
       let message = ""
       if (isPast) {
-        message = `${\uD83D\uDC4B} Merhaba *${customerName}*,%0A%0A`
-        message += `${\u26A0} *Yeşiltaş Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
-        message += `${\uD83D\uDCC5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) gecmistir.%0A%0A`
-        message += `${\uD83D\uDD27} Hizmet: *${appointment.service}*%0A%0A`
-        message += `${\uD83D\uDCDE} Lutfen yeni bir randevu olusturmak icin bizimle iletisime geciniz.%0A%0A`
-        message += `${\uD83D\uDE4F} Iyi gunler dileriz!%0A`
-        message += `${\uD83C\uDFEA} *Yeşiltaş Teknoloji*`
+        message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
+        message += `\u{26A0} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
+        message += `\u{1F4C5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.%0A%0A`
+        message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
+        message += `\u{1F4DE} Lütfen yeni bir randevu olusturmak icin bizimle iletişime geçiniz.%0A%0A`
+        message += `\u{1F64F} İyi günler dileriz!%0A`
+        message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
       } else {
-        message = `${\uD83D\uDC4B} Merhaba *${customerName}*,%0A%0A`
-        message += `${\u2705} *Yeşiltaş Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
-        message += `${\uD83D\uDCC5} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
-        message += `${\uD83D\uDD27} Hizmet: *${appointment.service}*%0A%0A`
-        message += `${\u23F0} Lutfen randevu saatinde gelmeyi unutmayiniz.%0A%0A`
-        message += `${\uD83D\uDE4F} Iyi gunler dileriz!%0A`
-        message += `${\uD83C\uDFEA} *Yeşiltaş Teknoloji*`
+        message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
+        message += `\u{2705} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
+        message += `\u{1F4C5} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
+        message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
+        message += `\u{23F0} Lütfen randevu saatinde gelmeyi unutmayınız.%0A%0A`
+        message += `\u{1F64F} İyi günler dileriz!%0A`
+        message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
       }
 
       if (appointment.notes) {
-        message += `%0A%0A${\uD83D\uDCDD} Not: ${appointment.notes}`
+        message += `%0A%0A\u{1F4DD} Not: ${appointment.notes}`
       }
 
       window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
@@ -289,12 +289,12 @@ export default function AppointmentsPage() {
 
   const getStatusBadge = (status: string, isPast: boolean) => {
     if (isPast && status === "scheduled") {
-      return <Badge className="bg-orange-900/50 text-orange-300 border-orange-700"><AlertTriangle className="mr-1 h-3 w-3"/>Gecmis</Badge>
+      return <Badge className="bg-orange-900/50 text-orange-300 border-orange-700"><AlertTriangle className="mr-1 h-3 w-3"/>Geçmiş</Badge>
     }
     switch (status) {
-      case "scheduled": return <Badge className="bg-blue-900/50 text-blue-300 border-blue-700"><Clock className="mr-1 h-3 w-3"/>Planlandi</Badge>
-      case "completed": return <Badge className="bg-green-900/50 text-green-300 border-green-700"><CheckCircle2 className="mr-1 h-3 w-3"/>Tamamlandi</Badge>
-      case "cancelled": return <Badge className="bg-red-900/50 text-red-300 border-red-700"><X className="mr-1 h-3 w-3"/>Iptal</Badge>
+      case "scheduled": return <Badge className="bg-blue-900/50 text-blue-300 border-blue-700"><Clock className="mr-1 h-3 w-3"/>Planlandı</Badge>
+      case "completed": return <Badge className="bg-green-900/50 text-green-300 border-green-700"><CheckCircle2 className="mr-1 h-3 w-3"/>Tamamlandı</Badge>
+      case "cancelled": return <Badge className="bg-red-900/50 text-red-300 border-red-700"><X className="mr-1 h-3 w-3"/>İptal</Badge>
       default: return <Badge variant="outline">Bilinmiyor</Badge>
     }
   }
@@ -316,11 +316,11 @@ export default function AppointmentsPage() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Musteri <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-slate-300">Müşteri <span className="text-red-400">*</span></label>
                 <div className="flex gap-2">
                   <Select value={String(newAppointment.customerId || "")} onValueChange={(v) => setNewAppointment({...newAppointment, customerId: Number(v)})}>
                     <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-white">
-                      <SelectValue placeholder="Musteri secin" />
+                      <SelectValue placeholder="Müşteri secin" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {customers.map(c => (
@@ -406,7 +406,7 @@ export default function AppointmentsPage() {
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Bugun</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-300">Bugün</CardTitle>
             <CalendarCheck className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -415,7 +415,7 @@ export default function AppointmentsPage() {
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Gecmis</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-300">Geçmiş</CardTitle>
             <AlertTriangle className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
@@ -448,7 +448,7 @@ export default function AppointmentsPage() {
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-slate-500" />
               <Input
-                placeholder="Musteri adi, telefon veya hizmet ara..."
+                placeholder="Müşteri adi, telefon veya hizmet ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
@@ -534,12 +534,12 @@ export default function AppointmentsPage() {
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Randevu Duzenle</DialogTitle>
+            <DialogTitle className="text-white">Randevu Düzenle</DialogTitle>
           </DialogHeader>
           {editingAppointment && (
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Musteri</label>
+                <label className="text-sm font-medium text-slate-300">Müşteri</label>
                 <Select value={String(editingAppointment.customerId)} onValueChange={(v) => {
                   const customer = customers.find(c => c.id === Number(v))
                   if (customer) {
@@ -601,9 +601,9 @@ export default function AppointmentsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="scheduled" className="text-white">Planlandi</SelectItem>
-                    <SelectItem value="completed" className="text-white">Tamamlandi</SelectItem>
-                    <SelectItem value="cancelled" className="text-white">Iptal</SelectItem>
+                    <SelectItem value="scheduled" className="text-white">Planlandı</SelectItem>
+                    <SelectItem value="completed" className="text-white">Tamamlandı</SelectItem>
+                    <SelectItem value="cancelled" className="text-white">İptal</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -620,7 +620,7 @@ export default function AppointmentsPage() {
 
               <Button onClick={handleUpdateAppointment}>
                 <Save className="mr-2 h-4 w-4" />
-                Guncelle
+                Güncelle
               </Button>
             </div>
           )}
@@ -631,7 +631,7 @@ export default function AppointmentsPage() {
       <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
         <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Yeni Musteri Ekle</DialogTitle>
+            <DialogTitle className="text-white">Yeni Müşteri Ekle</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
@@ -654,7 +654,7 @@ export default function AppointmentsPage() {
             </div>
             <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone}>
               <Save className="mr-2 h-4 w-4" />
-              Musteri Ekle
+              Müşteri Ekle
             </Button>
           </div>
         </DialogContent>
