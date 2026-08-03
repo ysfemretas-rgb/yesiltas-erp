@@ -371,12 +371,12 @@ export default function SalesPage() {
     const sale = sales.find(s => s.id === saleId)
     if (!sale) return
 
-    if (!confirm("🗑️ Bu satış kaydını silmek istediğinize emin misiniz?
+    if (!confirm(`🗑️ Bu satış kaydını silmek istediğinize emin misiniz?
 
 ⚠️ Bu işlem:
 • Stokları geri ekleyecek
 • Müşteri borcunu güncelleyecek
-• Finans kaydını silecektir.")) return
+• Finans kaydını silecektir.`)) return
 
     // Return stock
     const updatedProducts = products.map(p => {
