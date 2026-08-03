@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
 
 interface InventoryItem {
   id: number
@@ -29,19 +29,39 @@ interface InventoryItem {
   category: string
   quantity: number
   minQuantity: number
-  unitPrice: number
+  purchasePrice: number
+  purchaseCurrency: "TRY" | "USD" | "EUR"
+  profitMargin: number
+  salePrice: number
   supplier: string
   location: string
 }
 
+interface ExchangeRates {
+  USD: number
+  EUR: number
+  lastUpdated: string
+}
+
 const initialInventory: InventoryItem[] = [
-  { id: 1, name: "iPhone 14 Pro Ekran", sku: "IP14P-SCR-001", category: "Ekran", quantity: 12, minQuantity: 5, unitPrice: 850, supplier: "EkranTedarik", location: "Raf A-1" },
-  { id: 2, name: "Samsung S23 Batarya", sku: "SS23-BAT-001", category: "Batarya", quantity: 8, minQuantity: 10, unitPrice: 320, supplier: "SamsungParts", location: "Raf B-2" },
-  { id: 3, name: "iPhone 13 Arka Kapak", sku: "IP13-BCK-001", category: "Kapak", quantity: 25, minQuantity: 10, unitPrice: 180, supplier: "AppleParts", location: "Raf A-3" },
-  { id: 4, name: "USB-C Şarj Portu", sku: "USBC-PRT-001", category: "Port", quantity: 3, minQuantity: 15, unitPrice: 45, supplier: "GenelTedarik", location: "Raf C-1" },
-  { id: 5, name: "iPad Air 5 Ekran", sku: "IPA5-SCR-001", category: "Ekran", quantity: 6, minQuantity: 3, unitPrice: 1200, supplier: "EkranTedarik", location: "Raf A-2" },
-  { id: 6, name: "MacBook Air M2 Batarya", sku: "MBA-M2-BAT-001", category: "Batarya", quantity: 4, minQuantity: 2, unitPrice: 1500, supplier: "AppleParts", location: "Raf B-1" },
+  { id: 1, name: "iPhone 14 Pro Ekran", sku: "IP14P-SCR-001", category: "Ekran", quantity: 12, minQuantity: 5, purchasePrice: 25, purchaseCurrency: "USD", profitMargin: 40, salePrice: 0, supplier: "EkranTedarik", location: "Raf A-1" },
+  { id: 2, name: "Samsung S23 Batarya", sku: "SS23-BAT-001", category: "Batarya", quantity: 8, minQuantity: 10, purchasePrice: 8, purchaseCurrency: "USD", profitMargin: 35, salePrice: 0, supplier: "SamsungParts", location: "Raf B-2" },
+  { id: 3, name: "iPhone 13 Arka Kapak", sku: "IP13-BCK-001", category: "Kapak", quantity: 25, minQuantity: 10, purchasePrice: 5, purchaseCurrency: "USD", profitMargin: 50, salePrice: 0, supplier: "AppleParts", location: "Raf A-3" },
+  { id: 4, name: "USB-C Şarj Portu", sku: "USBC-PRT-001", category: "Port", quantity: 3, minQuantity: 15, purchasePrice: 1.5, purchaseCurrency: "USD", profitMargin: 60, salePrice: 0, supplier: "GenelTedarik", location: "Raf C-1" },
+  { id: 5, name: "iPad Air 5 Ekran", sku: "IPA5-SCR-001", category: "Ekran", quantity: 6, minQuantity: 3, purchasePrice: 35, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, supplier: "EkranTedarik", location: "Raf A-2" },
+  { id: 6, name: "MacBook Air M2 Batarya", sku: "MBA-M2-BAT-001", category: "Batarya", quantity: 4, minQuantity: 2, purchasePrice: 45, purchaseCurrency: "USD", profitMargin: 25, salePrice: 0, supplier: "AppleParts", location: "Raf B-1" },
 ]
+
+function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "USD" | "EUR", profitMargin: number, rates: ExchangeRates): number {
+  let priceInTRY = purchasePrice
+  if (purchaseCurrency === "USD") {
+    priceInTRY = purchasePrice * rates.USD
+  } else if (purchaseCurrency === "EUR") {
+    priceInTRY = purchasePrice * rates.EUR
+  }
+  const salePrice = priceInTRY * (1 + profitMargin / 100)
+  return Math.round(salePrice)
+}
 
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
@@ -51,12 +71,17 @@ export default function InventoryPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
+  const [isLoadingRates, setIsLoadingRates] = useState(false)
 
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Ekran",
     quantity: 0,
     minQuantity: 5,
-    unitPrice: 0,
+    purchasePrice: 0,
+    purchaseCurrency: "USD",
+    profitMargin: 30,
+    salePrice: 0,
   })
 
   // Load from localStorage
@@ -68,6 +93,13 @@ export default function InventoryPage() {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed) && parsed.length > 0) {
           setInventory(parsed)
+        }
+      }
+      const savedRates = localStorage.getItem("yt_exchange_rates")
+      if (savedRates) {
+        const parsed = JSON.parse(savedRates)
+        if (parsed && parsed.USD && parsed.EUR) {
+          setRates(parsed)
         }
       }
     } catch (e) {
@@ -82,9 +114,49 @@ export default function InventoryPage() {
     localStorage.setItem("yt_inventory", JSON.stringify(inventory))
   }, [inventory, isLoaded])
 
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_exchange_rates", JSON.stringify(rates))
+  }, [rates, isLoaded])
+
+  // Fetch live exchange rates from Frankfurter API (free, no key)
+  const fetchRates = async () => {
+    setIsLoadingRates(true)
+    try {
+      const res = await fetch("https://api.frankfurter.dev/v1/latest?base=TRY&symbols=USD,EUR")
+      if (!res.ok) throw new Error("Rate fetch failed")
+      const data = await res.json()
+      // Frankfurter returns rates as "1 TRY = X USD", so we need inverse
+      const usdRate = data.rates.USD ? 1 / data.rates.USD : 34.5
+      const eurRate = data.rates.EUR ? 1 / data.rates.EUR : 37.2
+      setRates({
+        USD: Math.round(usdRate * 100) / 100,
+        EUR: Math.round(eurRate * 100) / 100,
+        lastUpdated: new Date().toLocaleString("tr-TR"),
+      })
+    } catch (err) {
+      console.error("Exchange rate error:", err)
+      alert("\u{26A0} Kur bilgisi alınamadı! Manuel güncelleme yapabilirsiniz.")
+    } finally {
+      setIsLoadingRates(false)
+    }
+  }
+
+  // Auto-fetch rates on mount
+  useEffect(() => {
+    if (isLoaded) {
+      fetchRates()
+    }
+  }, [isLoaded])
+
   const categories = Array.from(new Set(inventory.map(i => i.category)))
 
-  const filteredItems = inventory.filter((item) => {
+  const inventoryWithPrices = inventory.map(item => ({
+    ...item,
+    salePrice: item.salePrice > 0 ? item.salePrice : calculateSalePrice(item.purchasePrice, item.purchaseCurrency, item.profitMargin, rates),
+  }))
+
+  const filteredItems = inventoryWithPrices.filter((item) => {
     const search = searchTerm.toLowerCase()
     const matchesSearch = item.name.toLowerCase().includes(search) ||
       item.sku.toLowerCase().includes(search) ||
@@ -93,8 +165,15 @@ export default function InventoryPage() {
     return matchesSearch && matchesCategory
   })
 
-  const lowStockItems = inventory.filter(item => item.quantity <= item.minQuantity)
-  const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
+  const lowStockItems = inventoryWithPrices.filter(item => item.quantity <= item.minQuantity)
+  const totalPurchaseValue = inventoryWithPrices.reduce((sum, item) => {
+    let priceInTRY = item.purchasePrice
+    if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
+    else if (item.purchaseCurrency === "EUR") priceInTRY = item.purchasePrice * rates.EUR
+    return sum + (priceInTRY * item.quantity)
+  }, 0)
+  const totalSaleValue = inventoryWithPrices.reduce((sum, item) => sum + (item.salePrice * item.quantity), 0)
+  const totalProfit = totalSaleValue - totalPurchaseValue
 
   const updateQuantity = (id: number, delta: number) => {
     setInventory(inventory.map(item =>
@@ -107,6 +186,12 @@ export default function InventoryPage() {
       alert("Lütfen ürün adı ve SKU kodu girin!")
       return
     }
+    const salePrice = calculateSalePrice(
+      Number(newItem.purchasePrice) || 0,
+      newItem.purchaseCurrency || "TRY",
+      Number(newItem.profitMargin) || 0,
+      rates
+    )
     const item: InventoryItem = {
       id: Date.now(),
       name: newItem.name,
@@ -114,12 +199,15 @@ export default function InventoryPage() {
       category: newItem.category || "Diğer",
       quantity: Number(newItem.quantity) || 0,
       minQuantity: Number(newItem.minQuantity) || 5,
-      unitPrice: Number(newItem.unitPrice) || 0,
+      purchasePrice: Number(newItem.purchasePrice) || 0,
+      purchaseCurrency: newItem.purchaseCurrency || "TRY",
+      profitMargin: Number(newItem.profitMargin) || 0,
+      salePrice: salePrice,
       supplier: newItem.supplier || "",
       location: newItem.location || "",
     }
     setInventory([item, ...inventory])
-    setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, unitPrice: 0 })
+    setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
     setIsDialogOpen(false)
   }
 
@@ -129,8 +217,14 @@ export default function InventoryPage() {
       alert("Lütfen ürün adı ve SKU kodu girin!")
       return
     }
+    const salePrice = calculateSalePrice(
+      editingItem.purchasePrice,
+      editingItem.purchaseCurrency,
+      editingItem.profitMargin,
+      rates
+    )
     setInventory(inventory.map(item =>
-      item.id === editingItem.id ? editingItem : item
+      item.id === editingItem.id ? { ...editingItem, salePrice } : item
     ))
     setIsEditOpen(false)
     setEditingItem(null)
@@ -146,6 +240,10 @@ export default function InventoryPage() {
   const openEditDialog = (item: InventoryItem) => {
     setEditingItem({ ...item })
     setIsEditOpen(true)
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
 
   if (!isLoaded) {
@@ -167,7 +265,7 @@ export default function InventoryPage() {
               Yeni Ürün
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white">
+          <DialogContent className="sm:max-w-[550px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-white">Yeni Stok Ürünü</DialogTitle>
             </DialogHeader>
@@ -229,34 +327,85 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Birim Fiyat (₺)</label>
-                  <Input
-                    type="number"
-                    value={newItem.unitPrice || ""}
-                    onChange={(e) => setNewItem({ ...newItem, unitPrice: Number(e.target.value) })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
-                  <Input
-                    value={newItem.supplier || ""}
-                    onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
-                    placeholder="Tedarikçi adı"
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Konum</label>
                   <Input
                     value={newItem.location || ""}
                     onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                    placeholder="Depo konumu"
+                    placeholder="Raf A-1"
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
+              </div>
+
+              <div className="border-t border-slate-700 pt-4">
+                <label className="text-sm font-medium text-emerald-400 flex items-center gap-2 mb-3">
+                  <DollarSign className="h-4 w-4" />
+                  Fiyatlandırma
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Alış Fiyatı</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newItem.purchasePrice || ""}
+                      onChange={(e) => setNewItem({ ...newItem, purchasePrice: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Para Birimi</label>
+                    <Select
+                      value={newItem.purchaseCurrency}
+                      onValueChange={(value: "TRY" | "USD" | "EUR") => setNewItem({ ...newItem, purchaseCurrency: value })}
+                    >
+                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="TRY" className="text-white">₺ TRY</SelectItem>
+                        <SelectItem value="USD" className="text-white">$ USD</SelectItem>
+                        <SelectItem value="EUR" className="text-white">€ EUR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Kar Marjı (%)</label>
+                    <Input
+                      type="number"
+                      value={newItem.profitMargin || ""}
+                      onChange={(e) => setNewItem({ ...newItem, profitMargin: Number(e.target.value) })}
+                      placeholder="30"
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-emerald-400">Tahmini Satış Fiyatı:</span>
+                    <span className="text-lg font-bold text-emerald-400">
+                      {formatCurrency(calculateSalePrice(
+                        Number(newItem.purchasePrice) || 0,
+                        newItem.purchaseCurrency || "TRY",
+                        Number(newItem.profitMargin) || 0,
+                        rates
+                      ))}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Kur: $1 = {formatCurrency(rates.USD)} | €1 = {formatCurrency(rates.EUR)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
+                <Input
+                  value={newItem.supplier || ""}
+                  onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
+                  placeholder="Tedarikçi adı"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
               </div>
               <Button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Kaydet
@@ -266,7 +415,43 @@ export default function InventoryPage() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Exchange Rates Card */}
+      <Card className="bg-slate-900 border-slate-700">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-400" />
+                <span className="text-white font-medium">Canlı Döviz Kurları</span>
+              </div>
+              <div className="flex gap-3 text-sm">
+                <Badge className="bg-blue-900/50 text-blue-300 border-blue-700">
+                  $1 = {formatCurrency(rates.USD)}
+                </Badge>
+                <Badge className="bg-purple-900/50 text-purple-300 border-purple-700">
+                  €1 = {formatCurrency(rates.EUR)}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {rates.lastUpdated && (
+                <span className="text-xs text-slate-500">Güncelleme: {rates.lastUpdated}</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fetchRates}
+                disabled={isLoadingRates}
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+              >
+                {isLoadingRates ? "Yükleniyor..." : "Kur Güncelle"}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Ürün</CardTitle>
@@ -287,20 +472,32 @@ export default function InventoryPage() {
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Toplam Değer</CardTitle>
-            <Barcode className="h-4 w-4 text-emerald-500" />
+            <CardTitle className="text-sm font-medium text-slate-400">Toplam Maliyet</CardTitle>
+            <Barcode className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-400">₺{totalValue.toLocaleString("tr-TR")}</div>
+            <div className="text-2xl font-bold text-amber-400">{formatCurrency(totalPurchaseValue)}</div>
           </CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Kategori Sayısı</CardTitle>
-            <Package className="h-4 w-4 text-purple-500" />
+            <CardTitle className="text-sm font-medium text-slate-400">Toplam Satış Değeri</CardTitle>
+            <DollarSign className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-400">{categories.length}</div>
+            <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalSaleValue)}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Tahmini Kar</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-400">{formatCurrency(totalProfit)}</div>
+            <div className="text-xs text-slate-500">
+              %{totalPurchaseValue > 0 ? Math.round((totalProfit / totalPurchaseValue) * 100) : 0} marj
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -370,6 +567,11 @@ export default function InventoryPage() {
             {filteredItems.map((item) => {
               const stockPercent = Math.min(100, (item.quantity / item.minQuantity) * 100)
               const isLowStock = item.quantity <= item.minQuantity
+              const purchaseInTRY = item.purchaseCurrency === "USD"
+                ? item.purchasePrice * rates.USD
+                : item.purchaseCurrency === "EUR"
+                  ? item.purchasePrice * rates.EUR
+                  : item.purchasePrice
 
               return (
                 <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-800 bg-red-900/10" : "border-slate-700 bg-slate-800/50"}`}>
@@ -386,11 +588,28 @@ export default function InventoryPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-emerald-400">₺{item.unitPrice.toLocaleString("tr-TR")}</div>
-                      <div className="text-sm text-slate-400">Birim fiyat</div>
+                      <div className="font-bold text-emerald-400">{formatCurrency(item.salePrice)}</div>
+                      <div className="text-xs text-slate-400">Satış fiyatı</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-3">
+
+                  <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 mb-3">
+                    <div>
+                      <span className="text-slate-500">Alış:</span>{" "}
+                      {item.purchaseCurrency === "USD" ? "$" : item.purchaseCurrency === "EUR" ? "€" : "₺"}
+                      {item.purchasePrice} ({formatCurrency(purchaseInTRY)})
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Kar:</span>{" "}
+                      <span className="text-emerald-400">%{item.profitMargin}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Birim Kar:</span>{" "}
+                      <span className="text-green-400">{formatCurrency(item.salePrice - purchaseInTRY)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -445,7 +664,7 @@ export default function InventoryPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white">
+        <DialogContent className="sm:max-w-[550px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Ürün Düzenle</DialogTitle>
           </DialogHeader>
@@ -506,25 +725,6 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Birim Fiyat (₺)</label>
-                  <Input
-                    type="number"
-                    value={editingItem.unitPrice}
-                    onChange={(e) => setEditingItem({ ...editingItem, unitPrice: Number(e.target.value) })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
-                  <Input
-                    value={editingItem.supplier}
-                    onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Konum</label>
                   <Input
                     value={editingItem.location}
@@ -532,6 +732,75 @@ export default function InventoryPage() {
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
+              </div>
+
+              <div className="border-t border-slate-700 pt-4">
+                <label className="text-sm font-medium text-emerald-400 flex items-center gap-2 mb-3">
+                  <DollarSign className="h-4 w-4" />
+                  Fiyatlandırma
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Alış Fiyatı</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingItem.purchasePrice}
+                      onChange={(e) => setEditingItem({ ...editingItem, purchasePrice: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Para Birimi</label>
+                    <Select
+                      value={editingItem.purchaseCurrency}
+                      onValueChange={(value: "TRY" | "USD" | "EUR") => setEditingItem({ ...editingItem, purchaseCurrency: value })}
+                    >
+                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="TRY" className="text-white">₺ TRY</SelectItem>
+                        <SelectItem value="USD" className="text-white">$ USD</SelectItem>
+                        <SelectItem value="EUR" className="text-white">€ EUR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Kar Marjı (%)</label>
+                    <Input
+                      type="number"
+                      value={editingItem.profitMargin}
+                      onChange={(e) => setEditingItem({ ...editingItem, profitMargin: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-emerald-400">Tahmini Satış Fiyatı:</span>
+                    <span className="text-lg font-bold text-emerald-400">
+                      {formatCurrency(calculateSalePrice(
+                        editingItem.purchasePrice,
+                        editingItem.purchaseCurrency,
+                        editingItem.profitMargin,
+                        rates
+                      ))}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Kur: $1 = {formatCurrency(rates.USD)} | €1 = {formatCurrency(rates.EUR)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
+                <Input
+                  value={editingItem.supplier}
+                  onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
               </div>
               <Button onClick={handleUpdateItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Güncelle
