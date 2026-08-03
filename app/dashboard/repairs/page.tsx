@@ -555,19 +555,19 @@ export default function RepairsPage() {
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
     let message = `\uD83D\uDC4B Merhaba *${repair.customerName}*,%0A%0A`
-    message += `\u2705 *${repair.brand} ${repair.model}* cihazinizin tamiri tamamlanmistir. \uD83D\uDD27%0A%0A`
+    message += `\u2705 *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. \uD83D\uDD27%0A%0A`
 
     if (repair.remaining > 0) {
       message += `\uD83D\uDCB0 *Toplam Ucret:* ${formatCurrency(repair.cost)}%0A`
       message += `\uD83D\uDCB5 *Alinan:* ${formatCurrency(repair.paid)}%0A`
       message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
-      message += `\uD83D\uDE4F Lutfen kalan tutari getirerek cihazinizi teslim aliniz.`
+      message += `\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
     } else {
-      message += `\uD83C\uDF89 *Ucret tamamen odenmistir* (${formatCurrency(repair.cost)}).%0A`
+      message += `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).%0A`
       message += `\u2705 Hemen teslim alabilirsiniz.`
     }
 
-    message += `%0A%0A\uD83C\uDFEA *Yesiltas Teknoloji*%0A\uD83D\uDCDE Bizi tercih ettiginiz icin tesekkur ederiz! \uD83D\uDE4F`
+    message += `%0A%0A\uD83C\uDFEA *Yeşiltaş Teknoloji*%0A\uD83D\uDCDE Bizi tercih ettiğiniz için teşekkür ederiz! \uD83D\uDE4F`
 
     window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
   }
