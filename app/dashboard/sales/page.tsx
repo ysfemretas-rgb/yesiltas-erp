@@ -174,10 +174,10 @@ export default function SalesPage() {
     return editCart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
   }, [editCart])
 
-  const paid = paymentMethod === "partial" ? Number(paidAmount) || 0 : cartTotal
+  const paid = paymentMethod === "partial" ? Number(paidAmount) || 0 : (paymentMethod === "unpaid" ? 0 : cartTotal)
   const remaining = cartTotal - paid
 
-  const editPaid = editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : editCartTotal
+  const editPaid = editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
   const editRemaining = editCartTotal - editPaid
 
   const addToCart = (product: Product, quantity: number = 1) => {
@@ -890,8 +890,8 @@ export default function SalesPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">{formatCurrency(sale.totalAmount)}</div>
-                      <Badge className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : "bg-emerald-600/20 text-emerald-400"}>
-                        {sale.remaining > 0 ? `⏳ Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : "✅ Tamamlandı"}
+                      <Badge className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : (sale.paid === 0 && sale.totalAmount > 0 ? "bg-red-600/20 text-red-400" : "bg-emerald-600/20 text-emerald-400")}>
+                        {sale.remaining > 0 ? `⏳ Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : (sale.paid === 0 && sale.totalAmount > 0 ? "❌ Ödenmedi" : "✅ Tamamlandı")}
                       </Badge>
                     </div>
                   </div>
