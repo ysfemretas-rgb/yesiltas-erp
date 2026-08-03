@@ -371,7 +371,12 @@ export default function SalesPage() {
     const sale = sales.find(s => s.id === saleId)
     if (!sale) return
 
-    if (!confirm("🗑️ Bu satış kaydını silmek istediğinize emin misiniz?\n\nBu işlem stokları geri ekleyecek ve müşteri borcunu güncelleyecektir.")) return
+    if (!confirm("🗑️ Bu satış kaydını silmek istediğinize emin misiniz?
+
+⚠️ Bu işlem:
+• Stokları geri ekleyecek
+• Müşteri borcunu güncelleyecek
+• Finans kaydını silecektir.")) return
 
     // Return stock
     const updatedProducts = products.map(p => {
@@ -560,7 +565,7 @@ export default function SalesPage() {
       {/* New Sale Dialog */}
       <Dialog open={showNewSale} onOpenChange={setShowNewSale}>
         <DialogContent className="max-w-4xl bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-xl">🛒 Yeni Satış</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-xl">🛒 Yeni Satış Oluştur</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {/* Customer Selection */}
             <div className="space-y-2">
@@ -672,7 +677,7 @@ export default function SalesPage() {
             {/* Cart */}
             {cart.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-slate-300">🛒 Sepet</Label>
+                <Label className="text-slate-300">🛒 Sepetim</Label>
                 <div className="space-y-2">
                   {cart.map(item => (
                     <div key={item.productId} className="flex items-center justify-between p-2 bg-slate-800 rounded-lg">
@@ -702,7 +707,7 @@ export default function SalesPage() {
                 {/* Payment */}
                 <div className="space-y-2 pt-2 border-t border-slate-700">
                   <div className="flex justify-between text-lg font-bold text-white">
-                    <span>💰 Toplam:</span>
+                    <span>💰 Toplam Tutar:</span>
                     <span>{formatCurrency(cartTotal)}</span>
                   </div>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -717,7 +722,7 @@ export default function SalesPage() {
                   </Select>
                   {paymentMethod === "partial" && (
                     <div className="space-y-2">
-                      <Label className="text-slate-300">💵 Alınan Tutar</Label>
+                      <Label className="text-slate-300">💵 Alınan Tutar (TL)</Label>
                       <Input
                         type="number"
                         inputMode="decimal"
@@ -729,19 +734,19 @@ export default function SalesPage() {
                       />
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-400">💵 Alınan: {formatCurrency(paid)}</span>
-                        <span className="text-amber-400">⏳ Kalan: {formatCurrency(remaining)}</span>
+                        <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</span>
                       </div>
                     </div>
                   )}
                   {remaining > 0 && paymentMethod !== "partial" && (
-                    <div className="text-sm text-amber-400">⏳ Kalan: {formatCurrency(remaining)}</div>
+                    <div className="text-sm text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</div>
                   )}
                   <Button
                     onClick={handleCompleteSale}
                     disabled={!selectedCustomer || cart.length === 0}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    ✅ Satışı Tamamla
+                    ✅ {paymentMethod === "unpaid" ? "Satışı Kaydet (Ödenmedi)" : "Satışı Tamamla"}
                   </Button>
                 </div>
               </div>
@@ -753,7 +758,7 @@ export default function SalesPage() {
       {/* Edit Sale Dialog */}
       <Dialog open={showEditSale} onOpenChange={setShowEditSale}>
         <DialogContent className="max-w-4xl bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-xl">✏️ Satış Düzenle #{editingSale?.id}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-xl">✏️ Satış Düzenle #{editingSale?.id || ""}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="text-sm text-slate-400">
               👤 Müşteri: <span className="text-white font-medium">{editingSale?.customerName}</span>
@@ -761,7 +766,7 @@ export default function SalesPage() {
 
             {/* Current Items */}
             <div className="space-y-2">
-              <Label className="text-slate-300">📦 Mevcut Ürünler</Label>
+              <Label className="text-slate-300">📦 Satıştaki Ürünler</Label>
               {editCart.map(item => (
                 <div key={item.productId} className="flex items-center justify-between p-2 bg-slate-800 rounded-lg">
                   <div>
@@ -789,7 +794,7 @@ export default function SalesPage() {
 
             {/* Add Products */}
             <div className="space-y-2">
-              <Label className="text-slate-300">➕ Ürün Ekle</Label>
+              <Label className="text-slate-300">➕ Ürün Ekle / Çıkar</Label>
               <Input
                 placeholder="Ürün ara..."
                 value={searchTerm}
@@ -829,7 +834,7 @@ export default function SalesPage() {
             {/* Payment */}
             <div className="space-y-2 pt-2 border-t border-slate-700">
               <div className="flex justify-between text-lg font-bold text-white">
-                <span>💰 Toplam:</span>
+                <span>💰 Toplam Tutar:</span>
                 <span>{formatCurrency(editCartTotal)}</span>
               </div>
               <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
@@ -844,7 +849,7 @@ export default function SalesPage() {
               </Select>
               {editPaymentMethod === "partial" && (
                 <div className="space-y-2">
-                  <Label className="text-slate-300">💵 Alınan Tutar</Label>
+                  <Label className="text-slate-300">💵 Alınan Tutar (TL)</Label>
                   <Input
                     type="number"
                     value={editPaidAmount}
@@ -853,15 +858,15 @@ export default function SalesPage() {
                   />
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-400">💵 Alınan: {formatCurrency(editPaid)}</span>
-                    <span className="text-amber-400">⏳ Kalan: {formatCurrency(editRemaining)}</span>
+                    <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(editRemaining)}</span>
                   </div>
                 </div>
               )}
               {editRemaining > 0 && editPaymentMethod !== "partial" && (
-                <div className="text-sm text-amber-400">⏳ Kalan: {formatCurrency(editRemaining)}</div>
+                <div className="text-sm text-amber-400">⏳ Kalan Borç: {formatCurrency(editRemaining)}</div>
               )}
               <Button onClick={handleUpdateSale} className="w-full bg-blue-600 hover:bg-blue-700">
-                💾 Güncelle
+                💾 Satışı Güncelle
               </Button>
             </div>
           </div>
@@ -886,7 +891,7 @@ export default function SalesPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-medium text-white">{sale.customerName}</div>
-                      <div className="text-xs text-slate-400">📅 {sale.date} | 📦 {(sale.items || []).length} ürün</div>
+                      <div className="text-xs text-slate-400">📅 {sale.date} | 📦 {(sale.items || []).length} ürün | 💳 {paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">{formatCurrency(sale.totalAmount)}</div>
