@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle, X } from "lucide-react"
+import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle } from "lucide-react"
 
 interface Debt {
   id: number
@@ -29,7 +29,6 @@ interface Debt {
   date: string
   status: "paid" | "unpaid"
   source?: "repair" | "sale" | "manual"
-  paidAmount?: number
 }
 
 interface Customer {
@@ -110,7 +109,6 @@ export default function CustomersPage() {
       if (savedCustomers) {
         const parsed = JSON.parse(savedCustomers)
         if (Array.isArray(parsed)) {
-          // Eski formatı yeni formata çevir
           const migrated = parsed.map((c: any) => ({
             ...c,
             firstName: c.firstName || c.name?.split(" ")[0] || "",
@@ -142,10 +140,27 @@ export default function CustomersPage() {
     localStorage.setItem("yt_customers", JSON.stringify(customers))
   }, [customers, isLoaded])
 
-  // Calculate customer debts from repairs and sales
+  // Son 30 gün kontrolü - otomatik pasif
+  const isCustomerActive = (customer: Customer) => {
+    if (customer.status === "inactive") return false
+    if ((customer.totalDebt || 0) > 0) return true
+    const lastVisit = new Date(customer.lastVisit)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    return lastVisit >= thirtyDaysAgo
+  }
+
+  // Manuel status değiştirme
+  const toggleStatus = (id: number) => {
+    setCustomers(customers.map(c =>
+      c.id === id ? { ...c, status: c.status === "active" ? "inactive" : "active" } : c
+    ))
+  }
+
   const getCustomerTransactions = (customerId: number) => {
-    const customerRepairs = repairs.filter(r => r.customerId === customerId || r.customerName === customers.find(c => c.id === customerId)?.name)
-    const customerSales = sales.filter(s => s.customerId === customerId || s.customerName === customers.find(c => c.id === customerId)?.name)
+    const customer = customers.find(c => c.id === customerId)
+    const customerRepairs = repairs.filter(r => r.customerId === customerId || (customer && r.customerName === customer.name))
+    const customerSales = sales.filter(s => s.customerId === customerId || (customer && s.customerName === customer.name))
 
     const transactions: {
       type: "repair" | "sale"
@@ -198,7 +213,7 @@ export default function CustomersPage() {
   })
 
   const totalDebt = customers.reduce((sum, c) => sum + (c.totalDebt || 0), 0)
-  const activeCount = customers.filter(c => c.status === "active").length
+  const activeCount = customers.filter(c => isCustomerActive(c)).length
   const debtCount = customers.filter(c => (c.totalDebt || 0) > 0).length
 
   const getInitials = (name: string) => {
@@ -317,7 +332,6 @@ export default function CustomersPage() {
     message += `Yeşiltaş Teknoloji'den bilgilendirme mesajıdır.%0A%0A`
 
     if (type === "simple") {
-      // Sadece toplam borç
       if (totalRemaining > 0) {
         message += `Toplam Borcunuz: ₺${totalRemaining.toLocaleString("tr-TR")}%0A`
         message += `Lütfen en kısa sürede ödeme yapınız.%0A`
@@ -325,7 +339,6 @@ export default function CustomersPage() {
         message += `Borcunuz bulunmamaktadır. Teşekkür ederiz!%0A`
       }
     } else {
-      // Detaylı borç listesi
       if (transactions.length > 0) {
         message += `İşlem Detaylarınız:%0A%0A`
         transactions.forEach(t => {
@@ -362,7 +375,7 @@ export default function CustomersPage() {
     }
     setCustomers(customers.map(c =>
       c.id === selectedCustomer.id
-        ? { ...c, debts: [...(c.debts || []), debt], totalDebt: (c.totalDebt || 0) + debt.amount }
+        ? { ...c, debts: [...(c.debts || []), debt], totalDebt: (c.totalDebt || 0) + debt.amount, status: "active" as const }
         : c
     ))
     setNewDebt({ amount: 0, description: "" })
@@ -585,10 +598,20 @@ export default function CustomersPage() {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-semibold text-lg text-white">{customer.name}</span>
                     <Badge variant="outline" className="border-slate-600 text-slate-400">{customer.customerId}</Badge>
-                    {customer.status === "active" ? (
-                      <Badge className="bg-green-900/50 text-green-300 border-green-700">Aktif</Badge>
+                    {isCustomerActive(customer) ? (
+                      <Badge 
+                        onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
+                        className="bg-green-900/50 text-green-300 border-green-700 cursor-pointer hover:opacity-80"
+                      >
+                        Aktif
+                      </Badge>
                     ) : (
-                      <Badge className="bg-slate-700 text-slate-300">Pasif</Badge>
+                      <Badge 
+                        onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
+                        className="bg-slate-700 text-slate-300 cursor-pointer hover:opacity-80"
+                      >
+                        Pasif
+                      </Badge>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
@@ -660,6 +683,15 @@ export default function CustomersPage() {
                   <div className="text-white">{selectedCustomer.city}</div>
                   <div className="text-slate-400">Adres:</div>
                   <div className="text-white">{selectedCustomer.address || "-"}</div>
+                  <div className="text-slate-400">Durum:</div>
+                  <div>
+                    <Badge 
+                      onClick={() => toggleStatus(selectedCustomer.id)}
+                      className={`cursor-pointer hover:opacity-80 ${isCustomerActive(selectedCustomer) ? "bg-green-900/50 text-green-300 border-green-700" : "bg-slate-700 text-slate-300"}`}
+                    >
+                      {isCustomerActive(selectedCustomer) ? "Aktif" : "Pasif"}
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="border-t border-slate-700 pt-4">
