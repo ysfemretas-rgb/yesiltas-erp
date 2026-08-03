@@ -245,8 +245,8 @@ export default function RepairsPage() {
       const customer = customers.find((c) => c.id.toString() === value)
       if (customer) {
         setCustomerName(customer.name)
-        setPhone1(customer.phone1)
-        setPhone2(customer.phone2)
+        setPhone1(customer.phone1 || "")
+        setPhone2(customer.phone2 || "")
       }
     }
   }
@@ -296,8 +296,25 @@ export default function RepairsPage() {
     setFinanceTransactions(prev => [newTransaction, ...prev])
   }
 
+  const validateForm = () => {
+    const missingFields: string[] = []
+
+    if (!customerName.trim()) missingFields.push("Musteri Adi")
+    if (!phone1.trim()) missingFields.push("Telefon 1")
+    if (!device.trim()) missingFields.push("Cihaz Turu")
+    if (!brand.trim()) missingFields.push("Marka")
+    if (!issue.trim()) missingFields.push("Ariza Aciklamasi")
+
+    if (missingFields.length > 0) {
+      alert("Lutfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+      return false
+    }
+    return true
+  }
+
   const handleAddRepair = () => {
-    if (!customerName.trim() || !phone1.trim() || !device.trim() || !brand.trim() || !issue.trim()) return
+    if (!validateForm()) return
+
     const newId = Math.max(...repairs.map((r) => r.id), 0) + 1
     const costNum = parseFloat(cost) || 0
     const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
@@ -332,6 +349,19 @@ export default function RepairsPage() {
 
   const handleUpdateRepair = () => {
     if (!selectedRepair) return
+
+    const missingFields: string[] = []
+    if (!customerName.trim()) missingFields.push("Musteri Adi")
+    if (!phone1.trim()) missingFields.push("Telefon 1")
+    if (!device.trim()) missingFields.push("Cihaz Turu")
+    if (!brand.trim()) missingFields.push("Marka")
+    if (!issue.trim()) missingFields.push("Ariza Aciklamasi")
+
+    if (missingFields.length > 0) {
+      alert("Lutfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+      return
+    }
+
     const costNum = parseFloat(cost) || selectedRepair.cost
     const paidNum = paymentType === "partial" 
       ? (parseFloat(paidAmount) || selectedRepair.paid) 
@@ -574,7 +604,7 @@ export default function RepairsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-slate-300 text-xs">Ad Soyad *</Label>
+                      <Label className="text-slate-300 text-xs">Ad Soyad <span className="text-red-400">*</span></Label>
                       <Input 
                         value={customerName} 
                         onChange={(e) => setCustomerName(e.target.value)} 
@@ -583,7 +613,7 @@ export default function RepairsPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-slate-300 text-xs">Telefon 1 *</Label>
+                      <Label className="text-slate-300 text-xs">Telefon 1 <span className="text-red-400">*</span></Label>
                       <Input 
                         value={phone1} 
                         onChange={(e) => setPhone1(e.target.value)} 
@@ -616,7 +646,7 @@ export default function RepairsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Cihaz Turu</Label>
+                  <Label className="text-slate-300">Cihaz Turu <span className="text-red-400">*</span></Label>
                   <Select value={device} onValueChange={setDevice}>
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                       <SelectValue placeholder="Secin" />
@@ -632,7 +662,7 @@ export default function RepairsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Marka</Label>
+                  <Label className="text-slate-300">Marka <span className="text-red-400">*</span></Label>
                   <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: Apple" />
                 </div>
               </div>
@@ -649,7 +679,7 @@ export default function RepairsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-slate-300">Ariza Aciklamasi</Label>
+                <Label className="text-slate-300">Ariza Aciklamasi <span className="text-red-400">*</span></Label>
                 <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white min-h-[80px]" placeholder="Cihazda yasanan sorunu detayli aciklayin..." />
               </div>
 
@@ -867,11 +897,11 @@ export default function RepairsPage() {
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Musteri Adi</Label>
+                <Label className="text-slate-300">Musteri Adi <span className="text-red-400">*</span></Label>
                 <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">Telefon 1</Label>
+                <Label className="text-slate-300">Telefon 1 <span className="text-red-400">*</span></Label>
                 <Input value={phone1} onChange={(e) => setPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
             </div>
@@ -881,7 +911,7 @@ export default function RepairsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Cihaz Turu</Label>
+                <Label className="text-slate-300">Cihaz Turu <span className="text-red-400">*</span></Label>
                 <Select value={device} onValueChange={setDevice}>
                   <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                     <SelectValue />
@@ -897,7 +927,7 @@ export default function RepairsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">Marka</Label>
+                <Label className="text-slate-300">Marka <span className="text-red-400">*</span></Label>
                 <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
             </div>
@@ -912,7 +942,7 @@ export default function RepairsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">Ariza Aciklamasi</Label>
+              <Label className="text-slate-300">Ariza Aciklamasi <span className="text-red-400">*</span></Label>
               <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1004,11 +1034,11 @@ export default function RepairsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label className="text-slate-300">Ad Soyad *</Label>
+              <Label className="text-slate-300">Ad Soyad <span className="text-red-400">*</span></Label>
               <Input value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">Telefon 1 *</Label>
+              <Label className="text-slate-300">Telefon 1 <span className="text-red-400">*</span></Label>
               <Input value={newCustomerPhone1} onChange={(e) => setNewCustomerPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0532 123 4567" />
             </div>
             <div className="space-y-2">
