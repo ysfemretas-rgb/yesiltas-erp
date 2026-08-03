@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,7 @@ interface Customer {
   lastName: string
   name: string
   phone: string
+  phone1?: string
   phone2: string
   email: string
   address: string
@@ -54,6 +55,8 @@ interface Repair {
   id: number
   customerId?: number
   customerName: string
+  phone1: string
+  phone2: string
   device: string
   brand: string
   cost: number
@@ -72,6 +75,31 @@ interface Sale {
   remaining: number
   date: string
   items: { name: string; quantity: number }[]
+}
+
+// Normalize customer data to ensure phone1 field exists
+function normalizeCustomer(raw: any): Customer {
+  const phone = raw.phone || raw.phone1 || raw.telefon || raw.tel1 || raw.phoneNumber || ""
+  const phone2 = raw.phone2 || raw.phoneSecondary || raw.tel2 || ""
+  return {
+    id: raw.id || 0,
+    customerId: raw.customerId || `MUS-${String(raw.id || 0).padStart(3, "0")}`,
+    firstName: raw.firstName || raw.name?.split(" ")[0] || "",
+    lastName: raw.lastName || raw.name?.split(" ").slice(1).join(" ") || "",
+    name: raw.name || `${raw.firstName || ""} ${raw.lastName || ""}`.trim() || "İsimsiz",
+    phone: phone,
+    phone1: phone,
+    phone2: phone2,
+    email: raw.email || "",
+    address: raw.address || "",
+    city: raw.city || "İstanbul",
+    debts: raw.debts || [],
+    totalDebt: raw.totalDebt || 0,
+    totalRepairs: raw.totalRepairs || 0,
+    lastVisit: raw.lastVisit || new Date().toISOString().split("T")[0],
+    status: raw.status || "active",
+    notes: raw.notes || "",
+  }
 }
 
 export default function CustomersPage() {
@@ -106,28 +134,63 @@ export default function CustomersPage() {
       const savedRepairs = localStorage.getItem("yt_repairs")
       const savedSales = localStorage.getItem("yt_sales")
 
+      let loadedCustomers: Customer[] = []
+      let loadedRepairs: Repair[] = []
+      let loadedSales: Sale[] = []
+
       if (savedCustomers) {
         const parsed = JSON.parse(savedCustomers)
         if (Array.isArray(parsed)) {
-          const migrated = parsed.map((c: any) => ({
-            ...c,
-            firstName: c.firstName || c.name?.split(" ")[0] || "",
-            lastName: c.lastName || c.name?.split(" ").slice(1).join(" ") || "",
-            name: c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
-          }))
-          setCustomers(migrated)
+          loadedCustomers = parsed.map(normalizeCustomer)
         }
       }
 
       if (savedRepairs) {
         const parsed = JSON.parse(savedRepairs)
-        if (Array.isArray(parsed)) setRepairs(parsed)
+        if (Array.isArray(parsed)) {
+          loadedRepairs = parsed
+          setRepairs(parsed)
+        }
       }
 
       if (savedSales) {
         const parsed = JSON.parse(savedSales)
-        if (Array.isArray(parsed)) setSales(parsed)
+        if (Array.isArray(parsed)) {
+          loadedSales = parsed
+          setSales(parsed)
+        }
       }
+
+      // Sync customer totalDebt from repairs and sales
+      const syncedCustomers = loadedCustomers.map(customer => {
+        const customerRepairs = loadedRepairs.filter(r => 
+          r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
+        )
+        const customerSales = loadedSales.filter(s => 
+          s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
+        )
+
+        const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
+        const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
+        const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
+
+        const totalDebt = repairDebt + saleDebt + manualDebt
+        const totalRepairs = customerRepairs.length
+
+        // Auto-update status based on debt
+        const status = totalDebt > 0 ? "active" : customer.status
+
+        return {
+          ...customer,
+          totalDebt,
+          totalRepairs,
+          status,
+          phone: customer.phone || customer.phone1 || "",
+          phone1: customer.phone1 || customer.phone || "",
+        }
+      })
+
+      setCustomers(syncedCustomers)
     } catch (e) {
       console.error("Load error:", e)
     }
@@ -140,17 +203,30 @@ export default function CustomersPage() {
     localStorage.setItem("yt_customers", JSON.stringify(customers))
   }, [customers, isLoaded])
 
-  // Son 30 gün kontrolü - otomatik pasif
+  // Calculate customer debt from repairs/sales in real-time
+  const getCustomerDebt = (customer: Customer) => {
+    const customerRepairs = repairs.filter(r => 
+      r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
+    )
+    const customerSales = sales.filter(s => 
+      s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
+    )
+    const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
+    const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
+    const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
+    return repairDebt + saleDebt + manualDebt
+  }
+
   const isCustomerActive = (customer: Customer) => {
+    const debt = getCustomerDebt(customer)
+    if (debt > 0) return true
     if (customer.status === "inactive") return false
-    if ((customer.totalDebt || 0) > 0) return true
     const lastVisit = new Date(customer.lastVisit)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     return lastVisit >= thirtyDaysAgo
   }
 
-  // Manuel status değiştirme
   const toggleStatus = (id: number) => {
     setCustomers(customers.map(c =>
       c.id === id ? { ...c, status: c.status === "active" ? "inactive" : "active" } : c
@@ -159,8 +235,14 @@ export default function CustomersPage() {
 
   const getCustomerTransactions = (customerId: number) => {
     const customer = customers.find(c => c.id === customerId)
-    const customerRepairs = repairs.filter(r => r.customerId === customerId || (customer && r.customerName === customer.name))
-    const customerSales = sales.filter(s => s.customerId === customerId || (customer && s.customerName === customer.name))
+    if (!customer) return []
+
+    const customerRepairs = repairs.filter(r => 
+      r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
+    )
+    const customerSales = sales.filter(s => 
+      s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
+    )
 
     const transactions: {
       type: "repair" | "sale"
@@ -205,16 +287,26 @@ export default function CustomersPage() {
 
   const filteredCustomers = customers.filter((c) => {
     const fullName = `${c.firstName || ""} ${c.lastName || ""} ${c.name || ""}`.toLowerCase()
+    const phone = c.phone || c.phone1 || ""
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
-      (c.phone && c.phone.includes(searchTerm)) ||
+      phone.includes(searchTerm) ||
       (c.customerId && c.customerId.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = filterStatus === "all" || c.status === filterStatus
     return matchesSearch && matchesStatus
   })
 
-  const totalDebt = customers.reduce((sum, c) => sum + (c.totalDebt || 0), 0)
+  // Recalculate totals from real-time data
+  const customerDebts = useMemo(() => {
+    const map = new Map<number, number>()
+    customers.forEach(c => {
+      map.set(c.id, getCustomerDebt(c))
+    })
+    return map
+  }, [customers, repairs, sales])
+
+  const totalDebt = customers.reduce((sum, c) => sum + (customerDebts.get(c.id) || 0), 0)
   const activeCount = customers.filter(c => isCustomerActive(c)).length
-  const debtCount = customers.filter(c => (c.totalDebt || 0) > 0).length
+  const debtCount = customers.filter(c => (customerDebts.get(c.id) || 0) > 0).length
 
   const getInitials = (name: string) => {
     if (!name) return "?"
@@ -225,8 +317,9 @@ export default function CustomersPage() {
     const firstName = newCustomer.firstName || ""
     const lastName = newCustomer.lastName || ""
     const fullName = `${firstName} ${lastName}`.trim()
+    const phone = newCustomer.phone || newCustomer.phone1 || ""
 
-    if (!firstName || !lastName || !newCustomer.phone) return
+    if (!firstName || !lastName || !phone) return
 
     const customer: Customer = {
       id: Date.now(),
@@ -234,7 +327,8 @@ export default function CustomersPage() {
       firstName,
       lastName,
       name: fullName,
-      phone: newCustomer.phone,
+      phone: phone,
+      phone1: phone,
       phone2: newCustomer.phone2 || "",
       email: newCustomer.email || "",
       address: newCustomer.address || "",
@@ -257,7 +351,8 @@ export default function CustomersPage() {
       firstName: customer.firstName,
       lastName: customer.lastName,
       name: customer.name,
-      phone: customer.phone,
+      phone: customer.phone || customer.phone1,
+      phone1: customer.phone1 || customer.phone,
       phone2: customer.phone2,
       email: customer.email,
       address: customer.address,
@@ -272,6 +367,7 @@ export default function CustomersPage() {
     const firstName = newCustomer.firstName || selectedCustomer.firstName
     const lastName = newCustomer.lastName || selectedCustomer.lastName
     const fullName = `${firstName} ${lastName}`.trim()
+    const phone = newCustomer.phone || newCustomer.phone1 || selectedCustomer.phone || selectedCustomer.phone1 || ""
 
     setCustomers(customers.map(c => 
       c.id === selectedCustomer.id 
@@ -280,7 +376,8 @@ export default function CustomersPage() {
             firstName,
             lastName,
             name: fullName,
-            phone: newCustomer.phone || c.phone, 
+            phone: phone,
+            phone1: phone,
             phone2: newCustomer.phone2 || "", 
             email: newCustomer.email || "", 
             address: newCustomer.address || "", 
@@ -314,12 +411,12 @@ export default function CustomersPage() {
   }
 
   const sendWhatsApp = (type: "simple" | "detailed") => {
-    if (!selectedCustomer || !selectedCustomer.phone) {
-      alert("Müşteri telefon numarası yok!")
+    if (!selectedCustomer) {
+      alert("Müşteri seçilmedi!")
       return
     }
 
-    const phone = String(selectedCustomer.phone).replace(/\D/g, "")
+    const phone = String(selectedCustomer.phone || selectedCustomer.phone1 || "").replace(/\D/g, "")
     if (!phone || phone.length < 10) {
       alert("Geçersiz telefon numarası!")
       return
@@ -443,8 +540,8 @@ export default function CustomersPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Telefon *</label>
                   <Input
-                    value={newCustomer.phone || ""}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                    value={newCustomer.phone || newCustomer.phone1 || ""}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value, phone1: e.target.value })}
                     placeholder="0555 123 4567"
                     className="bg-slate-800 border-slate-700 text-white"
                   />
@@ -509,7 +606,7 @@ export default function CustomersPage() {
               </div>
               <Button 
                 onClick={handleAddCustomer} 
-                disabled={!newCustomer.firstName || !newCustomer.lastName || !newCustomer.phone}
+                disabled={!newCustomer.firstName || !newCustomer.lastName || (!newCustomer.phone && !newCustomer.phone1)}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
                 <Save className="mr-2 h-4 w-4" />
@@ -587,74 +684,85 @@ export default function CustomersPage() {
           </div>
 
           <div className="space-y-3">
-            {filteredCustomers.map((customer) => (
-              <div key={customer.id} className="flex items-start gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => openDetailDialog(customer)}>
-                <Avatar className="h-12 w-12 shrink-0">
-                  <AvatarFallback className="bg-blue-600 text-white text-lg">
-                    {getInitials(customer.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold text-lg text-white">{customer.name}</span>
-                    <Badge variant="outline" className="border-slate-600 text-slate-400">{customer.customerId}</Badge>
-                    {isCustomerActive(customer) ? (
-                      <Badge 
-                        onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
-                        className="bg-green-900/50 text-green-300 border-green-700 cursor-pointer hover:opacity-80"
-                      >
-                        Aktif
-                      </Badge>
-                    ) : (
-                      <Badge 
-                        onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
-                        className="bg-slate-700 text-slate-300 cursor-pointer hover:opacity-80"
-                      >
-                        Pasif
-                      </Badge>
+            {filteredCustomers.map((customer) => {
+              const debt = customerDebts.get(customer.id) || 0
+              const hasDebt = debt > 0
+              const isActive = isCustomerActive(customer)
+
+              return (
+                <div key={customer.id} className="flex items-start gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => openDetailDialog(customer)}>
+                  <Avatar className="h-12 w-12 shrink-0">
+                    <AvatarFallback className="bg-blue-600 text-white text-lg">
+                      {getInitials(customer.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-semibold text-lg text-white">{customer.name}</span>
+                      <Badge variant="outline" className="border-slate-600 text-slate-400">{customer.customerId}</Badge>
+                      {isActive || hasDebt ? (
+                        <Badge 
+                          onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
+                          className="bg-green-900/50 text-green-300 border-green-700 cursor-pointer hover:opacity-80"
+                        >
+                          Aktif
+                        </Badge>
+                      ) : (
+                        <Badge 
+                          onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
+                          className="bg-slate-700 text-slate-300 cursor-pointer hover:opacity-80"
+                        >
+                          Pasif
+                        </Badge>
+                      )}
+                      {hasDebt && (
+                        <Badge className="bg-red-900/50 text-red-300 border-red-700">
+                          {formatCurrency(debt)} Borç
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
+                      <div className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        {customer.phone || customer.phone1 || "-"}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Mail className="h-3 w-3" />
+                        {customer.email || "-"}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {customer.city}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <History className="h-3 w-3" />
+                        Son ziyaret: {customer.lastVisit}
+                      </div>
+                    </div>
+                    {hasDebt && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <CreditCard className="h-3 w-3 text-red-400" />
+                        <span className="text-red-400 font-medium text-sm">Borç: {formatCurrency(debt)}</span>
+                      </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
-                    <div className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" />
-                      {customer.phone}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" />
-                      {customer.email || "-"}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {customer.city}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <History className="h-3 w-3" />
-                      Son ziyaret: {customer.lastVisit}
-                    </div>
+                  <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="outline" onClick={() => openWhatsAppDialog(customer)} className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10">
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => openDebtDialog(customer)} className="border-slate-600 text-slate-300 hover:text-white">
+                      <CreditCard className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => openEdit(customer)} className="border-slate-600 text-slate-300 hover:text-white">
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  {(customer.totalDebt || 0) > 0 && (
-                    <div className="mt-2 text-sm">
-                      <span className="text-red-400 font-medium">Borç: {formatCurrency(customer.totalDebt)}</span>
-                      <span className="text-slate-500 ml-2">({(customer.debts || []).length} kayıt)</span>
-                    </div>
-                  )}
                 </div>
-                <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Button size="sm" variant="outline" onClick={() => openWhatsAppDialog(customer)} className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10">
-                    <MessageCircle className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openDebtDialog(customer)} className="border-slate-600 text-slate-300 hover:text-white">
-                    <CreditCard className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openEdit(customer)} className="border-slate-600 text-slate-300 hover:text-white">
-                    <Edit3 className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </CardContent>
       </Card>
@@ -670,8 +778,8 @@ export default function CustomersPage() {
               <>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="text-slate-400">Telefon:</div>
-                  <div className="text-white">{selectedCustomer.phone}</div>
-                  {selectedCustomer.phone2 && (
+                  <div className="text-white">{selectedCustomer.phone || selectedCustomer.phone1 || "-"}</div>
+                  {(selectedCustomer.phone2 || selectedCustomer.phone2) && (
                     <>
                       <div className="text-slate-400">Telefon 2:</div>
                       <div className="text-white">{selectedCustomer.phone2}</div>
@@ -692,6 +800,18 @@ export default function CustomersPage() {
                       {isCustomerActive(selectedCustomer) ? "Aktif" : "Pasif"}
                     </Badge>
                   </div>
+                  {(() => {
+                    const debt = getCustomerDebt(selectedCustomer)
+                    if (debt > 0) {
+                      return (
+                        <>
+                          <div className="text-slate-400">Toplam Borç:</div>
+                          <div className="text-red-400 font-bold">{formatCurrency(debt)}</div>
+                        </>
+                      )
+                    }
+                    return null
+                  })()}
                 </div>
 
                 <div className="border-t border-slate-700 pt-4">
@@ -814,7 +934,7 @@ export default function CustomersPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Telefon</label>
-                <Input value={newCustomer.phone || ""} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+                <Input value={newCustomer.phone || newCustomer.phone1 || ""} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value, phone1: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Telefon 2</label>
