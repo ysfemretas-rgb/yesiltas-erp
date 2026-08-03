@@ -123,12 +123,16 @@ export default function InventoryPage() {
   const fetchRates = async () => {
     setIsLoadingRates(true)
     try {
-      const res = await fetch("https://api.frankfurter.dev/v1/latest?base=TRY&symbols=USD,EUR")
-      if (!res.ok) throw new Error("Rate fetch failed")
-      const data = await res.json()
-      // Frankfurter returns rates as "1 TRY = X USD", so we need inverse
-      const usdRate = data.rates.USD ? 1 / data.rates.USD : 34.5
-      const eurRate = data.rates.EUR ? 1 / data.rates.EUR : 37.2
+      // Fetch USD/TRY and EUR/TRY directly
+      const [usdRes, eurRes] = await Promise.all([
+        fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=TRY"),
+        fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=TRY"),
+      ])
+      if (!usdRes.ok || !eurRes.ok) throw new Error("Rate fetch failed")
+      const usdData = await usdRes.json()
+      const eurData = await eurRes.json()
+      const usdRate = usdData.rates.TRY || 34.5
+      const eurRate = eurData.rates.TRY || 37.2
       setRates({
         USD: Math.round(usdRate * 100) / 100,
         EUR: Math.round(eurRate * 100) / 100,
