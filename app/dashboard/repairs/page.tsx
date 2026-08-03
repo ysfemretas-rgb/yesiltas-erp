@@ -554,23 +554,22 @@ export default function RepairsPage() {
 
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
-    let message = `👋 Merhaba *${repair.customerName}*,%0A%0A`
-    message += `✅ *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. 🔧%0A%0A`
+    let message = `\uD83D\uDC4B Merhaba *${repair.customerName}*,%0A%0A`
+    message += `\u2705 *${repair.brand} ${repair.model}* cihazinizin tamiri tamamlanmistir. \uD83D\uDD27%0A%0A`
 
     if (repair.remaining > 0) {
-      message += `💰 *Toplam Ücret:* ${formatCurrency(repair.cost)}%0A`
-      message += `💵 *Alınan:* ${formatCurrency(repair.paid)}%0A`
-      message += `⏳ *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
-      message += `🙏 Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
+      message += `\uD83D\uDCB0 *Toplam Ucret:* ${formatCurrency(repair.cost)}%0A`
+      message += `\uD83D\uDCB5 *Alinan:* ${formatCurrency(repair.paid)}%0A`
+      message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
+      message += `\uD83D\uDE4F Lutfen kalan tutari getirerek cihazinizi teslim aliniz.`
     } else {
-      message += `🎉 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).%0A`
-      message += `✅ Hemen teslim alabilirsiniz.`
+      message += `\uD83C\uDF89 *Ucret tamamen odenmistir* (${formatCurrency(repair.cost)}).%0A`
+      message += `\u2705 Hemen teslim alabilirsiniz.`
     }
 
-    message += `%0A%0A🏪 *Yeşiltaş Teknoloji*%0A📞 Bizi tercih ettiğiniz için teşekkür ederiz! 🙏`
+    message += `%0A%0A\uD83C\uDFEA *Yesiltas Teknoloji*%0A\uD83D\uDCDE Bizi tercih ettiginiz icin tesekkur ederiz! \uD83D\uDE4F`
 
-    const encodedMessage = encodeURIComponent(message)
-    window.open(`https://wa.me/90${cleanPhone}?text=${encodedMessage}`, "_blank")
+    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
   }
 
   const formatCurrency = (amount: number) => {

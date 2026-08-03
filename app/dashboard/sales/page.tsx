@@ -463,12 +463,12 @@ export default function SalesPage() {
   const sendWhatsApp = (sale: Sale) => {
     try {
       if (!sale) {
-        alert("⚠️ Satış bilgisi bulunamadı!")
+        alert("Satis bilgisi bulunamadi!")
         return
       }
 
       let phone = ""
-      let customerName = sale.customerName || "Müşteri"
+      let customerName = sale.customerName || "Musteri"
 
       if (sale.customerPhone) {
         phone = sale.customerPhone
@@ -483,7 +483,7 @@ export default function SalesPage() {
       }
 
       if (!phone) {
-        alert("📵 Müşteri telefon numarası bulunamadı! Bu eski bir kayıt olabilir.")
+        alert("Musteri telefon numarasi bulunamadi!")
         return
       }
 
@@ -493,31 +493,30 @@ export default function SalesPage() {
       }
 
       if (!cleanPhone || cleanPhone.length < 10) {
-        alert("❌ Geçersiz telefon numarası: " + phone)
+        alert("Gecersiz telefon numarasi!")
         return
       }
 
-      const items = (sale.items || []).map(i => `📦 ${i.name} (${i.quantity}x ₺${i.price.toLocaleString("tr-TR")})`).join("%0A")
-      let message = `👋 Merhaba *${customerName}*,%0A%0A`
-      message += `✅ *Yeşiltaş Teknoloji* satış işleminiz hakkında bilgi vermek istiyoruz.%0A%0A`
-      message += `🛒 *Satış Detayları:*%0A${items || "Ürün bilgisi yok"}%0A%0A`
-      message += `💰 *Toplam Tutar:* ₺${(sale.totalAmount || 0).toLocaleString("tr-TR")}%0A`
+      const items = (sale.items || []).map(i => `${String.fromCharCode(0x1F4E6)} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("%0A")
+      let message = `${String.fromCharCode(0x1F44B)} Merhaba *${customerName}*,%0A%0A`
+      message += `${String.fromCharCode(0x2705)} *Yesiltas Teknoloji* satis isleminiz hakkinda bilgi vermek istiyoruz.%0A%0A`
+      message += `${String.fromCharCode(0x1F6D2)} *Satis Detaylari:*%0A${items || "Urun bilgisi yok"}%0A%0A`
+      message += `${String.fromCharCode(0x1F4B0)} *Toplam Tutar:* ${(sale.totalAmount || 0).toLocaleString("tr-TR")} TL%0A`
       if (sale.remaining > 0) {
-        message += `💵 *Alınan:* ₺${(sale.paid || 0).toLocaleString("tr-TR")}%0A`
-        message += `⏳ *Kalan Borç:* ₺${(sale.remaining || 0).toLocaleString("tr-TR")}%0A`
-        message += `💳 *Ödeme Şekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
+        message += `${String.fromCharCode(0x1F4B5)} *Alinan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL%0A`
+        message += `${String.fromCharCode(0x23F3)} *Kalan Borc:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL%0A`
+        message += `${String.fromCharCode(0x1F4B3)} *Odeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
       } else {
-        message += `✅ *Ödeme:* Tamamlandı%0A`
-        message += `💳 *Ödeme Şekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
+        message += `${String.fromCharCode(0x2705)} *Odeme:* Tamamlandi%0A`
+        message += `${String.fromCharCode(0x1F4B3)} *Odeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
       }
-      message += `%0A📅 *Tarih:* ${sale.date}%0A`
-      message += `%0A🙏 Teşekkür ederiz, iyi günler dileriz!%0A🏪 *Yeşiltaş Teknoloji*`
+      message += `${String.fromCharCode(0x1F4C5)} *Tarih:* ${sale.date}%0A`
+      message += `%0A${String.fromCharCode(0x1F64F)} Tesekkur ederiz, iyi gunler dileriz!%0A${String.fromCharCode(0x1F3EA)} *Yesiltas Teknoloji*`
 
-      const url = `https://wa.me/90${cleanPhone}?text=${message}`
-      window.open(url, "_blank")
+      window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
     } catch (err) {
       console.error("WhatsApp error:", err)
-      alert("❌ WhatsApp gönderilirken hata oluştu!")
+      alert("WhatsApp gonderilirken hata olustu!")
     }
   }
 
