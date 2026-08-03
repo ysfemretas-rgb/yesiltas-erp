@@ -497,21 +497,21 @@ export default function SalesPage() {
         return
       }
 
-      const items = (sale.items || []).map(i => `${String.fromCharCode(0x1F4E6)} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("%0A")
-      let message = `${String.fromCharCode(0x1F44B)} Merhaba *${customerName}*,%0A%0A`
-      message += `${String.fromCharCode(0x2705)} *Yeşiltaş Teknoloji* satis isleminiz hakkinda bilgi vermek istiyoruz.%0A%0A`
-      message += `${String.fromCharCode(0x1F6D2)} *Satis Detaylari:*%0A${items || "Urun bilgisi yok"}%0A%0A`
-      message += `${String.fromCharCode(0x1F4B0)} *Toplam Tutar:* ${(sale.totalAmount || 0).toLocaleString("tr-TR")} TL%0A`
+      const items = (sale.items || []).map(i => `${\uD83D\uDCE6} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("%0A")
+      let message = `${\uD83D\uDC4B} Merhaba *${customerName}*,%0A%0A`
+      message += `${\u2705} *Yeşiltaş Teknoloji* satis isleminiz hakkinda bilgi vermek istiyoruz.%0A%0A`
+      message += `${\uD83D\uDED2} *Satis Detaylari:*%0A${items || "Urun bilgisi yok"}%0A%0A`
+      message += `${\uD83D\uDCB0} *Toplam Tutar:* ${(sale.totalAmount || 0).toLocaleString("tr-TR")} TL%0A`
       if (sale.remaining > 0) {
-        message += `${String.fromCharCode(0x1F4B5)} *Alinan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL%0A`
-        message += `${String.fromCharCode(0x23F3)} *Kalan Borc:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL%0A`
-        message += `${String.fromCharCode(0x1F4B3)} *Odeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
+        message += `${\uD83D\uDCB5} *Alinan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL%0A`
+        message += `${\u23F3} *Kalan Borc:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL%0A`
+        message += `${\uD83D\uDCB3} *Odeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
       } else {
-        message += `${String.fromCharCode(0x2705)} *Odeme:* Tamamlandi%0A`
-        message += `${String.fromCharCode(0x1F4B3)} *Odeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
+        message += `${\u2705} *Odeme:* Tamamlandi%0A`
+        message += `${\uD83D\uDCB3} *Odeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
       }
-      message += `${String.fromCharCode(0x1F4C5)} *Tarih:* ${sale.date}%0A`
-      message += `%0A${String.fromCharCode(0x1F64F)} Tesekkur ederiz, iyi gunler dileriz!%0A${String.fromCharCode(0x1F3EA)} *Yeşiltaş Teknoloji*`
+      message += `${\uD83D\uDCC5} *Tarih:* ${sale.date}%0A`
+      message += `%0A${\uD83D\uDE4F} Tesekkur ederiz, iyi gunler dileriz!%0A${\uD83C\uDFEA} *Yeşiltaş Teknoloji*`
 
       window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
     } catch (err) {

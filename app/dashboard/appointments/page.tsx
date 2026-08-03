@@ -259,25 +259,25 @@ export default function AppointmentsPage() {
 
       let message = ""
       if (isPast) {
-        message = `${String.fromCharCode(0x1F44B)} Merhaba *${customerName}*,%0A%0A`
-        message += `${String.fromCharCode(0x26A0)} *Yeşiltaş Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
-        message += `${String.fromCharCode(0x1F4C5)} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) gecmistir.%0A%0A`
-        message += `${String.fromCharCode(0x1F527)} Hizmet: *${appointment.service}*%0A%0A`
-        message += `${String.fromCharCode(0x1F4DE)} Lutfen yeni bir randevu olusturmak icin bizimle iletisime geciniz.%0A%0A`
-        message += `${String.fromCharCode(0x1F64F)} Iyi gunler dileriz!%0A`
-        message += `${String.fromCharCode(0x1F3EA)} *Yeşiltaş Teknoloji*`
+        message = `${\uD83D\uDC4B} Merhaba *${customerName}*,%0A%0A`
+        message += `${\u26A0} *Yeşiltaş Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
+        message += `${\uD83D\uDCC5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) gecmistir.%0A%0A`
+        message += `${\uD83D\uDD27} Hizmet: *${appointment.service}*%0A%0A`
+        message += `${\uD83D\uDCDE} Lutfen yeni bir randevu olusturmak icin bizimle iletisime geciniz.%0A%0A`
+        message += `${\uD83D\uDE4F} Iyi gunler dileriz!%0A`
+        message += `${\uD83C\uDFEA} *Yeşiltaş Teknoloji*`
       } else {
-        message = `${String.fromCharCode(0x1F44B)} Merhaba *${customerName}*,%0A%0A`
-        message += `${String.fromCharCode(0x2705)} *Yeşiltaş Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
-        message += `${String.fromCharCode(0x1F4C5)} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
-        message += `${String.fromCharCode(0x1F527)} Hizmet: *${appointment.service}*%0A%0A`
-        message += `${String.fromCharCode(0x23F0)} Lutfen randevu saatinde gelmeyi unutmayiniz.%0A%0A`
-        message += `${String.fromCharCode(0x1F64F)} Iyi gunler dileriz!%0A`
-        message += `${String.fromCharCode(0x1F3EA)} *Yeşiltaş Teknoloji*`
+        message = `${\uD83D\uDC4B} Merhaba *${customerName}*,%0A%0A`
+        message += `${\u2705} *Yeşiltaş Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
+        message += `${\uD83D\uDCC5} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
+        message += `${\uD83D\uDD27} Hizmet: *${appointment.service}*%0A%0A`
+        message += `${\u23F0} Lutfen randevu saatinde gelmeyi unutmayiniz.%0A%0A`
+        message += `${\uD83D\uDE4F} Iyi gunler dileriz!%0A`
+        message += `${\uD83C\uDFEA} *Yeşiltaş Teknoloji*`
       }
 
       if (appointment.notes) {
-        message += `%0A%0A${String.fromCharCode(0x1F4DD)} Not: ${appointment.notes}`
+        message += `%0A%0A${\uD83D\uDCDD} Not: ${appointment.notes}`
       }
 
       window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
