@@ -143,6 +143,18 @@ const initialFinance: FinanceTransaction[] = [
   { id: 1, description: "iPhone 14 Pro Ekran Degisimi", amount: 4500, type: "income", category: "Tamir Geliri", date: "2026-07-29", customer: "Ahmet Yilmaz", source: "repair", sourceId: 1 },
 ]
 
+// Helper to normalize customer data from different sources
+function normalizeCustomer(raw: any): Customer {
+  return {
+    id: raw.id || 0,
+    name: raw.name || raw.fullName || raw.customerName || "",
+    phone1: raw.phone1 || raw.phone || raw.telefon || raw.tel1 || raw.phoneNumber || "",
+    phone2: raw.phone2 || raw.phoneSecondary || raw.tel2 || "",
+    email: raw.email || raw.e_posta || "",
+    address: raw.address || raw.adres || "",
+  }
+}
+
 export default function RepairsPage() {
   const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
@@ -188,7 +200,12 @@ export default function RepairsPage() {
         const savedNotes = localStorage.getItem("yt_repair_notes")
         const savedFinance = localStorage.getItem("yt_finance")
         if (savedRepairs) setRepairs(JSON.parse(savedRepairs))
-        if (savedCustomers) setCustomers(JSON.parse(savedCustomers))
+        if (savedCustomers) {
+          const parsed = JSON.parse(savedCustomers)
+          // Normalize customers to ensure phone1 field exists
+          const normalized = Array.isArray(parsed) ? parsed.map(normalizeCustomer) : []
+          setCustomers(normalized)
+        }
         if (savedNotes) setNotes(JSON.parse(savedNotes))
         if (savedFinance) setFinanceTransactions(JSON.parse(savedFinance))
       } catch (e) {
@@ -245,8 +262,11 @@ export default function RepairsPage() {
       const customer = customers.find((c) => c.id.toString() === value)
       if (customer) {
         setCustomerName(customer.name)
-        setPhone1(customer.phone1 || "")
-        setPhone2(customer.phone2 || "")
+        // Use phone1 with fallback to phone/telefon fields
+        const primaryPhone = customer.phone1 || customer.phone || ""
+        const secondaryPhone = customer.phone2 || ""
+        setPhone1(primaryPhone)
+        setPhone2(secondaryPhone)
       }
     }
   }
@@ -582,7 +602,7 @@ export default function RepairsPage() {
                     </SelectItem>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id.toString()} className="text-white">
-                        {c.name} - {c.phone1}
+                        {c.name} - {c.phone1 || c.phone || "Telefon yok"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -638,7 +658,7 @@ export default function RepairsPage() {
                 <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3">
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div><span className="text-slate-400">Ad:</span> <span className="text-white">{customerName}</span></div>
-                    <div><span className="text-slate-400">Tel 1:</span> <span className="text-white">{phone1}</span></div>
+                    <div><span className="text-slate-400">Tel 1:</span> <span className="text-white">{phone1 || "-"}</span></div>
                     {phone2 && <div><span className="text-slate-400">Tel 2:</span> <span className="text-white">{phone2}</span></div>}
                   </div>
                 </div>
