@@ -222,22 +222,69 @@ export default function AppointmentsPage() {
   }
 
   const sendWhatsApp = (appointment: Appointment) => {
-    const phone = appointment.customerPhone.replace(/\s/g, "").replace(/^0/, "+90")
-    const dateStr = new Date(appointment.date).toLocaleDateString("tr-TR")
-    const isPast = isPastDate(appointment.date)
+    try {
+      if (!appointment) {
+        alert("Randevu bilgisi bulunamadi!")
+        return
+      }
 
-    let message = ""
-    if (isPast) {
-      message = `Merhaba *${appointment.customerName}*,\n\n*Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\nRandevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.\n\nHizmet: *${appointment.service}*\n\nLütfen yeni bir randevu oluşturmak için bizimle iletişime geçiniz.\n\nİyi günler dileriz!\n*Yeşiltaş Teknoloji*`
-    } else {
-      message = `Merhaba *${appointment.customerName}*,\n\n*Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\nRandevu tarihiniz: *${dateStr} - ${appointment.time}*\n\nHizmet: *${appointment.service}*\n\nLütfen randevu saatinde gelmeyi unutmayınız.\n\nİyi günler dileriz!\n*Yeşiltaş Teknoloji*`
+      let phone = appointment.customerPhone || ""
+      let customerName = appointment.customerName || "Musteri"
+
+      if (!phone && appointment.customerId && customers.length > 0) {
+        const customer = customers.find(c => c.id === appointment.customerId)
+        if (customer) {
+          phone = customer.phone || customer.phone1 || ""
+          customerName = customer.name
+        }
+      }
+
+      if (!phone) {
+        alert("Musteri telefon numarasi bulunamadi!")
+        return
+      }
+
+      let cleanPhone = String(phone).replace(/\D/g, "")
+      if (cleanPhone.startsWith("0")) {
+        cleanPhone = cleanPhone.substring(1)
+      }
+
+      if (!cleanPhone || cleanPhone.length < 10) {
+        alert("Gecersiz telefon numarasi!")
+        return
+      }
+
+      const dateStr = new Date(appointment.date).toLocaleDateString("tr-TR")
+      const isPast = isPastDate(appointment.date)
+
+      let message = ""
+      if (isPast) {
+        message = `${String.fromCharCode(0x1F44B)} Merhaba *${customerName}*,%0A%0A`
+        message += `${String.fromCharCode(0x26A0)} *Yesiltas Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
+        message += `${String.fromCharCode(0x1F4C5)} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) gecmistir.%0A%0A`
+        message += `${String.fromCharCode(0x1F527)} Hizmet: *${appointment.service}*%0A%0A`
+        message += `${String.fromCharCode(0x1F4DE)} Lutfen yeni bir randevu olusturmak icin bizimle iletisime geciniz.%0A%0A`
+        message += `${String.fromCharCode(0x1F64F)} Iyi gunler dileriz!%0A`
+        message += `${String.fromCharCode(0x1F3EA)} *Yesiltas Teknoloji*`
+      } else {
+        message = `${String.fromCharCode(0x1F44B)} Merhaba *${customerName}*,%0A%0A`
+        message += `${String.fromCharCode(0x2705)} *Yesiltas Teknoloji*'den randevu hatirlatmasidir.%0A%0A`
+        message += `${String.fromCharCode(0x1F4C5)} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
+        message += `${String.fromCharCode(0x1F527)} Hizmet: *${appointment.service}*%0A%0A`
+        message += `${String.fromCharCode(0x23F0)} Lutfen randevu saatinde gelmeyi unutmayiniz.%0A%0A`
+        message += `${String.fromCharCode(0x1F64F)} Iyi gunler dileriz!%0A`
+        message += `${String.fromCharCode(0x1F3EA)} *Yesiltas Teknoloji*`
+      }
+
+      if (appointment.notes) {
+        message += `%0A%0A${String.fromCharCode(0x1F4DD)} Not: ${appointment.notes}`
+      }
+
+      window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+    } catch (err) {
+      console.error("WhatsApp error:", err)
+      alert("WhatsApp gonderilirken hata olustu!")
     }
-
-    if (appointment.notes) {
-      message += `\n\nNot: ${appointment.notes}`
-    }
-
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
   const getStatusBadge = (status: string, isPast: boolean) => {
@@ -388,9 +435,12 @@ export default function AppointmentsPage() {
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <CalendarDays className="h-5 w-5" />
-            Randevu Listesi
+          <CardTitle className="text-white flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" />
+              Randevu Listesi
+            </span>
+            <span className="text-sm text-slate-400">{appointments.length} kayit</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
