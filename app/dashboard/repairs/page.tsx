@@ -554,15 +554,20 @@ export default function RepairsPage() {
 
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
-    let message = `Merhaba ${repair.customerName}, ${repair.brand} ${repair.model} cihazinizin tamiri tamamlanmistir.`
+    let message = `👋 Merhaba *${repair.customerName}*,%0A%0A`
+    message += `✅ *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. 🔧%0A%0A`
 
     if (repair.remaining > 0) {
-      message += ` Toplam ucret: ${formatCurrency(repair.cost)}, alinan: ${formatCurrency(repair.paid)}, kalan bakiye: ${formatCurrency(repair.remaining)}. Lutfen kalan tutari getirin.`
+      message += `💰 *Toplam Ücret:* ${formatCurrency(repair.cost)}%0A`
+      message += `💵 *Alınan:* ${formatCurrency(repair.paid)}%0A`
+      message += `⏳ *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
+      message += `🙏 Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
     } else {
-      message += ` Ucret tamamen odenmistir (${formatCurrency(repair.cost)}). Hemen teslim alabilirsiniz.`
+      message += `🎉 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).%0A`
+      message += `✅ Hemen teslim alabilirsiniz.`
     }
 
-    message += ` Yesiltas Teknoloji`
+    message += `%0A%0A🏪 *Yeşiltaş Teknoloji*%0A📞 Bizi tercih ettiğiniz için teşekkür ederiz! 🙏`
 
     const encodedMessage = encodeURIComponent(message)
     window.open(`https://wa.me/90${cleanPhone}?text=${encodedMessage}`, "_blank")
@@ -869,7 +874,7 @@ export default function RepairsPage() {
                             size="sm" 
                             onClick={() => sendWhatsApp(repair)}
                             className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                            title="WhatsApp ile bilgilendir"
+                            title="📱 WhatsApp ile bilgilendir"
                           >
                             <MessageCircle className="h-4 w-4" />
                           </Button>

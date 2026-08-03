@@ -412,48 +412,50 @@ export default function CustomersPage() {
 
   const sendWhatsApp = (type: "simple" | "detailed") => {
     if (!selectedCustomer) {
-      alert("Müşteri seçilmedi!")
+      alert("⚠️ Müşteri seçilmedi!")
       return
     }
 
     const phone = String(selectedCustomer.phone || selectedCustomer.phone1 || "").replace(/\D/g, "")
     if (!phone || phone.length < 10) {
-      alert("Geçersiz telefon numarası!")
+      alert("❌ Geçersiz telefon numarası!")
       return
     }
 
     const transactions = getCustomerTransactions(selectedCustomer.id)
     const totalRemaining = transactions.reduce((sum, t) => sum + t.remaining, 0)
 
-    let message = `Merhaba ${selectedCustomer.firstName || selectedCustomer.name},%0A%0A`
-    message += `Yeşiltaş Teknoloji'den bilgilendirme mesajıdır.%0A%0A`
+    let message = `👋 Merhaba *${selectedCustomer.firstName || selectedCustomer.name}*,%0A%0A`
+    message += `✅ *Yeşiltaş Teknoloji*'den bilgilendirme mesajıdır.%0A%0A`
 
     if (type === "simple") {
       if (totalRemaining > 0) {
-        message += `Toplam Borcunuz: ₺${totalRemaining.toLocaleString("tr-TR")}%0A`
-        message += `Lütfen en kısa sürede ödeme yapınız.%0A`
+        message += `💰 *Toplam Borcunuz:* ₺${totalRemaining.toLocaleString("tr-TR")}%0A`
+        message += `⏳ Lütfen en kısa sürede ödeme yapınız.%0A`
       } else {
-        message += `Borcunuz bulunmamaktadır. Teşekkür ederiz!%0A`
+        message += `🎉 Borcunuz bulunmamaktadır. Teşekkür ederiz!%0A`
       }
     } else {
       if (transactions.length > 0) {
-        message += `İşlem Detaylarınız:%0A%0A`
+        message += `📋 *İşlem Detaylarınız:*%0A%0A`
         transactions.forEach(t => {
-          message += `📌 ${t.description}%0A`
-          message += `   Toplam: ₺${t.total.toLocaleString("tr-TR")}%0A`
-          message += `   Alınan: ₺${t.paid.toLocaleString("tr-TR")}%0A`
-          message += `   Kalan: ₺${t.remaining.toLocaleString("tr-TR")}%0A`
-          message += `   Tarih: ${t.date}%0A%0A`
+          message += `📌 *${t.description}*%0A`
+          message += `   💰 Toplam: ₺${t.total.toLocaleString("tr-TR")}%0A`
+          message += `   💵 Alınan: ₺${t.paid.toLocaleString("tr-TR")}%0A`
+          if (t.remaining > 0) {
+            message += `   ⏳ Kalan: ₺${t.remaining.toLocaleString("tr-TR")}%0A`
+          }
+          message += `   📅 Tarih: ${t.date}%0A%0A`
         })
         if (totalRemaining > 0) {
-          message += `Toplam Kalan Borç: ₺${totalRemaining.toLocaleString("tr-TR")}%0A`
+          message += `💰 *Toplam Kalan Borç:* ₺${totalRemaining.toLocaleString("tr-TR")}%0A`
         }
       } else {
-        message += `Borcunuz bulunmamaktadır.%0A`
+        message += `🎉 Borcunuz bulunmamaktadır.%0A`
       }
     }
 
-    message += `%0ATeşekkür ederiz, iyi günler dileriz!%0AYeşiltaş Teknoloji`
+    message += `%0A🙏 Teşekkür ederiz, iyi günler dileriz!%0A🏪 *Yeşiltaş Teknoloji*`
 
     const cleanPhone = phone.startsWith("0") ? phone.substring(1) : phone
     window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
@@ -884,18 +886,18 @@ export default function CustomersPage() {
       <Dialog open={isWhatsAppOpen} onOpenChange={setIsWhatsAppOpen}>
         <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">WhatsApp Mesajı - {selectedCustomer?.name}</DialogTitle>
+            <DialogTitle className="text-white">📱 WhatsApp Mesajı - {selectedCustomer?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-slate-400">Göndermek istediğiniz mesaj tipini seçin:</p>
+            <p className="text-sm text-slate-400">📤 Göndermek istediğiniz mesaj tipini seçin:</p>
             <div className="space-y-2">
               <Button 
                 onClick={() => sendWhatsApp("simple")}
                 className="w-full justify-start bg-slate-800 hover:bg-slate-700 text-white"
               >
-                <MessageCircle className="mr-2 h-4 w-4 text-green-400" />
+                <span className="mr-2 text-lg">💰</span>
                 <div className="text-left">
-                  <div className="text-sm">Sadece Borç Özeti</div>
+                  <div className="text-sm">💰 Sadece Borç Özeti</div>
                   <div className="text-xs text-slate-400">Toplam borç tutarı gönderilir</div>
                 </div>
               </Button>
@@ -903,9 +905,9 @@ export default function CustomersPage() {
                 onClick={() => sendWhatsApp("detailed")}
                 className="w-full justify-start bg-slate-800 hover:bg-slate-700 text-white"
               >
-                <MessageCircle className="mr-2 h-4 w-4 text-blue-400" />
+                <span className="mr-2 text-lg">📋</span>
                 <div className="text-left">
-                  <div className="text-sm">Detaylı Borç Listesi</div>
+                  <div className="text-sm">📋 Detaylı Borç Listesi</div>
                   <div className="text-xs text-slate-400">Tüm işlemler ve kalan borçlar gönderilir</div>
                 </div>
               </Button>
