@@ -12,6 +12,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Download, TrendingUp, TrendingDown, DollarSign, Wrench, ShoppingCart, Users, Calendar, FileText, Filter } from "lucide-react"
 import { format, parseISO, isWithinInterval, isValid, subMonths } from "date-fns"
 import { tr } from "date-fns/locale"
+import { useRouter } from "next/navigation"
 
 interface FinanceRecord {
   id: string
@@ -101,6 +102,10 @@ function safeMonthLabel(dateStr: string | undefined | null): string | null {
 }
 
 export default function ReportsPage() {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
   const [dateRange, setDateRange] = useState({ start: "", end: "" })
@@ -110,6 +115,37 @@ export default function ReportsPage() {
   const [customersData, setCustomersData] = useState<CustomerRecord[]>([])
   const [downloadFormat, setDownloadFormat] = useState<"pdf" | "excel">("excel")
   const [showDownloadDialog, setShowDownloadDialog] = useState(false)
+
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Raporlar")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
 
   useEffect(() => {
     // Varsayılan tarih aralığı: son 6 ay
@@ -146,6 +182,23 @@ export default function ReportsPage() {
 
   // Tarih filtresi
   const filterByDate = <T extends { date: string }>(data: T[]) => {
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
     if (!dateRange.start || !dateRange.end) return data
     const startDate = safeParseDate(dateRange.start)
     const endDate = safeParseDate(dateRange.end)

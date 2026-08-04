@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Eye, EyeOff, Check } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface StaffMember {
   id: number
@@ -89,6 +90,10 @@ function CustomCheckbox({
 }
 
 export default function StaffPage() {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
   const [isLoaded, setIsLoaded] = useState(false)
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -110,6 +115,37 @@ export default function StaffPage() {
   })
 
   // localStorage'dan yükle
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Personel")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem("yt_staff")
@@ -178,6 +214,23 @@ export default function StaffPage() {
   }
 
   const handleAddMember = () => {
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
     if (!newMember.name?.trim() || !newMember.email?.trim()) {
       alert("Lütfen ad soyad ve e-posta alanlarını doldurun!")
       return

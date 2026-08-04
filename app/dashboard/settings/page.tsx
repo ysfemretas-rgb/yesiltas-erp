@@ -69,6 +69,9 @@ const ALL_PERMISSIONS = ["Tamir", "Finans", "Envanter", "Personel", "Raporlar", 
 
 export default function SettingsPage() {
   const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
   const [isLoaded, setIsLoaded] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
   const [users, setUsers] = useState<AppUser[]>([])
@@ -104,6 +107,37 @@ export default function SettingsPage() {
   })
 
   // localStorage'dan yükle
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Ayarlar")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
+
   useEffect(() => {
     try {
       const companySaved = localStorage.getItem("yt_company")
@@ -161,6 +195,23 @@ export default function SettingsPage() {
   }
 
   const handleAddUser = () => {
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
     if (!newUser.username?.trim() || !newUser.name?.trim()) {
       alert("Lütfen kullanıcı adı ve ad soyad alanlarını doldurun!")
       return

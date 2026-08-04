@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface Product {
   id: number
@@ -71,11 +72,15 @@ const paymentMethods = [
 ]
 
 export default function SalesPage() {
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [cart, setCart] = useState<SaleItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<string>("")
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
   const [customerSearch, setCustomerSearch] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const [paidAmount, setPaidAmount] = useState("")
@@ -93,6 +98,37 @@ export default function SalesPage() {
   const [isLoaded, setIsLoaded] = useState(false)
 
   // Load data from localStorage
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Satışlar")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
+
   useEffect(() => {
     if (typeof window === "undefined") return
 
@@ -143,6 +179,23 @@ export default function SalesPage() {
   }, [customers, isLoaded])
 
   useEffect(() => {
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_sales", JSON.stringify(sales))
   }, [sales, isLoaded])

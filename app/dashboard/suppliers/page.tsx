@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, Trash2, Edit3, X, ExternalLink } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface Supplier {
   id: number
@@ -34,6 +35,10 @@ const getInitialSuppliers = (): Supplier[] => [
 ]
 
 export default function SuppliersPage() {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
   const [isLoaded, setIsLoaded] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -51,6 +56,37 @@ export default function SuppliersPage() {
   })
 
   // localStorage'dan yükle
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Tedarikçiler")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem("yt_suppliers")
@@ -78,6 +114,23 @@ export default function SuppliersPage() {
 
   // localStorage'a kaydet
   useEffect(() => {
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
     if (isLoaded && suppliers.length > 0) {
       localStorage.setItem("yt_suppliers", JSON.stringify(suppliers))
     }
