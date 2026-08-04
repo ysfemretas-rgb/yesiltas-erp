@@ -11,12 +11,14 @@ interface UserAccount {
   password: string
   name: string
   role: string
+  permissions: string[]
 }
 
-const users: UserAccount[] = [
-  { username: "admin", password: "admin123", name: "Emre", role: "Yonetici" },
-  { username: "teknisyen", password: "tek123", name: "Ahmet", role: "Teknisyen" },
-  { username: "kasa", password: "kasa123", name: "Ayse", role: "Kasiyer" },
+// Varsayılan kullanıcılar (fallback)
+const defaultUsers: UserAccount[] = [
+  { username: "admin", password: "admin123", name: "Emre", role: "Yönetici", permissions: ["Tamir", "Finans", "Envanter", "Personel", "Raporlar", "Ayarlar", "Satış", "Müşteriler", "Randevular", "Tedarikçiler"] },
+  { username: "teknisyen", password: "tek123", name: "Ahmet", role: "Teknisyen", permissions: ["Tamir", "Randevular", "Envanter", "Sarf Malzemeler"] },
+  { username: "kasa", password: "kasa123", name: "Ayşe", role: "Kasiyer", permissions: ["Satış", "Finans", "Müşteriler"] },
 ]
 
 export default function LoginForm() {
@@ -33,9 +35,30 @@ export default function LoginForm() {
     }
   }, [shouldRedirect])
 
+  const getUsers = (): UserAccount[] => {
+    try {
+      const saved = localStorage.getItem("yt_app_users")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((u: any) => ({
+            username: u.username,
+            password: u.password || "123456",
+            name: u.name,
+            role: u.role,
+            permissions: u.permissions || [],
+          }))
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return defaultUsers
+  }
+
   const handleLogin = () => {
     if (!username || !password) {
-      setError("Lutfen kullanici adi ve sifre girin!")
+      setError("Lütfen kullanıcı adı ve şifre girin!")
       setSuccess("")
       return
     }
@@ -43,7 +66,8 @@ export default function LoginForm() {
     setError("")
     setSuccess("")
 
-    const user = users.find(
+    const allUsers = getUsers()
+    const user = allUsers.find(
       (u) => u.username === username && u.password === password
     )
 
@@ -52,16 +76,34 @@ export default function LoginForm() {
         username: user.username,
         name: user.name,
         role: user.role,
+        permissions: user.permissions,
         loginTime: new Date().toISOString()
       }))
-      
-      setSuccess(`Giris basarili! Hos geldiniz, ${user.role} ${user.name}. Yonlendiriliyorsunuz...`)
-      
+
+      // Giriş kaydı ekle
+      try {
+        const records = JSON.parse(localStorage.getItem("yt_login_records") || "[]")
+        records.unshift({
+          id: Date.now(),
+          userId: user.username,
+          username: user.username,
+          name: user.name,
+          action: "login",
+          timestamp: new Date().toISOString().replace("T", " ").slice(0, 16),
+          ip: "local"
+        })
+        localStorage.setItem("yt_login_records", JSON.stringify(records.slice(0, 100)))
+      } catch {
+        // ignore
+      }
+
+      setSuccess(`Giriş başarılı! Hoş geldiniz, ${user.role} ${user.name}. Yönlendiriliyorsunuz...`)
+
       setTimeout(() => {
         setShouldRedirect(true)
       }, 1000)
     } else {
-      setError("Kullanici adi veya sifre hatali!")
+      setError("Kullanıcı adı veya şifre hatalı!")
       setSuccess("")
     }
   }
@@ -75,17 +117,17 @@ export default function LoginForm() {
   return (
     <Card className="border-slate-800 bg-slate-900">
       <CardHeader className="pb-4">
-        <CardTitle className="text-center text-xl text-white">Giris Yap</CardTitle>
+        <CardTitle className="text-center text-xl text-white">Giriş Yap</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="username" className="text-slate-300">Kullanici Adi</Label>
+          <Label htmlFor="username" className="text-slate-300">Kullanıcı Adı</Label>
           <div className="relative">
             <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
             <Input
               id="username"
               type="text"
-              placeholder="Kullanici adiniz"
+              placeholder="Kullanıcı adınız"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -95,13 +137,13 @@ export default function LoginForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password" className="text-slate-300">Sifre</Label>
+          <Label htmlFor="password" className="text-slate-300">Şifre</Label>
           <div className="relative">
             <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
-              placeholder="Sifreniz"
+              placeholder="Şifreniz"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -118,7 +160,7 @@ export default function LoginForm() {
         </div>
 
         {success && (
-          <div className="flex items-center gap-2 rounded-lg border border-green-800 bg-green-900/20 p-3 text-sm text-green-300">
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-800 bg-emerald-900/20 p-3 text-sm text-emerald-300">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             {success}
           </div>
@@ -135,7 +177,7 @@ export default function LoginForm() {
           onClick={handleLogin}
           className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
-          Giris Yap
+          Giriş Yap
         </button>
 
         <div className="border-t border-slate-800 pt-4">
@@ -146,14 +188,14 @@ export default function LoginForm() {
               onClick={() => { setUsername("admin"); setPassword("admin123"); setError(""); setSuccess(""); }}
             >
               <span>admin / admin123</span>
-              <span className="text-blue-400">Yonetici</span>
+              <span className="text-blue-400">Yönetici</span>
             </div>
             <div 
               className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
               onClick={() => { setUsername("teknisyen"); setPassword("tek123"); setError(""); setSuccess(""); }}
             >
               <span>teknisyen / tek123</span>
-              <span className="text-green-400">Teknisyen</span>
+              <span className="text-emerald-400">Teknisyen</span>
             </div>
             <div 
               className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
