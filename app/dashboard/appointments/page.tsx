@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,9 +57,46 @@ interface Appointment {
   notes: string
 }
 
-const services = ["Ekran Degisimi", "Batarya Degisimi", "Anakart Tamiri", "Yazilim Güncelleme", "Genel Bakim"]
+const services = ["Ekran Değişimi", "Batarya Değişimi", "Anakart Tamiri", "Yazılım Güncelleme", "Genel Bakım"]
+
+function usePermissionGuard(requiredPermission: string) {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    const userData = localStorage.getItem("yt_user")
+    if (!userData) { router.push("/"); return }
+    try {
+      const user = JSON.parse(userData)
+      if (user.role === "Yönetici" || (user.permissions || []).includes(requiredPermission)) {
+        setAuthorized(true)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch { router.push("/") }
+    setChecking(false)
+  }, [router, requiredPermission])
+
+  return { authorized, checking }
+}
 
 export default function AppointmentsPage() {
+  const { authorized, checking } = usePermissionGuard("Randevular")
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) return null
+
   const [customers, setCustomers] = useState<Customer[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -161,7 +199,7 @@ export default function AppointmentsPage() {
     if (!appt.date) missing.push("Tarih")
     if (!appt.time) missing.push("Saat")
     if (missing.length > 0) {
-      alert("Lütfen zorunlu alanlari doldurun: " + missing.join(", "))
+      alert("Lütfen zorunlu alanları doldurun: " + missing.join(", "))
       return false
     }
     return true
@@ -172,7 +210,7 @@ export default function AppointmentsPage() {
 
     const customer = customers.find(c => c.id === Number(newAppointment.customerId))
     if (!customer) {
-      alert("Müşteri bulunamadi!")
+      alert("Müşteri bulunamadı!")
       return
     }
 
@@ -208,7 +246,7 @@ export default function AppointmentsPage() {
   }
 
   const handleDeleteAppointment = (id: number) => {
-    if (!confirm(`Bu randevu kaydini silmek istediginize emin misiniz?\n\nBu islem geri alinamaz!`)) return
+    if (!confirm(`Bu randevu kaydını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
     setAppointments(appointments.filter(a => a.id !== id))
   }
 
@@ -224,7 +262,7 @@ export default function AppointmentsPage() {
   const sendWhatsApp = (appointment: Appointment) => {
     try {
       if (!appointment) {
-        alert("Randevu bilgisi bulunamadi!")
+        alert("Randevu bilgisi bulunamadı!")
         return
       }
 
@@ -240,7 +278,7 @@ export default function AppointmentsPage() {
       }
 
       if (!phone) {
-        alert("Müşteri telefon numarasi bulunamadi!")
+        alert("Müşteri telefon numarası bulunamadı!")
         return
       }
 
@@ -250,7 +288,7 @@ export default function AppointmentsPage() {
       }
 
       if (!cleanPhone || cleanPhone.length < 10) {
-        alert("Gecersiz telefon numarasi!")
+        alert("Geçersiz telefon numarası!")
         return
       }
 
@@ -263,7 +301,7 @@ export default function AppointmentsPage() {
         message += `\u{26A0} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
         message += `\u{1F4C5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.%0A%0A`
         message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
-        message += `\u{1F4DE} Lütfen yeni bir randevu olusturmak icin bizimle iletişime geçiniz.%0A%0A`
+        message += `\u{1F4DE} Lütfen yeni bir randevu oluşturmak için bizimle iletişime geçiniz.%0A%0A`
         message += `\u{1F64F} İyi günler dileriz!%0A`
         message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
       } else {
@@ -283,7 +321,7 @@ export default function AppointmentsPage() {
       window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
     } catch (err) {
       console.error("WhatsApp error:", err)
-      alert("WhatsApp gonderilirken hata olustu!")
+      alert("WhatsApp gönderilirken hata oluştu!")
     }
   }
 
@@ -305,7 +343,7 @@ export default function AppointmentsPage() {
         <h1 className="text-3xl font-bold tracking-tight text-white">Randevular</h1>
         <Dialog open={isNewAppointmentOpen} onOpenChange={setIsNewAppointmentOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="mr-2 h-4 w-4" />
               Yeni Randevu
             </Button>
@@ -320,7 +358,7 @@ export default function AppointmentsPage() {
                 <div className="flex gap-2">
                   <Select value={String(newAppointment.customerId || "")} onValueChange={(v) => setNewAppointment({...newAppointment, customerId: Number(v)})}>
                     <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-white">
-                      <SelectValue placeholder="Müşteri secin" />
+                      <SelectValue placeholder="Müşteri seçin" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {customers.map(c => (
@@ -385,9 +423,9 @@ export default function AppointmentsPage() {
                 />
               </div>
 
-              <Button onClick={handleAddAppointment}>
+              <Button onClick={handleAddAppointment} className="bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />
-                Randevu Olustur
+                Randevu Oluştur
               </Button>
             </div>
           </DialogContent>
@@ -398,37 +436,37 @@ export default function AppointmentsPage() {
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Bekleyen</CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <Clock className="h-4 w-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{pendingAppointments}</div>
+            <div className="text-2xl font-bold text-blue-400">{pendingAppointments}</div>
           </CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Bugün</CardTitle>
-            <CalendarCheck className="h-4 w-4 text-green-500" />
+            <CalendarCheck className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{todayAppointments}</div>
+            <div className="text-2xl font-bold text-emerald-400">{todayAppointments}</div>
           </CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Geçmiş</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <AlertTriangle className="h-4 w-4 text-orange-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-500">{pastAppointments}</div>
+            <div className="text-2xl font-bold text-orange-400">{pastAppointments}</div>
           </CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Toplam</CardTitle>
-            <CalendarDays className="h-4 w-4 text-purple-500" />
+            <CalendarDays className="h-4 w-4 text-purple-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-500">{appointments.length}</div>
+            <div className="text-2xl font-bold text-purple-400">{appointments.length}</div>
           </CardContent>
         </Card>
       </div>
@@ -440,7 +478,7 @@ export default function AppointmentsPage() {
               <CalendarDays className="h-5 w-5" />
               Randevu Listesi
             </span>
-            <span className="text-sm text-slate-400">{appointments.length} kayit</span>
+            <span className="text-sm text-slate-400">{appointments.length} kayıt</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -448,7 +486,7 @@ export default function AppointmentsPage() {
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-slate-500" />
               <Input
-                placeholder="Müşteri adi, telefon veya hizmet ara..."
+                placeholder="Müşteri adı, telefon veya hizmet ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
@@ -460,14 +498,14 @@ export default function AppointmentsPage() {
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 className="w-40 bg-slate-800 border-slate-700 text-white"
-                placeholder="Baslangic"
+                placeholder="Başlangıç"
               />
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 className="w-40 bg-slate-800 border-slate-700 text-white"
-                placeholder="Bitis"
+                placeholder="Bitiş"
               />
             </div>
           </div>
@@ -476,7 +514,7 @@ export default function AppointmentsPage() {
             {filteredAppointments.length === 0 && (
               <div className="text-center text-slate-500 py-8">
                 <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Randevu bulunamadi.</p>
+                <p>Randevu bulunamadı.</p>
               </div>
             )}
             {filteredAppointments.map((appointment) => {
@@ -510,10 +548,10 @@ export default function AppointmentsPage() {
                       </Button>
                       {appointment.status === "scheduled" && (
                         <>
-                          <Button size="sm" onClick={() => updateStatus(appointment.id, "completed")} className="bg-green-700 hover:bg-green-600">
+                          <Button size="sm" onClick={() => updateStatus(appointment.id, "completed")} className="bg-emerald-600 hover:bg-emerald-700">
                             <CheckCircle2 className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="destructive" onClick={() => updateStatus(appointment.id, "cancelled")}>
+                          <Button size="sm" variant="destructive" onClick={() => updateStatus(appointment.id, "cancelled")} className="bg-red-900/50 hover:bg-red-800 border-red-800">
                             <X className="h-4 w-4" />
                           </Button>
                         </>
@@ -618,7 +656,7 @@ export default function AppointmentsPage() {
                 />
               </div>
 
-              <Button onClick={handleUpdateAppointment}>
+              <Button onClick={handleUpdateAppointment} className="bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />
                 Güncelle
               </Button>
@@ -640,7 +678,7 @@ export default function AppointmentsPage() {
                 value={newCustomer.name}
                 onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
                 className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Ahmet Yilmaz"
+                placeholder="Ahmet Yılmaz"
               />
             </div>
             <div className="space-y-2">
@@ -652,7 +690,7 @@ export default function AppointmentsPage() {
                 placeholder="0555 123 4567"
               />
             </div>
-            <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone}>
+            <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone} className="bg-blue-600 hover:bg-blue-700">
               <Save className="mr-2 h-4 w-4" />
               Müşteri Ekle
             </Button>

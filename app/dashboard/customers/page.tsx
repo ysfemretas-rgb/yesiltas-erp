@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -102,7 +103,44 @@ function normalizeCustomer(raw: any): Customer {
   }
 }
 
+function usePermissionGuard(requiredPermission: string) {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    const userData = localStorage.getItem("yt_user")
+    if (!userData) { router.push("/"); return }
+    try {
+      const user = JSON.parse(userData)
+      if (user.role === "Yönetici" || (user.permissions || []).includes(requiredPermission)) {
+        setAuthorized(true)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch { router.push("/") }
+    setChecking(false)
+  }, [router, requiredPermission])
+
+  return { authorized, checking }
+}
+
 export default function CustomersPage() {
+  const { authorized, checking } = usePermissionGuard("Müşteriler")
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) return null
+
   const [customers, setCustomers] = useState<Customer[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -114,7 +152,7 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({
     status: "active",
-    city: "Istanbul",
+    city: "İstanbul",
     debts: [],
     totalDebt: 0,
     totalRepairs: 0,
@@ -332,7 +370,7 @@ export default function CustomersPage() {
       phone2: newCustomer.phone2 || "",
       email: newCustomer.email || "",
       address: newCustomer.address || "",
-      city: newCustomer.city || "Istanbul",
+      city: newCustomer.city || "İstanbul",
       debts: [],
       totalDebt: 0,
       totalRepairs: 0,
@@ -341,7 +379,7 @@ export default function CustomersPage() {
       notes: newCustomer.notes || "",
     }
     setCustomers([customer, ...customers])
-    setNewCustomer({ status: "active", city: "Istanbul", debts: [], totalDebt: 0, totalRepairs: 0 })
+    setNewCustomer({ status: "active", city: "İstanbul", debts: [], totalDebt: 0, totalRepairs: 0 })
     setIsDialogOpen(false)
   }
 
@@ -412,13 +450,13 @@ export default function CustomersPage() {
 
   const sendWhatsApp = (type: "simple" | "detailed") => {
     if (!selectedCustomer) {
-      alert("Musteri secilmedi!")
+      alert("Müşteri seçilmedi!")
       return
     }
 
     const phone = String(selectedCustomer.phone || selectedCustomer.phone1 || "").replace(/\D/g, "")
     if (!phone || phone.length < 10) {
-      alert("Gecersiz telefon numarasi!")
+      alert("Geçersiz telefon numarası!")
       return
     }
 
@@ -426,36 +464,36 @@ export default function CustomersPage() {
     const totalRemaining = transactions.reduce((sum, t) => sum + t.remaining, 0)
 
     let message = `\uD83D\uDC4B Merhaba *${selectedCustomer.firstName || selectedCustomer.name}*,%0A%0A`
-    message += `\u2705 *Yesiltas Teknoloji*'den bilgilendirme mesajidir.%0A%0A`
+    message += `\u2705 *Yeşiltaş Teknoloji*'den bilgilendirme mesajıdır.%0A%0A`
 
     if (type === "simple") {
       if (totalRemaining > 0) {
         message += `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL%0A`
-        message += `\u23F3 Lutfen en kisa surede odeme yapiniz.%0A`
+        message += `\u23F3 Lütfen en kısa sürede ödeme yapınız.%0A`
       } else {
-        message += `\uD83C\uDF89 Borcunuz bulunmamaktadir. Tesekkur ederiz!%0A`
+        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!%0A`
       }
     } else {
       if (transactions.length > 0) {
-        message += `\uD83D\uDCCB *Islem Detaylariniz:*%0A%0A`
+        message += `\uD83D\uDCCB *İşlem Detaylarınız:*%0A%0A`
         transactions.forEach(t => {
           message += `\uD83D\uDCCC *${t.description}*%0A`
           message += `   \uD83D\uDCB0 Toplam: ${t.total.toLocaleString("tr-TR")} TL%0A`
-          message += `   \uD83D\uDCB5 Alinan: ${t.paid.toLocaleString("tr-TR")} TL%0A`
+          message += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL%0A`
           if (t.remaining > 0) {
             message += `   \u23F3 Kalan: ${t.remaining.toLocaleString("tr-TR")} TL%0A`
           }
           message += `   \uD83D\uDCC5 Tarih: ${t.date}%0A%0A`
         })
         if (totalRemaining > 0) {
-          message += `\uD83D\uDCB0 *Toplam Kalan Borc:* ${totalRemaining.toLocaleString("tr-TR")} TL%0A`
+          message += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL%0A`
         }
       } else {
-        message += `\uD83C\uDF89 Borcunuz bulunmamaktadir.%0A`
+        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır.%0A`
       }
     }
 
-    message += `%0A\uD83D\uDE4F Tesekkur ederiz, iyi gunler dileriz!%0A\uD83C\uDFEA *Yesiltas Teknoloji*`
+    message += `%0A\uD83D\uDE4F Teşekkür ederiz, iyi günler dileriz!%0A\uD83C\uDFEA *Yeşiltaş Teknoloji*`
 
     const cleanPhone = phone.startsWith("0") ? phone.substring(1) : phone
     window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
@@ -572,16 +610,16 @@ export default function CustomersPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Şehir</label>
                   <Select
-                    value={newCustomer.city || "Istanbul"}
+                    value={newCustomer.city || "İstanbul"}
                     onValueChange={(value) => setNewCustomer({ ...newCustomer, city: value })}
                   >
                     <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="Istanbul" className="text-white">İstanbul</SelectItem>
+                      <SelectItem value="İstanbul" className="text-white">İstanbul</SelectItem>
                       <SelectItem value="Ankara" className="text-white">Ankara</SelectItem>
-                      <SelectItem value="Izmir" className="text-white">İzmir</SelectItem>
+                      <SelectItem value="İzmir" className="text-white">İzmir</SelectItem>
                       <SelectItem value="Bursa" className="text-white">Bursa</SelectItem>
                       <SelectItem value="Antalya" className="text-white">Antalya</SelectItem>
                     </SelectContent>
@@ -623,7 +661,7 @@ export default function CustomersPage() {
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Toplam Müşteri</CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
+            <Users className="h-4 w-4 text-blue-400" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">{customers.length}</div>
@@ -632,28 +670,28 @@ export default function CustomersPage() {
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Aktif Müşteri</CardTitle>
-            <Users className="h-4 w-4 text-green-500" />
+            <Users className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{activeCount}</div>
+            <div className="text-2xl font-bold text-emerald-400">{activeCount}</div>
           </CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Borçlu Müşteri</CardTitle>
-            <CreditCard className="h-4 w-4 text-red-500" />
+            <CreditCard className="h-4 w-4 text-red-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{debtCount}</div>
+            <div className="text-2xl font-bold text-red-400">{debtCount}</div>
           </CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Toplam Borç</CardTitle>
-            <CreditCard className="h-4 w-4 text-orange-500" />
+            <CreditCard className="h-4 w-4 text-orange-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-500">{formatCurrency(totalDebt)}</div>
+            <div className="text-2xl font-bold text-orange-400">{formatCurrency(totalDebt)}</div>
           </CardContent>
         </Card>
       </div>
@@ -705,7 +743,7 @@ export default function CustomersPage() {
                       {isActive || hasDebt ? (
                         <Badge 
                           onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
-                          className="bg-green-900/50 text-green-300 border-green-700 cursor-pointer hover:opacity-80"
+                          className="bg-emerald-900/50 text-emerald-300 border-emerald-700 cursor-pointer hover:opacity-80"
                         >
                           Aktif
                         </Badge>
@@ -797,7 +835,7 @@ export default function CustomersPage() {
                   <div>
                     <Badge 
                       onClick={() => toggleStatus(selectedCustomer.id)}
-                      className={`cursor-pointer hover:opacity-80 ${isCustomerActive(selectedCustomer) ? "bg-green-900/50 text-green-300 border-green-700" : "bg-slate-700 text-slate-300"}`}
+                      className={`cursor-pointer hover:opacity-80 ${isCustomerActive(selectedCustomer) ? "bg-emerald-900/50 text-emerald-300 border-emerald-700" : "bg-slate-700 text-slate-300"}`}
                     >
                       {isCustomerActive(selectedCustomer) ? "Aktif" : "Pasif"}
                     </Badge>
@@ -834,7 +872,7 @@ export default function CustomersPage() {
                               </div>
                               <div className="text-right">
                                 <div className="text-sm text-white">Toplam: {formatCurrency(t.total)}</div>
-                                <div className="text-xs text-green-400">Alınan: {formatCurrency(t.paid)}</div>
+                                <div className="text-xs text-emerald-400">Alınan: {formatCurrency(t.paid)}</div>
                                 {t.remaining > 0 && (
                                   <div className="text-xs text-red-400">Kalan: {formatCurrency(t.remaining)}</div>
                                 )}
@@ -868,7 +906,7 @@ export default function CustomersPage() {
                             {debt.status === "unpaid" ? (
                               <Badge className="bg-red-900/50 text-red-300">Ödenmedi</Badge>
                             ) : (
-                              <Badge className="bg-green-900/50 text-green-300">Ödendi</Badge>
+                              <Badge className="bg-emerald-900/50 text-emerald-300">Ödendi</Badge>
                             )}
                           </div>
                         </div>
@@ -886,18 +924,18 @@ export default function CustomersPage() {
       <Dialog open={isWhatsAppOpen} onOpenChange={setIsWhatsAppOpen}>
         <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">WhatsApp Mesaji - {selectedCustomer?.name}</DialogTitle>
+            <DialogTitle className="text-white">WhatsApp Mesajı - {selectedCustomer?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-slate-400">Gondermek istediginiz mesaj tipini secin:</p>
+            <p className="text-sm text-slate-400">Göndermek istediğiniz mesaj tipini seçin:</p>
             <div className="space-y-2">
               <Button 
                 onClick={() => sendWhatsApp("simple")}
                 className="w-full justify-start bg-slate-800 hover:bg-slate-700 text-white"
               >
                 <div className="text-left">
-                  <div className="text-sm">Sadece Borc Ozeti</div>
-                  <div className="text-xs text-slate-400">Toplam borc tutari gonderilir</div>
+                  <div className="text-sm">Sadece Borç Özeti</div>
+                  <div className="text-xs text-slate-400">Toplam borç tutarı gönderilir</div>
                 </div>
               </Button>
               <Button 
@@ -905,8 +943,8 @@ export default function CustomersPage() {
                 className="w-full justify-start bg-slate-800 hover:bg-slate-700 text-white"
               >
                 <div className="text-left">
-                  <div className="text-sm">Detayli Borc Listesi</div>
-                  <div className="text-xs text-slate-400">Tum islemler ve kalan borclar gonderilir</div>
+                  <div className="text-sm">Detaylı Borç Listesi</div>
+                  <div className="text-xs text-slate-400">Tüm işlemler ve kalan borçlar gönderilir</div>
                 </div>
               </Button>
             </div>
@@ -974,7 +1012,7 @@ export default function CustomersPage() {
                         Öde
                       </Button>
                     ) : (
-                      <Badge className="bg-green-900/50 text-green-300 border-green-700">Ödenmiş</Badge>
+                      <Badge className="bg-emerald-900/50 text-emerald-300 border-emerald-700">Ödenmiş</Badge>
                     )}
                   </div>
                 ))}

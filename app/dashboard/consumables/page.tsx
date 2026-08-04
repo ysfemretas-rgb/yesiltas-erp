@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import {
   Dialog,
   DialogContent,
@@ -20,451 +20,465 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign } from "lucide-react"
+import { 
+  CalendarDays, 
+  Plus, 
+  Search, 
+  UserPlus,
+  Clock,
+  CheckCircle2,
+  X,
+  Save,
+  Phone,
+  Pencil,
+  Trash2,
+  MessageCircle,
+  AlertTriangle,
+  CalendarCheck
+} from "lucide-react"
 
-interface Consumable {
+interface Customer {
   id: number
   name: string
-  category: string
-  currentStock: number
-  minStock: number
-  unit: string
-  purchasePrice: number
-  purchaseCurrency: "TRY" | "USD" | "EUR"
-  supplier: string
-  lastRestocked: string
+  phone: string
+  phone1?: string
+  phone2?: string
 }
 
-interface ExchangeRates {
-  USD: number
-  EUR: number
-  lastUpdated: string
+interface Appointment {
+  id: number
+  customerId: number
+  customerName: string
+  customerPhone: string
+  date: string
+  time: string
+  service: string
+  status: "scheduled" | "completed" | "cancelled"
+  notes: string
 }
 
-const initialConsumables: Consumable[] = [
-  { id: 1, name: "Ekran Temizleyici", category: "Temizlik", currentStock: 45, minStock: 20, unit: "Adet", purchasePrice: 0.8, purchaseCurrency: "USD", supplier: "TemizlikTedarik", lastRestocked: "2024-01-10" },
-  { id: 2, name: "Tornavida Seti", category: "Alet", currentStock: 8, minStock: 10, unit: "Set", purchasePrice: 4.5, purchaseCurrency: "USD", supplier: "AletTedarik", lastRestocked: "2024-01-05" },
-  { id: 3, name: "Isıtıcı Tabanca", category: "Alet", currentStock: 3, minStock: 5, unit: "Adet", purchasePrice: 12, purchaseCurrency: "USD", supplier: "AletTedarik", lastRestocked: "2023-12-20" },
-  { id: 4, name: "Ekran Yapıştırıcı", category: "Yapıştırıcı", currentStock: 12, minStock: 15, unit: "Tüp", purchasePrice: 2.5, purchaseCurrency: "USD", supplier: "KimyaTedarik", lastRestocked: "2024-01-08" },
-  { id: 5, name: "Mikrofiber Bez", category: "Temizlik", currentStock: 100, minStock: 50, unit: "Adet", purchasePrice: 0.15, purchaseCurrency: "USD", supplier: "TemizlikTedarik", lastRestocked: "2024-01-12" },
-]
+const services = ["Ekran Değişimi", "Batarya Değişimi", "Anakart Tamiri", "Yazılım Güncelleme", "Genel Bakım"]
 
-function priceInTRY(price: number, currency: "TRY" | "USD" | "EUR", rates: ExchangeRates): number {
-  if (currency === "USD") return price * rates.USD
-  if (currency === "EUR") return price * rates.EUR
-  return price
+function usePermissionGuard(requiredPermission: string) {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    const userData = localStorage.getItem("yt_user")
+    if (!userData) { router.push("/"); return }
+    try {
+      const user = JSON.parse(userData)
+      if (user.role === "Yönetici" || (user.permissions || []).includes(requiredPermission)) {
+        setAuthorized(true)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch { router.push("/") }
+    setChecking(false)
+  }, [router, requiredPermission])
+
+  return { authorized, checking }
 }
 
-export default function ConsumablesPage() {
-  const [consumables, setConsumables] = useState<Consumable[]>(initialConsumables)
+export default function AppointmentsPage() {
+  const { authorized, checking } = usePermissionGuard("Randevular")
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) return null
+
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterCategory, setFilterCategory] = useState("all")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false)
+  const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<Consumable | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
-  const [isLoadingRates, setIsLoadingRates] = useState(false)
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
 
-  const [newItem, setNewItem] = useState<Partial<Consumable>>({
-    category: "Temizlik",
-    unit: "Adet",
-    currentStock: 0,
-    minStock: 10,
-    purchasePrice: 0,
-    purchaseCurrency: "TRY",
+  const [newAppointment, setNewAppointment] = useState<Partial<Appointment>>({
+    date: new Date().toISOString().split("T")[0],
+    time: "09:00",
+    status: "scheduled",
+    service: services[0]
   })
 
-  // Load from localStorage
+  const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({
+    name: "",
+    phone: ""
+  })
+
+  // Load from localStorage on mount
   useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const saved = localStorage.getItem("yt_consumables")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setConsumables(parsed)
-        }
+    const savedCustomers = localStorage.getItem("yt_customers")
+    const savedAppointments = localStorage.getItem("yt_appointments")
+
+    if (savedCustomers) {
+      try {
+        const parsed = JSON.parse(savedCustomers)
+        setCustomers(Array.isArray(parsed) ? parsed : [])
+      } catch {
+        setCustomers([])
       }
-      const savedRates = localStorage.getItem("yt_exchange_rates")
-      if (savedRates) {
-        const parsed = JSON.parse(savedRates)
-        if (parsed && parsed.USD && parsed.EUR) {
-          setRates(parsed)
-        }
-      }
-    } catch (e) {
-      console.error("Load error:", e)
     }
-    setIsLoaded(true)
+
+    if (savedAppointments) {
+      try {
+        const parsed = JSON.parse(savedAppointments)
+        setAppointments(Array.isArray(parsed) ? parsed : [])
+      } catch {
+        setAppointments([])
+      }
+    }
   }, [])
 
   // Save to localStorage
   useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_consumables", JSON.stringify(consumables))
-  }, [consumables, isLoaded])
+    localStorage.setItem("yt_appointments", JSON.stringify(appointments))
+  }, [appointments])
 
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_exchange_rates", JSON.stringify(rates))
-  }, [rates, isLoaded])
-
-  // Fetch live exchange rates from Frankfurter API
-  const fetchRates = async () => {
-    setIsLoadingRates(true)
-    try {
-      const [usdRes, eurRes] = await Promise.all([
-        fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=TRY"),
-        fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=TRY"),
-      ])
-      if (!usdRes.ok || !eurRes.ok) throw new Error("Rate fetch failed")
-      const usdData = await usdRes.json()
-      const eurData = await eurRes.json()
-      const usdRate = usdData.rates.TRY || 34.5
-      const eurRate = eurData.rates.TRY || 37.2
-      setRates({
-        USD: Math.round(usdRate * 100) / 100,
-        EUR: Math.round(eurRate * 100) / 100,
-        lastUpdated: new Date().toLocaleString("tr-TR"),
-      })
-    } catch (err) {
-      console.error("Exchange rate error:", err)
-      alert("\u{26A0} Kur bilgisi alınamadı! Manuel güncelleme yapabilirsiniz.")
-    } finally {
-      setIsLoadingRates(false)
-    }
+  const isPastDate = (dateStr: string) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const appDate = new Date(dateStr)
+    appDate.setHours(0, 0, 0, 0)
+    return appDate < today
   }
 
-  useEffect(() => {
-    if (isLoaded) fetchRates()
-  }, [isLoaded])
-
-  const categories = Array.from(new Set(consumables.map(c => c.category)))
-
-  const filteredItems = consumables.filter((item) => {
-    const search = searchTerm.toLowerCase()
-    const matchesSearch = item.name.toLowerCase().includes(search) ||
-      item.supplier.toLowerCase().includes(search)
-    const matchesCategory = filterCategory === "all" || item.category === filterCategory
-    return matchesSearch && matchesCategory
+  const filteredAppointments = appointments.filter(a => {
+    const searchLower = searchTerm.toLowerCase()
+    const matchesSearch = 
+      a.customerName.toLowerCase().includes(searchLower) ||
+      a.customerPhone.toLowerCase().includes(searchLower) ||
+      a.service.toLowerCase().includes(searchLower)
+    const matchesDate = (!dateFrom || a.date >= dateFrom) && (!dateTo || a.date <= dateTo)
+    return matchesSearch && matchesDate
   })
 
-  const lowStockItems = consumables.filter(item => item.currentStock <= item.minStock)
-  const totalValue = consumables.reduce((sum, item) => {
-    return sum + (priceInTRY(item.purchasePrice, item.purchaseCurrency, rates) * item.currentStock)
-  }, 0)
+  const todayStr = new Date().toISOString().split("T")[0]
+  const todayAppointments = appointments.filter(a => a.date === todayStr && a.status === "scheduled").length
+  const weekAppointments = appointments.filter(a => {
+    const appDate = new Date(a.date)
+    const today = new Date()
+    const diff = Math.ceil((appDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    return diff >= 0 && diff <= 7 && a.status === "scheduled"
+  }).length
+  const pendingAppointments = appointments.filter(a => a.status === "scheduled").length
+  const pastAppointments = appointments.filter(a => isPastDate(a.date) && a.status === "scheduled").length
 
-  const updateStock = (id: number, delta: number) => {
-    setConsumables(consumables.map(item =>
-      item.id === id ? { ...item, currentStock: Math.max(0, item.currentStock + delta) } : item
-    ))
-  }
-
-  const handleAddItem = () => {
-    if (!newItem.name) {
-      alert("Lütfen malzeme adı girin!")
-      return
-    }
-    const item: Consumable = {
+  const handleAddCustomer = () => {
+    if (!newCustomer.name || !newCustomer.phone) return
+    const customer: Customer = {
       id: Date.now(),
-      name: newItem.name,
-      category: newItem.category || "Diğer",
-      currentStock: Number(newItem.currentStock) || 0,
-      minStock: Number(newItem.minStock) || 10,
-      unit: newItem.unit || "Adet",
-      purchasePrice: Number(newItem.purchasePrice) || 0,
-      purchaseCurrency: newItem.purchaseCurrency || "TRY",
-      supplier: newItem.supplier || "",
-      lastRestocked: new Date().toISOString().split("T")[0],
+      name: newCustomer.name,
+      phone: newCustomer.phone,
+      phone1: newCustomer.phone,
+      phone2: ""
     }
-    setConsumables([item, ...consumables])
-    setNewItem({ category: "Temizlik", unit: "Adet", currentStock: 0, minStock: 10, purchasePrice: 0, purchaseCurrency: "TRY" })
-    setIsDialogOpen(false)
+    const updated = [customer, ...customers]
+    setCustomers(updated)
+    localStorage.setItem("yt_customers", JSON.stringify(updated))
+    setNewCustomer({ name: "", phone: "" })
+    setIsNewCustomerOpen(false)
   }
 
-  const handleUpdateItem = () => {
-    if (!editingItem) return
-    if (!editingItem.name) {
-      alert("Lütfen malzeme adı girin!")
+  const validateAppointment = (appt: Partial<Appointment>) => {
+    const missing: string[] = []
+    if (!appt.customerId) missing.push("Müşteri")
+    if (!appt.date) missing.push("Tarih")
+    if (!appt.time) missing.push("Saat")
+    if (missing.length > 0) {
+      alert("Lütfen zorunlu alanları doldurun: " + missing.join(", "))
+      return false
+    }
+    return true
+  }
+
+  const handleAddAppointment = () => {
+    if (!validateAppointment(newAppointment)) return
+
+    const customer = customers.find(c => c.id === Number(newAppointment.customerId))
+    if (!customer) {
+      alert("Müşteri bulunamadı!")
       return
     }
-    setConsumables(consumables.map(item =>
-      item.id === editingItem.id ? editingItem : item
-    ))
+
+    const appointment: Appointment = {
+      id: Date.now(),
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone || customer.phone1 || "",
+      date: newAppointment.date || new Date().toISOString().split("T")[0],
+      time: newAppointment.time || "09:00",
+      service: newAppointment.service || services[0],
+      status: "scheduled",
+      notes: newAppointment.notes || ""
+    }
+
+    setAppointments([appointment, ...appointments])
+    setNewAppointment({
+      date: new Date().toISOString().split("T")[0],
+      time: "09:00",
+      status: "scheduled",
+      service: services[0]
+    })
+    setIsNewAppointmentOpen(false)
+  }
+
+  const handleUpdateAppointment = () => {
+    if (!editingAppointment) return
+    if (!validateAppointment(editingAppointment)) return
+
+    setAppointments(appointments.map(a => a.id === editingAppointment.id ? editingAppointment : a))
     setIsEditOpen(false)
-    setEditingItem(null)
+    setEditingAppointment(null)
   }
 
-  const handleDeleteItem = (id: number) => {
-    const item = consumables.find(c => c.id === id)
-    if (!item) return
-    if (!confirm(`\u{26A0} *${item.name}* malzemesini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setConsumables(consumables.filter(item => item.id !== id))
+  const handleDeleteAppointment = (id: number) => {
+    if (!confirm(`Bu randevu kaydını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
+    setAppointments(appointments.filter(a => a.id !== id))
   }
 
-  const openEditDialog = (item: Consumable) => {
-    setEditingItem({ ...item })
+  const updateStatus = (id: number, status: Appointment["status"]) => {
+    setAppointments(appointments.map(a => a.id === id ? { ...a, status } : a))
+  }
+
+  const handleEditClick = (appointment: Appointment) => {
+    setEditingAppointment({ ...appointment })
     setIsEditOpen(true)
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
+  const sendWhatsApp = (appointment: Appointment) => {
+    try {
+      if (!appointment) {
+        alert("Randevu bilgisi bulunamadı!")
+        return
+      }
+
+      let phone = appointment.customerPhone || ""
+      let customerName = appointment.customerName || "Müşteri"
+
+      if (!phone && appointment.customerId && customers.length > 0) {
+        const customer = customers.find(c => c.id === appointment.customerId)
+        if (customer) {
+          phone = customer.phone || customer.phone1 || ""
+          customerName = customer.name
+        }
+      }
+
+      if (!phone) {
+        alert("Müşteri telefon numarası bulunamadı!")
+        return
+      }
+
+      let cleanPhone = String(phone).replace(/\D/g, "")
+      if (cleanPhone.startsWith("0")) {
+        cleanPhone = cleanPhone.substring(1)
+      }
+
+      if (!cleanPhone || cleanPhone.length < 10) {
+        alert("Geçersiz telefon numarası!")
+        return
+      }
+
+      const dateStr = new Date(appointment.date).toLocaleDateString("tr-TR")
+      const isPast = isPastDate(appointment.date)
+
+      let message = ""
+      if (isPast) {
+        message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
+        message += `\u{26A0} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
+        message += `\u{1F4C5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.%0A%0A`
+        message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
+        message += `\u{1F4DE} Lütfen yeni bir randevu oluşturmak için bizimle iletişime geçiniz.%0A%0A`
+        message += `\u{1F64F} İyi günler dileriz!%0A`
+        message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
+      } else {
+        message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
+        message += `\u{2705} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
+        message += `\u{1F4C5} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
+        message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
+        message += `\u{23F0} Lütfen randevu saatinde gelmeyi unutmayınız.%0A%0A`
+        message += `\u{1F64F} İyi günler dileriz!%0A`
+        message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
+      }
+
+      if (appointment.notes) {
+        message += `%0A%0A\u{1F4DD} Not: ${appointment.notes}`
+      }
+
+      window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+    } catch (err) {
+      console.error("WhatsApp error:", err)
+      alert("WhatsApp gönderilirken hata oluştu!")
+    }
   }
 
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yükleniyor...</div>
-      </div>
-    )
+  const getStatusBadge = (status: string, isPast: boolean) => {
+    if (isPast && status === "scheduled") {
+      return <Badge className="bg-orange-900/50 text-orange-300 border-orange-700"><AlertTriangle className="mr-1 h-3 w-3"/>Geçmiş</Badge>
+    }
+    switch (status) {
+      case "scheduled": return <Badge className="bg-blue-900/50 text-blue-300 border-blue-700"><Clock className="mr-1 h-3 w-3"/>Planlandı</Badge>
+      case "completed": return <Badge className="bg-green-900/50 text-green-300 border-green-700"><CheckCircle2 className="mr-1 h-3 w-3"/>Tamamlandı</Badge>
+      case "cancelled": return <Badge className="bg-red-900/50 text-red-300 border-red-700"><X className="mr-1 h-3 w-3"/>İptal</Badge>
+      default: return <Badge variant="outline">Bilinmiyor</Badge>
+    }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-white">Sarf Malzeme Takibi</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Randevular</h1>
+        <Dialog open={isNewAppointmentOpen} onOpenChange={setIsNewAppointmentOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="mr-2 h-4 w-4" />
-              Yeni Malzeme
+              Yeni Randevu
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
             <DialogHeader>
-              <DialogTitle className="text-white">Yeni Sarf Malzeme</DialogTitle>
+              <DialogTitle className="text-white">Yeni Randevu</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Malzeme Adı <span className="text-red-400">*</span></label>
-                <Input
-                  value={newItem.name || ""}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  placeholder="Malzeme adı"
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Kategori</label>
-                  <Select
-                    value={newItem.category}
-                    onValueChange={(value) => setNewItem({ ...newItem, category: value })}
-                  >
-                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue />
+                <label className="text-sm font-medium text-slate-300">Müşteri <span className="text-red-400">*</span></label>
+                <div className="flex gap-2">
+                  <Select value={String(newAppointment.customerId || "")} onValueChange={(v) => setNewAppointment({...newAppointment, customerId: Number(v)})}>
+                    <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-white">
+                      <SelectValue placeholder="Müşteri seçin" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      {customers.map(c => (
+                        <SelectItem key={c.id} value={String(c.id)} className="text-white">
+                          {c.name} - {c.phone || c.phone1 || "Telefon yok"}
+                        </SelectItem>
                       ))}
-                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Birim</label>
-                  <Input
-                    value={newItem.unit || ""}
-                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
-                    placeholder="Adet, Set, Tüp..."
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Mevcut Stok</label>
-                  <Input
-                    type="number"
-                    value={newItem.currentStock || ""}
-                    onChange={(e) => setNewItem({ ...newItem, currentStock: Number(e.target.value) })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Min. Stok</label>
-                  <Input
-                    type="number"
-                    value={newItem.minStock || ""}
-                    onChange={(e) => setNewItem({ ...newItem, minStock: Number(e.target.value) })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsNewCustomerOpen(true)}
+                    className="border-slate-700 text-slate-300 hover:text-white"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
 
-              <div className="border-t border-slate-700 pt-4">
-                <label className="text-sm font-medium text-emerald-400 flex items-center gap-2 mb-3">
-                  <DollarSign className="h-4 w-4" />
-                  Maliyet
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Alış Fiyatı</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={newItem.purchasePrice || ""}
-                      onChange={(e) => setNewItem({ ...newItem, purchasePrice: Number(e.target.value) })}
-                      className="bg-slate-800 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Para Birimi</label>
-                    <Select
-                      value={newItem.purchaseCurrency}
-                      onValueChange={(value: "TRY" | "USD" | "EUR") => setNewItem({ ...newItem, purchaseCurrency: value })}
-                    >
-                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-600">
-                        <SelectItem value="TRY" className="text-white">₺ TRY</SelectItem>
-                        <SelectItem value="USD" className="text-white">$ USD</SelectItem>
-                        <SelectItem value="EUR" className="text-white">€ EUR</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Tarih <span className="text-red-400">*</span></label>
+                  <Input
+                    type="date"
+                    value={newAppointment.date}
+                    onChange={(e) => setNewAppointment({...newAppointment, date: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
                 </div>
-                <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-emerald-400">Birim Maliyet (TL):</span>
-                    <span className="text-lg font-bold text-emerald-400">
-                      {formatCurrency(priceInTRY(
-                        Number(newItem.purchasePrice) || 0,
-                        newItem.purchaseCurrency || "TRY",
-                        rates
-                      ))}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Kur: $1 = {formatCurrency(rates.USD)} | €1 = {formatCurrency(rates.EUR)}
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Saat <span className="text-red-400">*</span></label>
+                  <Input
+                    type="time"
+                    value={newAppointment.time}
+                    onChange={(e) => setNewAppointment({...newAppointment, time: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
+                <label className="text-sm font-medium text-slate-300">Hizmet</label>
+                <Select value={newAppointment.service} onValueChange={(v) => setNewAppointment({...newAppointment, service: v})}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    {services.map(s => (
+                      <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Notlar</label>
                 <Input
-                  value={newItem.supplier || ""}
-                  onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
-                  placeholder="Tedarikçi adı"
-                  className="bg-slate-800 border-slate-600 text-white"
+                  value={newAppointment.notes || ""}
+                  onChange={(e) => setNewAppointment({...newAppointment, notes: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Ek notlar..."
                 />
               </div>
-              <Button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700">
-                <Save className="mr-2 h-4 w-4" />Kaydet
+
+              <Button onClick={handleAddAppointment} className="bg-blue-600 hover:bg-blue-700">
+                <Save className="mr-2 h-4 w-4" />
+                Randevu Oluştur
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Exchange Rates Card */}
-      <Card className="bg-slate-900 border-slate-700">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-emerald-400" />
-                <span className="text-white font-medium">Canlı Döviz Kurları</span>
-              </div>
-              <div className="flex gap-3 text-sm">
-                <Badge className="bg-blue-900/50 text-blue-300 border-blue-700">
-                  $1 = {formatCurrency(rates.USD)}
-                </Badge>
-                <Badge className="bg-purple-900/50 text-purple-300 border-purple-700">
-                  €1 = {formatCurrency(rates.EUR)}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {rates.lastUpdated && (
-                <span className="text-xs text-slate-500">Güncelleme: {rates.lastUpdated}</span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={fetchRates}
-                disabled={isLoadingRates}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800"
-              >
-                {isLoadingRates ? "Yükleniyor..." : "Kur Güncelle"}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Toplam Malzeme</CardTitle>
-            <Package className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium text-slate-300">Bekleyen</CardTitle>
+            <Clock className="h-4 w-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{consumables.length}</div>
+            <div className="text-2xl font-bold text-blue-400">{pendingAppointments}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Kritik Stok</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-medium text-slate-300">Bugün</CardTitle>
+            <CalendarCheck className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-400">{lowStockItems.length}</div>
+            <div className="text-2xl font-bold text-emerald-400">{todayAppointments}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Toplam Değer</CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-500" />
+            <CardTitle className="text-sm font-medium text-slate-300">Geçmiş</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-orange-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalValue)}</div>
+            <div className="text-2xl font-bold text-orange-400">{pastAppointments}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Kategori Sayısı</CardTitle>
-            <Package className="h-4 w-4 text-purple-500" />
+            <CardTitle className="text-sm font-medium text-slate-300">Toplam</CardTitle>
+            <CalendarDays className="h-4 w-4 text-purple-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-400">{categories.length}</div>
+            <div className="text-2xl font-bold text-purple-400">{appointments.length}</div>
           </CardContent>
         </Card>
       </div>
 
-      {lowStockItems.length > 0 && (
-        <Card className="bg-red-900/20 border-red-800">
-          <CardHeader>
-            <CardTitle className="text-red-300 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Kritik Stok Uyarısı
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {lowStockItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-white">{item.name}</span>
-                  <Badge className="bg-red-600">Stok: {item.currentStock} {item.unit} / Min: {item.minStock}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="bg-slate-900 border-slate-700">
+      <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
           <CardTitle className="text-white flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Sarf Malzeme Listesi
+              <CalendarDays className="h-5 w-5" />
+              Randevu Listesi
             </span>
-            <span className="text-sm text-slate-400">{filteredItems.length} kayıt</span>
+            <span className="text-sm text-slate-400">{appointments.length} kayıt</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -472,109 +486,77 @@ export default function ConsumablesPage() {
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-slate-500" />
               <Input
-                placeholder="Malzeme ara..."
+                placeholder="Müşteri adı, telefon veya hizmet ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-white">
-                <SelectValue placeholder="Kategori" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
-                <SelectItem value="all" className="text-white">Tüm Kategoriler</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-40 bg-slate-800 border-slate-700 text-white"
+                placeholder="Başlangıç"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-40 bg-slate-800 border-slate-700 text-white"
+                placeholder="Bitiş"
+              />
+            </div>
           </div>
 
           <div className="space-y-3">
-            {filteredItems.length === 0 && (
+            {filteredAppointments.length === 0 && (
               <div className="text-center text-slate-500 py-8">
-                <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Malzeme bulunamadı.</p>
+                <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Randevu bulunamadı.</p>
               </div>
             )}
-            {filteredItems.map((item) => {
-              const stockPercent = Math.min(100, (item.currentStock / item.minStock) * 100)
-              const isLowStock = item.currentStock <= item.minStock
-              const unitCostTRY = priceInTRY(item.purchasePrice, item.purchaseCurrency, rates)
-              const totalCost = unitCostTRY * item.currentStock
-
+            {filteredAppointments.map((appointment) => {
+              const isPast = isPastDate(appointment.date)
               return (
-                <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-700 bg-red-900/10" : "border-slate-700 bg-slate-800/50"}`}>
-                  <div className="flex items-start justify-between mb-2">
+                <div key={appointment.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                  <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="font-semibold text-lg text-white">{item.name}</span>
-                        <Badge variant="outline" className="border-slate-600 text-slate-400">{item.category}</Badge>
-                        {isLowStock && <Badge className="bg-red-600">Kritik</Badge>}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="font-semibold text-white text-lg">{appointment.customerName}</span>
+                        {getStatusBadge(appointment.status, isPast)}
                       </div>
-                      <div className="text-sm text-slate-400">
-                        Tedarikçi: {item.supplier} • Son Tedarik: {item.lastRestocked}
+                      <div className="grid grid-cols-2 gap-2 text-sm text-slate-400 mb-2">
+                        <div className="flex items-center gap-1"><Phone className="h-3 w-3 text-slate-500"/> {appointment.customerPhone}</div>
+                        <div><span className="text-slate-500">Hizmet:</span> {appointment.service}</div>
+                        <div><span className="text-slate-500">Tarih:</span> {appointment.date}</div>
+                        <div><span className="text-slate-500">Saat:</span> {appointment.time}</div>
                       </div>
+                      {appointment.notes && (
+                        <div className="text-sm text-slate-500">
+                          Not: {appointment.notes}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-white">{item.currentStock} <span className="text-sm font-normal text-slate-400">{item.unit}</span></div>
-                      <div className="text-sm text-emerald-400">
-                        {item.purchaseCurrency === "USD" ? "$" : item.purchaseCurrency === "EUR" ? "€" : "₺"}
-                        {item.purchasePrice} = {formatCurrency(unitCostTRY)} / {item.unit}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 mb-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Stok Seviyesi</span>
-                      <span className={isLowStock ? "text-red-400" : "text-slate-400"}>
-                        Min: {item.minStock} {item.unit}
-                      </span>
-                    </div>
-                    <Progress
-                      value={stockPercent}
-                      className={`h-2 ${isLowStock ? "bg-red-900/50" : "bg-slate-700"}`}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-slate-500">
-                      Toplam Değer: <span className="font-semibold text-white">{formatCurrency(totalCost)}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateStock(item.id, -1)}
-                        disabled={item.currentStock <= 0}
-                        className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700"
-                      >
-                        <Minus className="h-4 w-4" />
+                    <div className="flex gap-1 flex-wrap justify-end">
+                      <Button size="sm" variant="outline" onClick={() => sendWhatsApp(appointment)} className="border-green-700 text-green-400 hover:bg-green-900/30">
+                        <MessageCircle className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateStock(item.id, 1)}
-                        className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700"
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openEditDialog(item)}
-                        className="h-8 w-8 p-0 text-slate-400 hover:text-white"
-                      >
+                      <Button size="sm" variant="outline" onClick={() => handleEditClick(appointment)} className="border-slate-600 text-slate-300 hover:bg-slate-700">
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
-                      >
+                      {appointment.status === "scheduled" && (
+                        <>
+                          <Button size="sm" onClick={() => updateStatus(appointment.id, "completed")} className="bg-emerald-600 hover:bg-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => updateStatus(appointment.id, "cancelled")} className="bg-red-900/50 hover:bg-red-800 border-red-800">
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteAppointment(appointment.id)} className="bg-red-900/50 hover:bg-red-800 border-red-800">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -588,128 +570,131 @@ export default function ConsumablesPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Malzeme Düzenle</DialogTitle>
+            <DialogTitle className="text-white">Randevu Düzenle</DialogTitle>
           </DialogHeader>
-          {editingItem && (
+          {editingAppointment && (
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Malzeme Adı <span className="text-red-400">*</span></label>
-                <Input
-                  value={editingItem.name}
-                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Kategori</label>
-                  <Select
-                    value={editingItem.category}
-                    onValueChange={(value) => setEditingItem({ ...editingItem, category: value })}
-                  >
-                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
-                      ))}
-                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Birim</label>
-                  <Input
-                    value={editingItem.unit}
-                    onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Mevcut Stok</label>
-                  <Input
-                    type="number"
-                    value={editingItem.currentStock}
-                    onChange={(e) => setEditingItem({ ...editingItem, currentStock: Number(e.target.value) })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Min. Stok</label>
-                  <Input
-                    type="number"
-                    value={editingItem.minStock}
-                    onChange={(e) => setEditingItem({ ...editingItem, minStock: Number(e.target.value) })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
+                <label className="text-sm font-medium text-slate-300">Müşteri</label>
+                <Select value={String(editingAppointment.customerId)} onValueChange={(v) => {
+                  const customer = customers.find(c => c.id === Number(v))
+                  if (customer) {
+                    setEditingAppointment({...editingAppointment, customerId: customer.id, customerName: customer.name, customerPhone: customer.phone || customer.phone1 || ""})
+                  }
+                }}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    {customers.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)} className="text-white">
+                        {c.name} - {c.phone || c.phone1 || "Telefon yok"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="border-t border-slate-700 pt-4">
-                <label className="text-sm font-medium text-emerald-400 flex items-center gap-2 mb-3">
-                  <DollarSign className="h-4 w-4" />
-                  Maliyet
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Alış Fiyatı</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingItem.purchasePrice}
-                      onChange={(e) => setEditingItem({ ...editingItem, purchasePrice: Number(e.target.value) })}
-                      className="bg-slate-800 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Para Birimi</label>
-                    <Select
-                      value={editingItem.purchaseCurrency}
-                      onValueChange={(value: "TRY" | "USD" | "EUR") => setEditingItem({ ...editingItem, purchaseCurrency: value })}
-                    >
-                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-600">
-                        <SelectItem value="TRY" className="text-white">₺ TRY</SelectItem>
-                        <SelectItem value="USD" className="text-white">$ USD</SelectItem>
-                        <SelectItem value="EUR" className="text-white">€ EUR</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Tarih <span className="text-red-400">*</span></label>
+                  <Input
+                    type="date"
+                    value={editingAppointment.date}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, date: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
                 </div>
-                <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-emerald-400">Birim Maliyet (TL):</span>
-                    <span className="text-lg font-bold text-emerald-400">
-                      {formatCurrency(priceInTRY(
-                        editingItem.purchasePrice,
-                        editingItem.purchaseCurrency,
-                        rates
-                      ))}
-                    </span>
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Saat <span className="text-red-400">*</span></label>
+                  <Input
+                    type="time"
+                    value={editingAppointment.time}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, time: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
+                <label className="text-sm font-medium text-slate-300">Hizmet</label>
+                <Select value={editingAppointment.service} onValueChange={(v) => setEditingAppointment({...editingAppointment, service: v})}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    {services.map(s => (
+                      <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Durum</label>
+                <Select value={editingAppointment.status} onValueChange={(v) => setEditingAppointment({...editingAppointment, status: v as Appointment["status"]})}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="scheduled" className="text-white">Planlandı</SelectItem>
+                    <SelectItem value="completed" className="text-white">Tamamlandı</SelectItem>
+                    <SelectItem value="cancelled" className="text-white">İptal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Notlar</label>
                 <Input
-                  value={editingItem.supplier}
-                  onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
-                  className="bg-slate-800 border-slate-600 text-white"
+                  value={editingAppointment.notes}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, notes: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Ek notlar..."
                 />
               </div>
-              <Button onClick={handleUpdateItem} className="w-full bg-blue-600 hover:bg-blue-700">
-                <Save className="mr-2 h-4 w-4" />Güncelle
+
+              <Button onClick={handleUpdateAppointment} className="bg-blue-600 hover:bg-blue-700">
+                <Save className="mr-2 h-4 w-4" />
+                Güncelle
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* New Customer Dialog */}
+      <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Yeni Müşteri Ekle</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Ad Soyad <span className="text-red-400">*</span></label>
+              <Input
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="Ahmet Yılmaz"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Telefon <span className="text-red-400">*</span></label>
+              <Input
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="0555 123 4567"
+              />
+            </div>
+            <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone} className="bg-blue-600 hover:bg-blue-700">
+              <Save className="mr-2 h-4 w-4" />
+              Müşteri Ekle
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
