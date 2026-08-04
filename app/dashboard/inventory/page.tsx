@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { usePermissionGuard } from "@/hooks/usePermissionGuard"
 
 interface InventoryItem {
   id: number
@@ -72,6 +74,28 @@ export default function InventoryPage() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
+  const router = useRouter()
+  const { authorized, checking } = usePermissionGuard("Envanter")
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    useEffect(() => {
+      router.push("/dashboard")
+    }, [router])
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
   const [isLoadingRates, setIsLoadingRates] = useState(false)
 
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({

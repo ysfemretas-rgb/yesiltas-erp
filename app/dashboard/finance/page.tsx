@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { usePermissionGuard } from "@/hooks/usePermissionGuard"
 
 interface Transaction {
   id: number
@@ -56,6 +58,28 @@ export default function FinancePage() {
   const [isLoaded, setIsLoaded] = useState(false)
 
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
+  const router = useRouter()
+  const { authorized, checking } = usePermissionGuard("Finans")
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    useEffect(() => {
+      router.push("/dashboard")
+    }, [router])
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
     type: "income",
     category: "Tamir Geliri",
     date: new Date().toISOString().split("T")[0],

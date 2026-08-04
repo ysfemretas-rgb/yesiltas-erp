@@ -1,1083 +1,840 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
-  Wrench, 
-  Plus, 
-  Search, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle,
-  MessageCircle,
-  CreditCard,
-  Banknote,
-  Receipt,
-  Pencil,
-  Trash2,
-  Wallet
-} from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { usePermissionGuard } from "@/hooks/usePermissionGuard"
 
-interface Repair {
-  id: number
-  customerName: string
-  phone1: string
-  phone2: string
-  device: string
-  brand: string
-  model: string
-  issue: string
-  status: "waiting" | "in_progress" | "completed"
-  cost: number
-  paid: number
-  remaining: number
-  paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
-  notes: string
-  createdAt: string
-  completedAt?: string
-}
-
-interface Customer {
+interface InventoryItem {
   id: number
   name: string
-  phone1: string
-  phone2: string
-  email: string
-  address: string
-}
-
-interface Note {
-  id: number
-  repairId: number
-  text: string
-  createdAt: string
-  author: string
-}
-
-interface FinanceTransaction {
-  id: number
-  description: string
-  amount: number
-  type: "income" | "expense"
+  sku: string
   category: string
-  date: string
-  customer?: string
-  source: "repair" | "sale" | "manual"
-  sourceId?: number
+  quantity: number
+  minQuantity: number
+  purchasePrice: number
+  purchaseCurrency: "TRY" | "USD" | "EUR"
+  profitMargin: number
+  salePrice: number
+  supplier: string
+  location: string
 }
 
-const initialRepairs: Repair[] = [
-  {
-    id: 1,
-    customerName: "Ahmet Yilmaz",
-    phone1: "0532 123 4567",
-    phone2: "",
-    device: "Telefon",
-    brand: "Apple",
-    model: "iPhone 14 Pro",
-    issue: "Ekran kirildi",
-    status: "completed",
-    cost: 4500,
-    paid: 4500,
-    remaining: 0,
-    paymentType: "cash",
-    notes: "Ekran degistirildi, test edildi.",
-    createdAt: "2026-07-28",
-    completedAt: "2026-07-29",
-  },
-  {
-    id: 2,
-    customerName: "Mehmet Demir",
-    phone1: "0533 987 6543",
-    phone2: "0544 111 2222",
-    device: "Laptop",
-    brand: "Dell",
-    model: "XPS 15",
-    issue: "Sarj olmuyor",
-    status: "in_progress",
-    cost: 1200,
-    paid: 0,
-    remaining: 1200,
-    paymentType: "unpaid",
-    notes: "Sarj soketi kontrol ediliyor.",
-    createdAt: "2026-07-30",
-  },
-  {
-    id: 3,
-    customerName: "Ayse Kaya",
-    phone1: "0555 444 3333",
-    phone2: "",
-    device: "Tablet",
-    brand: "Samsung",
-    model: "Galaxy Tab S8",
-    issue: "Dokunmatik calismiyor",
-    status: "waiting",
-    cost: 800,
-    paid: 0,
-    remaining: 800,
-    paymentType: "unpaid",
-    notes: "Parca siparisi verildi.",
-    createdAt: "2026-08-01",
-  },
+interface ExchangeRates {
+  USD: number
+  EUR: number
+  lastUpdated: string
+}
+
+const initialInventory: InventoryItem[] = [
+  { id: 1, name: "iPhone 14 Pro Ekran", sku: "IP14P-SCR-001", category: "Ekran", quantity: 12, minQuantity: 5, purchasePrice: 25, purchaseCurrency: "USD", profitMargin: 40, salePrice: 0, supplier: "EkranTedarik", location: "Raf A-1" },
+  { id: 2, name: "Samsung S23 Batarya", sku: "SS23-BAT-001", category: "Batarya", quantity: 8, minQuantity: 10, purchasePrice: 8, purchaseCurrency: "USD", profitMargin: 35, salePrice: 0, supplier: "SamsungParts", location: "Raf B-2" },
+  { id: 3, name: "iPhone 13 Arka Kapak", sku: "IP13-BCK-001", category: "Kapak", quantity: 25, minQuantity: 10, purchasePrice: 5, purchaseCurrency: "USD", profitMargin: 50, salePrice: 0, supplier: "AppleParts", location: "Raf A-3" },
+  { id: 4, name: "USB-C Şarj Portu", sku: "USBC-PRT-001", category: "Port", quantity: 3, minQuantity: 15, purchasePrice: 1.5, purchaseCurrency: "USD", profitMargin: 60, salePrice: 0, supplier: "GenelTedarik", location: "Raf C-1" },
+  { id: 5, name: "iPad Air 5 Ekran", sku: "IPA5-SCR-001", category: "Ekran", quantity: 6, minQuantity: 3, purchasePrice: 35, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, supplier: "EkranTedarik", location: "Raf A-2" },
+  { id: 6, name: "MacBook Air M2 Batarya", sku: "MBA-M2-BAT-001", category: "Batarya", quantity: 4, minQuantity: 2, purchasePrice: 45, purchaseCurrency: "USD", profitMargin: 25, salePrice: 0, supplier: "AppleParts", location: "Raf B-1" },
 ]
 
-const initialCustomers: Customer[] = [
-  { id: 1, name: "Ahmet Yilmaz", phone1: "0532 123 4567", phone2: "", email: "ahmet@email.com", address: "Istanbul" },
-  { id: 2, name: "Mehmet Demir", phone1: "0533 987 6543", phone2: "0544 111 2222", email: "mehmet@email.com", address: "Ankara" },
-  { id: 3, name: "Ayse Kaya", phone1: "0555 444 3333", phone2: "", email: "ayse@email.com", address: "Izmir" },
-]
-
-const initialNotes: Note[] = [
-  { id: 1, repairId: 2, text: "Parca siparisi verildi, 2 gun surecek.", createdAt: "2026-07-30 10:00", author: "Teknisyen" },
-]
-
-const initialFinance: FinanceTransaction[] = [
-  { id: 1, description: "iPhone 14 Pro Ekran Degisimi", amount: 4500, type: "income", category: "Tamir Geliri", date: "2026-07-29", customer: "Ahmet Yilmaz", source: "repair", sourceId: 1 },
-]
-
-// Helper to normalize customer data from different sources
-function normalizeCustomer(raw: any): Customer {
-  return {
-    id: raw.id || 0,
-    name: raw.name || raw.fullName || raw.customerName || "",
-    phone1: raw.phone1 || raw.phone || raw.telefon || raw.tel1 || raw.phoneNumber || "",
-    phone2: raw.phone2 || raw.phoneSecondary || raw.tel2 || "",
-    email: raw.email || raw.e_posta || "",
-    address: raw.address || raw.adres || "",
+function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "USD" | "EUR", profitMargin: number, rates: ExchangeRates): number {
+  let priceInTRY = purchasePrice
+  if (purchaseCurrency === "USD") {
+    priceInTRY = purchasePrice * rates.USD
+  } else if (purchaseCurrency === "EUR") {
+    priceInTRY = purchasePrice * rates.EUR
   }
+  const salePrice = priceInTRY * (1 + profitMargin / 100)
+  return Math.round(salePrice)
 }
 
-export default function RepairsPage() {
-  const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
-  const [notes, setNotes] = useState<Note[]>(initialNotes)
-  const [financeTransactions, setFinanceTransactions] = useState<FinanceTransaction[]>(initialFinance)
-  const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
+export default function InventoryPage() {
+  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false)
-  const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false)
-  const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null)
-  const [noteText, setNoteText] = useState("")
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
+  const router = useRouter()
+  const { authorized, checking } = usePermissionGuard("Envanter")
 
-  // Form states
-  const [customerId, setCustomerId] = useState<string>("")
-  const [customerName, setCustomerName] = useState("")
-  const [phone1, setPhone1] = useState("")
-  const [phone2, setPhone2] = useState("")
-  const [device, setDevice] = useState("")
-  const [brand, setBrand] = useState("")
-  const [model, setModel] = useState("")
-  const [issue, setIssue] = useState("")
-  const [cost, setCost] = useState("")
-  const [paymentType, setPaymentType] = useState<string>("unpaid")
-  const [paidAmount, setPaidAmount] = useState("")
-  const [notesInput, setNotesInput] = useState("")
-  const [isNewCustomer, setIsNewCustomer] = useState(false)
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
 
-  // New customer form
-  const [newCustomerName, setNewCustomerName] = useState("")
-  const [newCustomerPhone1, setNewCustomerPhone1] = useState("")
-  const [newCustomerPhone2, setNewCustomerPhone2] = useState("")
-  const [newCustomerEmail, setNewCustomerEmail] = useState("")
-  const [newCustomerAddress, setNewCustomerAddress] = useState("")
+  if (!authorized) {
+    useEffect(() => {
+      router.push("/dashboard")
+    }, [router])
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
+  const [isLoadingRates, setIsLoadingRates] = useState(false)
+
+  const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
+    category: "Ekran",
+    quantity: 0,
+    minQuantity: 5,
+    purchasePrice: 0,
+    purchaseCurrency: "USD",
+    profitMargin: 30,
+    salePrice: 0,
+  })
 
   // Load from localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const savedRepairs = localStorage.getItem("yt_repairs")
-        const savedCustomers = localStorage.getItem("yt_customers")
-        const savedNotes = localStorage.getItem("yt_repair_notes")
-        const savedFinance = localStorage.getItem("yt_finance")
-        if (savedRepairs) setRepairs(JSON.parse(savedRepairs))
-        if (savedCustomers) {
-          const parsed = JSON.parse(savedCustomers)
-          // Normalize customers to ensure phone1 field exists
-          const normalized = Array.isArray(parsed) ? parsed.map(normalizeCustomer) : []
-          setCustomers(normalized)
+    if (typeof window === "undefined") return
+    try {
+      const saved = localStorage.getItem("yt_inventory")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setInventory(parsed)
         }
-        if (savedNotes) setNotes(JSON.parse(savedNotes))
-        if (savedFinance) setFinanceTransactions(JSON.parse(savedFinance))
-      } catch (e) {
-        console.error("Load error:", e)
       }
+      const savedRates = localStorage.getItem("yt_exchange_rates")
+      if (savedRates) {
+        const parsed = JSON.parse(savedRates)
+        if (parsed && parsed.USD && parsed.EUR) {
+          setRates(parsed)
+        }
+      }
+    } catch (e) {
+      console.error("Load error:", e)
     }
+    setIsLoaded(true)
   }, [])
 
   // Save to localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("yt_repairs", JSON.stringify(repairs))
-      localStorage.setItem("yt_customers", JSON.stringify(customers))
-      localStorage.setItem("yt_repair_notes", JSON.stringify(notes))
-      localStorage.setItem("yt_finance", JSON.stringify(financeTransactions))
-    }
-  }, [repairs, customers, notes, financeTransactions])
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_inventory", JSON.stringify(inventory))
+  }, [inventory, isLoaded])
 
-  const filteredRepairs = useMemo(() => {
-    return repairs.filter((r) => {
-      const matchesSearch =
-        search === "" ||
-        r.customerName.toLowerCase().includes(search.toLowerCase()) ||
-        r.phone1.includes(search) ||
-        r.phone2.includes(search) ||
-        r.device.toLowerCase().includes(search.toLowerCase()) ||
-        r.brand.toLowerCase().includes(search.toLowerCase()) ||
-        r.model.toLowerCase().includes(search.toLowerCase())
-      const matchesStatus = statusFilter === "all" || r.status === statusFilter
-      return matchesSearch && matchesStatus
-    })
-  }, [repairs, search, statusFilter])
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_exchange_rates", JSON.stringify(rates))
+  }, [rates, isLoaded])
 
-  const stats = useMemo(() => {
-    const total = repairs.length
-    const waiting = repairs.filter((r) => r.status === "waiting").length
-    const inProgress = repairs.filter((r) => r.status === "in_progress").length
-    const completed = repairs.filter((r) => r.status === "completed").length
-    const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
-    const totalRemaining = repairs.reduce((sum, r) => sum + r.remaining, 0)
-    return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
-  }, [repairs])
-
-  const handleCustomerSelect = (value: string) => {
-    if (value === "new") {
-      setIsNewCustomer(true)
-      setCustomerId("")
-      setCustomerName("")
-      setPhone1("")
-      setPhone2("")
-    } else {
-      setIsNewCustomer(false)
-      setCustomerId(value)
-      const customer = customers.find((c) => c.id.toString() === value)
-      if (customer) {
-        setCustomerName(customer.name)
-        setPhone1(customer.phone1 || "")
-        setPhone2(customer.phone2 || "")
-      }
+  // Fetch live exchange rates from Frankfurter API (free, no key)
+  const fetchRates = async () => {
+    setIsLoadingRates(true)
+    try {
+      // Fetch USD/TRY and EUR/TRY directly
+      const [usdRes, eurRes] = await Promise.all([
+        fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=TRY"),
+        fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=TRY"),
+      ])
+      if (!usdRes.ok || !eurRes.ok) throw new Error("Rate fetch failed")
+      const usdData = await usdRes.json()
+      const eurData = await eurRes.json()
+      const usdRate = usdData.rates.TRY || 34.5
+      const eurRate = eurData.rates.TRY || 37.2
+      setRates({
+        USD: Math.round(usdRate * 100) / 100,
+        EUR: Math.round(eurRate * 100) / 100,
+        lastUpdated: new Date().toLocaleString("tr-TR"),
+      })
+    } catch (err) {
+      console.error("Exchange rate error:", err)
+      alert("\u{26A0} Kur bilgisi alınamadı! Manuel güncelleme yapabilirsiniz.")
+    } finally {
+      setIsLoadingRates(false)
     }
   }
 
-  const handleAddNewCustomer = () => {
-    if (!newCustomerName.trim() || !newCustomerPhone1.trim()) return
-    const newId = Math.max(...customers.map((c) => c.id), 0) + 1
-    const newCustomer: Customer = {
-      id: newId,
-      name: newCustomerName,
-      phone1: newCustomerPhone1,
-      phone2: newCustomerPhone2,
-      email: newCustomerEmail,
-      address: newCustomerAddress,
+  // Auto-fetch rates on mount
+  useEffect(() => {
+    if (isLoaded) {
+      fetchRates()
     }
-    setCustomers([...customers, newCustomer])
-    setCustomerId(newId.toString())
-    setCustomerName(newCustomerName)
-    setPhone1(newCustomerPhone1)
-    setPhone2(newCustomerPhone2)
-    setIsNewCustomerDialogOpen(false)
-    setIsNewCustomer(false)
-    setNewCustomerName("")
-    setNewCustomerPhone1("")
-    setNewCustomerPhone2("")
-    setNewCustomerEmail("")
-    setNewCustomerAddress("")
+  }, [isLoaded])
+
+  const categories = Array.from(new Set(inventory.map(i => i.category)))
+
+  const inventoryWithPrices = inventory.map(item => ({
+    ...item,
+    salePrice: item.salePrice > 0 ? item.salePrice : calculateSalePrice(item.purchasePrice, item.purchaseCurrency, item.profitMargin, rates),
+  }))
+
+  const filteredItems = inventoryWithPrices.filter((item) => {
+    const search = searchTerm.toLowerCase()
+    const matchesSearch = item.name.toLowerCase().includes(search) ||
+      item.sku.toLowerCase().includes(search) ||
+      item.supplier.toLowerCase().includes(search)
+    const matchesCategory = filterCategory === "all" || item.category === filterCategory
+    return matchesSearch && matchesCategory
+  })
+
+  const lowStockItems = inventoryWithPrices.filter(item => item.quantity <= item.minQuantity)
+  const totalPurchaseValue = inventoryWithPrices.reduce((sum, item) => {
+    let priceInTRY = item.purchasePrice
+    if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
+    else if (item.purchaseCurrency === "EUR") priceInTRY = item.purchasePrice * rates.EUR
+    return sum + (priceInTRY * item.quantity)
+  }, 0)
+  const totalSaleValue = inventoryWithPrices.reduce((sum, item) => sum + (item.salePrice * item.quantity), 0)
+  const totalProfit = totalSaleValue - totalPurchaseValue
+
+  const updateQuantity = (id: number, delta: number) => {
+    setInventory(inventory.map(item =>
+      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    ))
   }
 
-  const calculateRemaining = (totalCost: number, paid: number) => {
-    return Math.max(0, totalCost - paid)
-  }
-
-  const addFinanceTransaction = (repair: Repair) => {
-    if (repair.paid <= 0) return
-    const newTransaction: FinanceTransaction = {
+  const handleAddItem = () => {
+    if (!newItem.name || !newItem.sku) {
+      alert("Lütfen ürün adı ve SKU kodu girin!")
+      return
+    }
+    const salePrice = calculateSalePrice(
+      Number(newItem.purchasePrice) || 0,
+      newItem.purchaseCurrency || "TRY",
+      Number(newItem.profitMargin) || 0,
+      rates
+    )
+    const item: InventoryItem = {
       id: Date.now(),
-      description: `${repair.brand} ${repair.model} ${repair.device} Tamiri`,
-      amount: repair.paid,
-      type: "income",
-      category: "Tamir Geliri",
-      date: new Date().toISOString().split("T")[0],
-      customer: repair.customerName,
-      source: "repair",
-      sourceId: repair.id,
+      name: newItem.name,
+      sku: newItem.sku,
+      category: newItem.category || "Diğer",
+      quantity: Number(newItem.quantity) || 0,
+      minQuantity: Number(newItem.minQuantity) || 5,
+      purchasePrice: Number(newItem.purchasePrice) || 0,
+      purchaseCurrency: newItem.purchaseCurrency || "TRY",
+      profitMargin: Number(newItem.profitMargin) || 0,
+      salePrice: salePrice,
+      supplier: newItem.supplier || "",
+      location: newItem.location || "",
     }
-    setFinanceTransactions(prev => [newTransaction, ...prev])
-  }
-
-  const validateForm = () => {
-    const missingFields: string[] = []
-
-    if (!customerName.trim()) missingFields.push("Müşteri Adi")
-    if (!phone1.trim()) missingFields.push("Telefon 1")
-    if (!device.trim()) missingFields.push("Cihaz Türü")
-    if (!brand.trim()) missingFields.push("Marka")
-    if (!issue.trim()) missingFields.push("Arıza Açıklaması")
-
-    if (missingFields.length > 0) {
-      alert("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
-      return false
-    }
-    return true
-  }
-
-  const handleAddRepair = () => {
-    if (!validateForm()) return
-
-    const newId = Math.max(...repairs.map((r) => r.id), 0) + 1
-    const costNum = parseFloat(cost) || 0
-    const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
-    const remainingNum = calculateRemaining(costNum, paidNum)
-    const newRepair: Repair = {
-      id: newId,
-      customerName,
-      phone1,
-      phone2,
-      device,
-      brand,
-      model,
-      issue,
-      status: "waiting",
-      cost: costNum,
-      paid: paidNum,
-      remaining: remainingNum,
-      paymentType: paymentType as Repair["paymentType"],
-      notes: notesInput,
-      createdAt: new Date().toISOString().split("T")[0],
-    }
-    setRepairs([newRepair, ...repairs])
-
-    // Add to finance if payment made
-    if (paidNum > 0) {
-      addFinanceTransaction({ ...newRepair, id: newId })
-    }
-
-    resetForm()
+    setInventory([item, ...inventory])
+    setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
     setIsDialogOpen(false)
   }
 
-  const handleUpdateRepair = () => {
-    if (!selectedRepair) return
-
-    const missingFields: string[] = []
-    if (!customerName.trim()) missingFields.push("Müşteri Adi")
-    if (!phone1.trim()) missingFields.push("Telefon 1")
-    if (!device.trim()) missingFields.push("Cihaz Türü")
-    if (!brand.trim()) missingFields.push("Marka")
-    if (!issue.trim()) missingFields.push("Arıza Açıklaması")
-
-    if (missingFields.length > 0) {
-      alert("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+  const handleUpdateItem = () => {
+    if (!editingItem) return
+    if (!editingItem.name || !editingItem.sku) {
+      alert("Lütfen ürün adı ve SKU kodu girin!")
       return
     }
-
-    const costNum = parseFloat(cost) || selectedRepair.cost
-    const paidNum = paymentType === "partial" 
-      ? (parseFloat(paidAmount) || selectedRepair.paid) 
-      : (paymentType === "unpaid" ? 0 : costNum)
-    const remainingNum = calculateRemaining(costNum, paidNum)
-
-    const updatedRepair: Repair = {
-      ...selectedRepair,
-      customerName,
-      phone1,
-      phone2,
-      device,
-      brand,
-      model,
-      issue,
-      cost: costNum,
-      paid: paidNum,
-      remaining: remainingNum,
-      paymentType: paymentType as Repair["paymentType"],
-      notes: notesInput,
-    }
-
-    setRepairs(
-      repairs.map((r) =>
-        r.id === selectedRepair.id ? updatedRepair : r
-      )
+    const salePrice = calculateSalePrice(
+      editingItem.purchasePrice,
+      editingItem.purchaseCurrency,
+      editingItem.profitMargin,
+      rates
     )
-
-    // Update finance if payment changed
-    if (paidNum > selectedRepair.paid) {
-      const diff = paidNum - selectedRepair.paid
-      const newTransaction: FinanceTransaction = {
-        id: Date.now(),
-        description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Ödeme`,
-        amount: diff,
-        type: "income",
-        category: "Tamir Geliri",
-        date: new Date().toISOString().split("T")[0],
-        customer: updatedRepair.customerName,
-        source: "repair",
-        sourceId: updatedRepair.id,
-      }
-      setFinanceTransactions(prev => [newTransaction, ...prev])
-    }
-
-    setIsEditDialogOpen(false)
-    setSelectedRepair(null)
+    setInventory(inventory.map(item =>
+      item.id === editingItem.id ? { ...editingItem, salePrice } : item
+    ))
+    setIsEditOpen(false)
+    setEditingItem(null)
   }
 
-  const handleStatusChange = (id: number, newStatus: Repair["status"]) => {
-    const repair = repairs.find(r => r.id === id)
-    if (!repair) return
-
-    const updatedRepair = {
-      ...repair,
-      status: newStatus,
-      completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : repair.completedAt,
-    }
-
-    setRepairs(
-      repairs.map((r) =>
-        r.id === id ? updatedRepair : r
-      )
-    )
-
-    // Add to finance when completed and has payment
-    if (newStatus === "completed" && repair.paid > 0) {
-      // Check if already added
-      const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandı"))
-      if (!alreadyAdded) {
-        const newTransaction: FinanceTransaction = {
-          id: Date.now(),
-          description: `${repair.brand} ${repair.model} - Tamir Tamamlandı`,
-          amount: repair.paid,
-          type: "income",
-          category: "Tamir Geliri",
-          date: new Date().toISOString().split("T")[0],
-          customer: repair.customerName,
-          source: "repair",
-          sourceId: repair.id,
-        }
-        setFinanceTransactions(prev => [newTransaction, ...prev])
-      }
-    }
+  const handleDeleteItem = (id: number) => {
+    const item = inventory.find(i => i.id === id)
+    if (!item) return
+    if (!confirm(`\u{26A0} *${item.name}* ürününü silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
+    setInventory(inventory.filter(item => item.id !== id))
   }
 
-  const handleDeleteRepair = (id: number) => {
-    if (confirm("Bu tamir kaydini silmek istediginize emin misiniz?")) {
-      setRepairs(repairs.filter((r) => r.id !== id))
-      setNotes(notes.filter((n) => n.repairId !== id))
-      // Remove related finance transactions
-      setFinanceTransactions(financeTransactions.filter(t => !(t.source === "repair" && t.sourceId === id)))
-    }
-  }
-
-  const handleAddNote = () => {
-    if (!noteText.trim() || !selectedRepair) return
-    const newNote: Note = {
-      id: Math.max(...notes.map((n) => n.id), 0) + 1,
-      repairId: selectedRepair.id,
-      text: noteText,
-      createdAt: new Date().toLocaleString("tr-TR"),
-      author: "Teknisyen",
-    }
-    setNotes([...notes, newNote])
-    setNoteText("")
-  }
-
-  const openEditDialog = (repair: Repair) => {
-    setSelectedRepair(repair)
-    setCustomerName(repair.customerName)
-    setPhone1(repair.phone1)
-    setPhone2(repair.phone2)
-    setDevice(repair.device)
-    setBrand(repair.brand)
-    setModel(repair.model)
-    setIssue(repair.issue)
-    setCost(repair.cost.toString())
-    setPaymentType(repair.paymentType)
-    setPaidAmount(repair.paid.toString())
-    setNotesInput(repair.notes)
-    setIsEditDialogOpen(true)
-  }
-
-  const openNoteDialog = (repair: Repair) => {
-    setSelectedRepair(repair)
-    setIsNoteDialogOpen(true)
-  }
-
-  const resetForm = () => {
-    setCustomerId("")
-    setCustomerName("")
-    setPhone1("")
-    setPhone2("")
-    setDevice("")
-    setBrand("")
-    setModel("")
-    setIssue("")
-    setCost("")
-    setPaymentType("unpaid")
-    setPaidAmount("")
-    setNotesInput("")
-    setIsNewCustomer(false)
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "waiting":
-        return <Badge variant="outline" className="border-amber-500 text-amber-400"><Clock className="h-3 w-3 mr-1" />Bekliyor</Badge>
-      case "in_progress":
-        return <Badge variant="outline" className="border-blue-500 text-blue-400"><AlertCircle className="h-3 w-3 mr-1" />Devam Ediyor</Badge>
-      case "completed":
-        return <Badge variant="outline" className="border-emerald-500 text-emerald-400"><CheckCircle className="h-3 w-3 mr-1" />Tamamlandı</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
-  const getPaymentBadge = (type: string, remaining: number) => {
-    if (remaining > 0 && type !== "unpaid") {
-      return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi ({formatCurrency(remaining)} kaldi)</Badge>
-    }
-    switch (type) {
-      case "cash": return <Badge className="bg-emerald-600"><Banknote className="h-3 w-3 mr-1" />Nakit</Badge>
-      case "card": return <Badge className="bg-blue-600"><CreditCard className="h-3 w-3 mr-1" />Kart</Badge>
-      case "transfer": return <Badge className="bg-violet-600"><Receipt className="h-3 w-3 mr-1" />Havale</Badge>
-      case "partial": return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi</Badge>
-      default: return <Badge variant="secondary">Odenmedi</Badge>
-    }
-  }
-
-  const getRepairNotes = (repairId: number) => notes.filter((n) => n.repairId === repairId)
-
-  const sendWhatsApp = (repair: Repair) => {
-    const cleanPhone = repair.phone1.replace(/\D/g, "")
-    let message = `\uD83D\uDC4B Merhaba *${repair.customerName}*,%0A%0A`
-    message += `\u2705 *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. \uD83D\uDD27%0A%0A`
-
-    if (repair.remaining > 0) {
-      message += `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}%0A`
-      message += `\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}%0A`
-      message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
-      message += `\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
-    } else {
-      message += `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).%0A`
-      message += `\u2705 Hemen teslim alabilirsiniz.`
-    }
-
-    message += `%0A%0A\uD83C\uDFEA *Yeşiltaş Teknoloji*%0A\uD83D\uDCDE Bizi tercih ettiğiniz için teşekkür ederiz! \uD83D\uDE4F`
-
-    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+  const openEditDialog = (item: InventoryItem) => {
+    setEditingItem({ ...item })
+    setIsEditOpen(true)
   }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
 
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yükleniyor...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Teknik Servis</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Stok Yönetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />Yeni Tamir
+              <Plus className="mr-2 h-4 w-4" />
+              Yeni Ürün
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
+          <DialogContent className="sm:max-w-[550px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-white">Yeni Tamir Kaydı</DialogTitle>
+              <DialogTitle className="text-white">Yeni Stok Ürünü</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Müşteri Seçimi</Label>
-                <Select value={customerId} onValueChange={handleCustomerSelect}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                    <SelectValue placeholder="Müşteri secin veya yeni ekleyin" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="new" className="text-emerald-400 font-semibold">
-                      + Yeni Müşteri Ekle
-                    </SelectItem>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id.toString()} className="text-white">
-                        {c.name} - {c.phone1 || "Telefon yok"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium text-slate-300">Ürün Adı <span className="text-red-400">*</span></label>
+                <Input
+                  value={newItem.name || ""}
+                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                  placeholder="Ürün adı"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
               </div>
-
-              {isNewCustomer && (
-                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-emerald-400 font-semibold">Yeni Müşteri Bilgileri</Label>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => setIsNewCustomerDialogOpen(true)}
-                      className="text-emerald-400 hover:text-emerald-300"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />Detayli Ekle
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-slate-300 text-xs">Ad Soyad <span className="text-red-400">*</span></Label>
-                      <Input 
-                        value={customerName} 
-                        onChange={(e) => setCustomerName(e.target.value)} 
-                        className="bg-slate-800 border-slate-600 text-white"
-                        placeholder="Orn: Ahmet Yilmaz"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-slate-300 text-xs">Telefon 1 <span className="text-red-400">*</span></Label>
-                      <Input 
-                        value={phone1} 
-                        onChange={(e) => setPhone1(e.target.value)} 
-                        className="bg-slate-800 border-slate-600 text-white"
-                        placeholder="0532 123 4567"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-slate-300 text-xs">Telefon 2</Label>
-                      <Input 
-                        value={phone2} 
-                        onChange={(e) => setPhone2(e.target.value)} 
-                        className="bg-slate-800 border-slate-600 text-white"
-                        placeholder="0544 987 6543"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!isNewCustomer && customerName && (
-                <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3">
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div><span className="text-slate-400">Ad:</span> <span className="text-white">{customerName}</span></div>
-                    <div><span className="text-slate-400">Tel 1:</span> <span className="text-white">{phone1 || "-"}</span></div>
-                    {phone2 && <div><span className="text-slate-400">Tel 2:</span> <span className="text-white">{phone2}</span></div>}
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Cihaz Türü <span className="text-red-400">*</span></Label>
-                  <Select value={device} onValueChange={setDevice}>
+                  <label className="text-sm font-medium text-slate-300">SKU / Barkod <span className="text-red-400">*</span></label>
+                  <Input
+                    value={newItem.sku || ""}
+                    onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
+                    placeholder="SKU kodu"
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Kategori</label>
+                  <Select
+                    value={newItem.category}
+                    onValueChange={(value) => setNewItem({ ...newItem, category: value })}
+                  >
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue placeholder="Seçin" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-600">
-                      <SelectItem value="Telefon">Telefon</SelectItem>
-                      <SelectItem value="Tablet">Tablet</SelectItem>
-                      <SelectItem value="Laptop">Laptop</SelectItem>
-                      <SelectItem value="Bilgisayar">Bilgisayar</SelectItem>
-                      <SelectItem value="Monitor">Monitor</SelectItem>
-                      <SelectItem value="Diger">Diger</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                      ))}
+                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Marka <span className="text-red-400">*</span></Label>
-                  <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: Apple" />
+                  <label className="text-sm font-medium text-slate-300">Miktar</label>
+                  <Input
+                    type="number"
+                    value={newItem.quantity || ""}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Min. Stok</label>
+                  <Input
+                    type="number"
+                    value={newItem.minQuantity || ""}
+                    onChange={(e) => setNewItem({ ...newItem, minQuantity: Number(e.target.value) })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Konum</label>
+                  <Input
+                    value={newItem.location || ""}
+                    onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
+                    placeholder="Raf A-1"
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-slate-300">Model</Label>
-                  <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-300">Ücret (TL)</Label>
-                  <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-300">Arıza Açıklaması <span className="text-red-400">*</span></Label>
-                <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white min-h-[80px]" placeholder="Cihazda yasanan sorunu detayli aciklayin..." />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-slate-300">Ödeme Sekli</Label>
-                  <Select value={paymentType} onValueChange={setPaymentType}>
-                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue placeholder="Seçin" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
-                      <SelectItem value="unpaid">Odenmedi</SelectItem>
-                      <SelectItem value="cash">Nakit</SelectItem>
-                      <SelectItem value="card">Kredi Karti</SelectItem>
-                      <SelectItem value="transfer">Havale/EFT</SelectItem>
-                      <SelectItem value="partial">Kismi Ödeme</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {paymentType === "partial" && (
+              <div className="border-t border-slate-700 pt-4">
+                <label className="text-sm font-medium text-emerald-400 flex items-center gap-2 mb-3">
+                  <DollarSign className="h-4 w-4" />
+                  Fiyatlandırma
+                </label>
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-slate-300">Alınan Tutar (TL)</Label>
-                    <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: 2000" />
+                    <label className="text-sm font-medium text-slate-300">Alış Fiyatı</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newItem.purchasePrice || ""}
+                      onChange={(e) => setNewItem({ ...newItem, purchasePrice: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
                   </div>
-                )}
-              </div>
-
-              {paymentType === "partial" && cost && paidAmount && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
-                    <div><span className="text-slate-400">Alınan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
-                    <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Para Birimi</label>
+                    <Select
+                      value={newItem.purchaseCurrency}
+                      onValueChange={(value: "TRY" | "USD" | "EUR") => setNewItem({ ...newItem, purchaseCurrency: value })}
+                    >
+                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="TRY" className="text-white">₺ TRY</SelectItem>
+                        <SelectItem value="USD" className="text-white">$ USD</SelectItem>
+                        <SelectItem value="EUR" className="text-white">€ EUR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Kar Marjı (%)</label>
+                    <Input
+                      type="number"
+                      value={newItem.profitMargin || ""}
+                      onChange={(e) => setNewItem({ ...newItem, profitMargin: Number(e.target.value) })}
+                      placeholder="30"
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
                   </div>
                 </div>
-              )}
-
-              <div className="space-y-2">
-                <Label className="text-slate-300">Notlar</Label>
-                <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ekstra notlar..." />
+                <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-emerald-400">Tahmini Satış Fiyatı:</span>
+                    <span className="text-lg font-bold text-emerald-400">
+                      {formatCurrency(calculateSalePrice(
+                        Number(newItem.purchasePrice) || 0,
+                        newItem.purchaseCurrency || "TRY",
+                        Number(newItem.profitMargin) || 0,
+                        rates
+                      ))}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Kur: $1 = {formatCurrency(rates.USD)} | €1 = {formatCurrency(rates.EUR)}
+                  </div>
+                </div>
               </div>
 
-              <Button onClick={handleAddRepair} className="w-full bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />Kaydet
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
+                <Input
+                  value={newItem.supplier || ""}
+                  onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
+                  placeholder="Tedarikçi adı"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <Button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Save className="mr-2 h-4 w-4" />Kaydet
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card className="bg-slate-900 border-slate-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-400">Toplam Tamir</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-white">{stats.total}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-900 border-slate-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-400">Bekleyen</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-amber-400">{stats.waiting}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-900 border-slate-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-400">Devam Eden</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-400">{stats.inProgress}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-900 border-slate-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-400">Toplam Gelir</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-emerald-400">{formatCurrency(stats.totalRevenue)}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-900 border-slate-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-400">Bekleyen Tahsilat</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-amber-400">{formatCurrency(stats.totalRemaining)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input 
-            placeholder="Müşteri, telefon, cihaz, marka, model ara..." 
-            value={search} 
-            onChange={(e) => setSearch(e.target.value)} 
-            className="pl-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px] bg-slate-900 border-slate-700 text-white">
-            <SelectValue placeholder="Durum filtresi" />
-          </SelectTrigger>
-          <SelectContent className="bg-slate-900 border-slate-700">
-            <SelectItem value="all">Tumu</SelectItem>
-            <SelectItem value="waiting">Bekliyor</SelectItem>
-            <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-            <SelectItem value="completed">Tamamlandı</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
+      {/* Exchange Rates Card */}
       <Card className="bg-slate-900 border-slate-700">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-700 hover:bg-transparent">
-                <TableHead className="text-slate-400">ID</TableHead>
-                <TableHead className="text-slate-400">Müşteri</TableHead>
-                <TableHead className="text-slate-400">Telefon</TableHead>
-                <TableHead className="text-slate-400">Cihaz</TableHead>
-                <TableHead className="text-slate-400">Arıza</TableHead>
-                <TableHead className="text-slate-400">Durum</TableHead>
-                <TableHead className="text-slate-400">Ücret</TableHead>
-                <TableHead className="text-slate-400">Ödeme</TableHead>
-                <TableHead className="text-slate-400">Tarih</TableHead>
-                <TableHead className="text-slate-400 text-right">Islemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRepairs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center text-slate-500 py-8">
-                    Kayit bulunamadi.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredRepairs.map((repair) => (
-                  <TableRow key={repair.id} className="border-slate-700 hover:bg-slate-800/50">
-                    <TableCell className="text-slate-300 font-mono">#{repair.id}</TableCell>
-                    <TableCell className="text-white font-medium">{repair.customerName}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-slate-300 text-sm">{repair.phone1}</span>
-                        {repair.phone2 && <span className="text-slate-400 text-xs">{repair.phone2}</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-300">{repair.brand} {repair.model}</TableCell>
-                    <TableCell className="text-slate-300 max-w-[200px] truncate">{repair.issue}</TableCell>
-                    <TableCell>{getStatusBadge(repair.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-white font-medium">{formatCurrency(repair.cost)}</span>
-                        {repair.remaining > 0 && (
-                          <span className="text-amber-400 text-xs">Kalan: {formatCurrency(repair.remaining)}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getPaymentBadge(repair.paymentType, repair.remaining)}</TableCell>
-                    <TableCell className="text-slate-400 text-sm">{repair.createdAt}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {repair.status === "completed" && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => sendWhatsApp(repair)}
-                            className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                            title="📱 WhatsApp ile bilgilendir"
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Select 
-                          value={repair.status} 
-                          onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
-                        >
-                          <SelectTrigger className="h-8 w-[130px] bg-slate-800 border-slate-600 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-600">
-                            <SelectItem value="waiting">Bekliyor</SelectItem>
-                            <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-                            <SelectItem value="completed">Tamamlandı</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button variant="ghost" size="sm" onClick={() => openNoteDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                          <AlertCircle className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRepair(repair.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-400">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-400" />
+                <span className="text-white font-medium">Canlı Döviz Kurları</span>
+              </div>
+              <div className="flex gap-3 text-sm">
+                <Badge className="bg-blue-900/50 text-blue-300 border-blue-700">
+                  $1 = {formatCurrency(rates.USD)}
+                </Badge>
+                <Badge className="bg-purple-900/50 text-purple-300 border-purple-700">
+                  €1 = {formatCurrency(rates.EUR)}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {rates.lastUpdated && (
+                <span className="text-xs text-slate-500">Güncelleme: {rates.lastUpdated}</span>
               )}
-            </TableBody>
-          </Table>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fetchRates}
+                disabled={isLoadingRates}
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+              >
+                {isLoadingRates ? "Yükleniyor..." : "Kur Güncelle"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Tamir Düzenle #{selectedRepair?.id}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-slate-300">Müşteri Adi <span className="text-red-400">*</span></Label>
-                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-300">Telefon 1 <span className="text-red-400">*</span></Label>
-                <Input value={phone1} onChange={(e) => setPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-              </div>
+      <div className="grid gap-4 md:grid-cols-5">
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Toplam Ürün</CardTitle>
+            <Package className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{inventory.length}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Kritik Stok</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-400">{lowStockItems.length}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Toplam Maliyet</CardTitle>
+            <Barcode className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-400">{formatCurrency(totalPurchaseValue)}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Toplam Satış Değeri</CardTitle>
+            <DollarSign className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalSaleValue)}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Tahmini Kar</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-400">{formatCurrency(totalProfit)}</div>
+            <div className="text-xs text-slate-500">
+              %{totalPurchaseValue > 0 ? Math.round((totalProfit / totalPurchaseValue) * 100) : 0} marj
             </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Telefon 2</Label>
-              <Input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ikinci telefon (opsiyonel)" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-slate-300">Cihaz Türü <span className="text-red-400">*</span></Label>
-                <Select value={device} onValueChange={setDevice}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="Telefon">Telefon</SelectItem>
-                    <SelectItem value="Tablet">Tablet</SelectItem>
-                    <SelectItem value="Laptop">Laptop</SelectItem>
-                    <SelectItem value="Bilgisayar">Bilgisayar</SelectItem>
-                    <SelectItem value="Monitor">Monitor</SelectItem>
-                    <SelectItem value="Diger">Diger</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-300">Marka <span className="text-red-400">*</span></Label>
-                <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-slate-300">Model</Label>
-                <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-300">Ücret (TL)</Label>
-                <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Arıza Açıklaması <span className="text-red-400">*</span></Label>
-              <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-slate-300">Ödeme Sekli</Label>
-                <Select value={paymentType} onValueChange={setPaymentType}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="unpaid">Odenmedi</SelectItem>
-                    <SelectItem value="cash">Nakit</SelectItem>
-                    <SelectItem value="card">Kredi Karti</SelectItem>
-                    <SelectItem value="transfer">Havale/EFT</SelectItem>
-                    <SelectItem value="partial">Kismi Ödeme</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {paymentType === "partial" && (
-                <div className="space-y-2">
-                  <Label className="text-slate-300">Alınan Tutar (TL)</Label>
-                  <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ne kadar alindi?" />
-                </div>
-              )}
-            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-            {paymentType === "partial" && cost && paidAmount && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
-                  <div><span className="text-slate-400">Alınan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
-                  <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+      {lowStockItems.length > 0 && (
+        <Card className="bg-red-900/20 border-red-800">
+          <CardHeader>
+            <CardTitle className="text-red-300 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Kritik Stok Uyarısı
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {lowStockItems.map((item) => (
+                <div key={item.id} className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-white">{item.name} ({item.sku})</span>
+                  <Badge className="bg-red-600">Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
                 </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="bg-slate-900 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Stok Listesi
+            </span>
+            <span className="text-sm text-slate-400">{filteredItems.length} kayıt</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4 text-slate-500" />
+              <Input
+                placeholder="Ürün adı, SKU veya tedarikçi ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+              />
+            </div>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-white">
+                <SelectValue placeholder="Kategori" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectItem value="all" className="text-white">Tüm Kategoriler</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-3">
+            {filteredItems.length === 0 && (
+              <div className="text-center text-slate-500 py-8">
+                <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Ürün bulunamadı.</p>
               </div>
             )}
+            {filteredItems.map((item) => {
+              const stockPercent = Math.min(100, (item.quantity / item.minQuantity) * 100)
+              const isLowStock = item.quantity <= item.minQuantity
+              const purchaseInTRY = item.purchaseCurrency === "USD"
+                ? item.purchasePrice * rates.USD
+                : item.purchaseCurrency === "EUR"
+                  ? item.purchasePrice * rates.EUR
+                  : item.purchasePrice
 
-            <div className="space-y-2">
-              <Label className="text-slate-300">Notlar</Label>
-              <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-            </div>
-            <Button onClick={handleUpdateRepair} className="w-full bg-blue-600 hover:bg-blue-700">
-              <CheckCircle className="h-4 w-4 mr-2" />Güncelle
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
-        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Notlar - {selectedRepair?.customerName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-slate-300">Yeni Not Ekle</Label>
-              <div className="flex gap-2">
-                <Textarea 
-                  value={noteText} 
-                  onChange={(e) => setNoteText(e.target.value)} 
-                  className="bg-slate-800 border-slate-600 text-white flex-1" 
-                  placeholder="Not yazin..."
-                />
-                <Button onClick={handleAddNote} className="bg-blue-600 hover:bg-blue-700 self-end">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              <Label className="text-slate-300">Geçmiş Notlar</Label>
-              {getRepairNotes(selectedRepair?.id || 0).length === 0 ? (
-                <p className="text-slate-500 text-sm">Heniz not eklenmemis.</p>
-              ) : (
-                getRepairNotes(selectedRepair?.id || 0).map((note) => (
-                  <div key={note.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <p className="text-white text-sm">{note.text}</p>
-                    <p className="text-slate-500 text-xs mt-1">{note.author} - {note.createdAt}</p>
+              return (
+                <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-800 bg-red-900/10" : "border-slate-700 bg-slate-800/50"}`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-white">{item.name}</span>
+                        <Badge variant="outline" className="text-xs border-slate-600 text-slate-300">{item.category}</Badge>
+                        {isLowStock && <Badge className="bg-red-600 text-xs">Kritik Stok</Badge>}
+                      </div>
+                      <div className="text-sm text-slate-400 mt-1">
+                        <Barcode className="inline h-3 w-3 mr-1" />
+                        {item.sku} • {item.supplier} • {item.location}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-emerald-400">{formatCurrency(item.salePrice)}</div>
+                      <div className="text-xs text-slate-400">Satış fiyatı</div>
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      <Dialog open={isNewCustomerDialogOpen} onOpenChange={setIsNewCustomerDialogOpen}>
-        <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Yeni Müşteri Ekle</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-slate-300">Ad Soyad <span className="text-red-400">*</span></Label>
-              <Input value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Telefon 1 <span className="text-red-400">*</span></Label>
-              <Input value={newCustomerPhone1} onChange={(e) => setNewCustomerPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0532 123 4567" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Telefon 2</Label>
-              <Input value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0544 987 6543" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">E-posta</Label>
-              <Input value={newCustomerEmail} onChange={(e) => setNewCustomerEmail(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="ornek@email.com" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Adres</Label>
-              <Textarea value={newCustomerAddress} onChange={(e) => setNewCustomerAddress(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Adres..." />
-            </div>
-            <Button onClick={handleAddNewCustomer} className="w-full bg-emerald-600 hover:bg-emerald-700">
-              <Plus className="h-4 w-4 mr-2" />Müşteri Ekle
-            </Button>
+                  <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 mb-3">
+                    <div>
+                      <span className="text-slate-500">Alış:</span>{" "}
+                      {item.purchaseCurrency === "USD" ? "$" : item.purchaseCurrency === "EUR" ? "€" : "₺"}
+                      {item.purchasePrice} ({formatCurrency(purchaseInTRY)})
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Kar:</span>{" "}
+                      <span className="text-emerald-400">%{item.profitMargin}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Birim Kar:</span>{" "}
+                      <span className="text-green-400">{formatCurrency(item.salePrice - purchaseInTRY)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateQuantity(item.id, -1)}
+                        disabled={item.quantity <= 0}
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="font-semibold w-8 text-center text-white">{item.quantity}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateQuantity(item.id, 1)}
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                      >
+                        <PlusIcon className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex-1">
+                      <Progress value={stockPercent} className={isLowStock ? "bg-red-900/50" : "bg-slate-700"} />
+                    </div>
+                    <div className="text-sm text-slate-400 w-24 text-right">
+                      Stok: {item.quantity}/{item.minQuantity}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(item)}
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-white"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[550px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Ürün Düzenle</DialogTitle>
+          </DialogHeader>
+          {editingItem && (
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Ürün Adı <span className="text-red-400">*</span></label>
+                <Input
+                  value={editingItem.name}
+                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">SKU / Barkod <span className="text-red-400">*</span></label>
+                  <Input
+                    value={editingItem.sku}
+                    onChange={(e) => setEditingItem({ ...editingItem, sku: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Kategori</label>
+                  <Select
+                    value={editingItem.category}
+                    onValueChange={(value) => setEditingItem({ ...editingItem, category: value })}
+                  >
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                      ))}
+                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Miktar</label>
+                  <Input
+                    type="number"
+                    value={editingItem.quantity}
+                    onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Min. Stok</label>
+                  <Input
+                    type="number"
+                    value={editingItem.minQuantity}
+                    onChange={(e) => setEditingItem({ ...editingItem, minQuantity: Number(e.target.value) })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Konum</label>
+                  <Input
+                    value={editingItem.location}
+                    onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-700 pt-4">
+                <label className="text-sm font-medium text-emerald-400 flex items-center gap-2 mb-3">
+                  <DollarSign className="h-4 w-4" />
+                  Fiyatlandırma
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Alış Fiyatı</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingItem.purchasePrice}
+                      onChange={(e) => setEditingItem({ ...editingItem, purchasePrice: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Para Birimi</label>
+                    <Select
+                      value={editingItem.purchaseCurrency}
+                      onValueChange={(value: "TRY" | "USD" | "EUR") => setEditingItem({ ...editingItem, purchaseCurrency: value })}
+                    >
+                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="TRY" className="text-white">₺ TRY</SelectItem>
+                        <SelectItem value="USD" className="text-white">$ USD</SelectItem>
+                        <SelectItem value="EUR" className="text-white">€ EUR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Kar Marjı (%)</label>
+                    <Input
+                      type="number"
+                      value={editingItem.profitMargin}
+                      onChange={(e) => setEditingItem({ ...editingItem, profitMargin: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-emerald-400">Tahmini Satış Fiyatı:</span>
+                    <span className="text-lg font-bold text-emerald-400">
+                      {formatCurrency(calculateSalePrice(
+                        editingItem.purchasePrice,
+                        editingItem.purchaseCurrency,
+                        editingItem.profitMargin,
+                        rates
+                      ))}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Kur: $1 = {formatCurrency(rates.USD)} | €1 = {formatCurrency(rates.EUR)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
+                <Input
+                  value={editingItem.supplier}
+                  onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <Button onClick={handleUpdateItem} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Save className="mr-2 h-4 w-4" />Güncelle
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
