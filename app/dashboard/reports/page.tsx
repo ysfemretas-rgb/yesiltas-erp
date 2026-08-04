@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 import { Download, TrendingUp, TrendingDown, DollarSign, Wrench, ShoppingCart, Users, Calendar, FileText, Filter } from "lucide-react"
-import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, subMonths } from "date-fns"
+import { format, parseISO, isWithinInterval, isValid, subMonths } from "date-fns"
 import { tr } from "date-fns/locale"
 
 interface FinanceRecord {
@@ -55,6 +55,51 @@ interface CustomerRecord {
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"]
 
+// Güvenli tarih parse fonksiyonu
+function safeParseDate(dateStr: string | undefined | null): Date | null {
+  if (!dateStr || typeof dateStr !== "string") return null
+  try {
+    const parsed = parseISO(dateStr)
+    if (isValid(parsed)) return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+
+// Güvenli tarih formatlama
+function safeFormatDate(dateStr: string | undefined | null, fmt: string): string {
+  const parsed = safeParseDate(dateStr)
+  if (!parsed) return "-"
+  try {
+    return format(parsed, fmt, { locale: tr })
+  } catch {
+    return "-"
+  }
+}
+
+// Güvenli ay anahtarı
+function safeMonthKey(dateStr: string | undefined | null): string | null {
+  const parsed = safeParseDate(dateStr)
+  if (!parsed) return null
+  try {
+    return format(parsed, "yyyy-MM")
+  } catch {
+    return null
+  }
+}
+
+// Güvenli ay etiketi
+function safeMonthLabel(dateStr: string | undefined | null): string | null {
+  const parsed = safeParseDate(dateStr)
+  if (!parsed) return null
+  try {
+    return format(parsed, "MMM yyyy", { locale: tr })
+  } catch {
+    return null
+  }
+}
+
 export default function ReportsPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
@@ -82,10 +127,16 @@ export default function ReportsPage() {
       const sales = JSON.parse(localStorage.getItem("yt_sales") || "[]")
       const customers = JSON.parse(localStorage.getItem("yt_customers") || "[]")
 
-      setFinanceData(finance)
-      setRepairsData(repairs)
-      setSalesData(sales)
-      setCustomersData(customers)
+      // Veri doğrulama - date alanı olmayanları filtrele
+      const validFinance = (Array.isArray(finance) ? finance : []).filter((f: any) => f && f.date && typeof f.date === "string")
+      const validRepairs = (Array.isArray(repairs) ? repairs : []).filter((r: any) => r && r.date && typeof r.date === "string")
+      const validSales = (Array.isArray(sales) ? sales : []).filter((s: any) => s && s.date && typeof s.date === "string")
+      const validCustomers = (Array.isArray(customers) ? customers : []).filter((c: any) => c && c.id)
+
+      setFinanceData(validFinance)
+      setRepairsData(validRepairs)
+      setSalesData(validSales)
+      setCustomersData(validCustomers)
     } catch (e) {
       console.error("Veri yükleme hatası:", e)
     }
@@ -96,12 +147,14 @@ export default function ReportsPage() {
   // Tarih filtresi
   const filterByDate = <T extends { date: string }>(data: T[]) => {
     if (!dateRange.start || !dateRange.end) return data
+    const startDate = safeParseDate(dateRange.start)
+    const endDate = safeParseDate(dateRange.end)
+    if (!startDate || !endDate) return data
+
     return data.filter(item => {
-      const itemDate = parseISO(item.date)
-      return isWithinInterval(itemDate, {
-        start: parseISO(dateRange.start),
-        end: parseISO(dateRange.end)
-      })
+      const itemDate = safeParseDate(item.date)
+      if (!itemDate) return false
+      return isWithinInterval(itemDate, { start: startDate, end: endDate })
     })
   }
 
@@ -110,8 +163,8 @@ export default function ReportsPage() {
   const filteredSales = filterByDate(salesData)
 
   // Genel istatistikler
-  const totalIncome = filteredFinance.filter(f => f.type === "income").reduce((sum, f) => sum + f.amount, 0)
-  const totalExpense = filteredFinance.filter(f => f.type === "expense").reduce((sum, f) => sum + f.amount, 0)
+  const totalIncome = filteredFinance.filter(f => f.type === "income").reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
+  const totalExpense = filteredFinance.filter(f => f.type === "expense").reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
   const netProfit = totalIncome - totalExpense
   const totalRepairs = filteredRepairs.length
   const totalSales = filteredSales.length
@@ -122,18 +175,20 @@ export default function ReportsPage() {
     const months: Record<string, { month: string; gelir: number; gider: number; kar: number; tamir: number; satis: number }> = {}
 
     filteredFinance.forEach(f => {
-      const monthKey = format(parseISO(f.date), "yyyy-MM")
-      const monthLabel = format(parseISO(f.date), "MMM yyyy", { locale: tr })
+      const monthKey = safeMonthKey(f.date)
+      const monthLabel = safeMonthLabel(f.date)
+      if (!monthKey || !monthLabel) return
       if (!months[monthKey]) {
         months[monthKey] = { month: monthLabel, gelir: 0, gider: 0, kar: 0, tamir: 0, satis: 0 }
       }
-      if (f.type === "income") months[monthKey].gelir += f.amount
-      else months[monthKey].gider += f.amount
+      if (f.type === "income") months[monthKey].gelir += (Number(f.amount) || 0)
+      else months[monthKey].gider += (Number(f.amount) || 0)
     })
 
     filteredRepairs.forEach(r => {
-      const monthKey = format(parseISO(r.date), "yyyy-MM")
-      const monthLabel = format(parseISO(r.date), "MMM yyyy", { locale: tr })
+      const monthKey = safeMonthKey(r.date)
+      const monthLabel = safeMonthLabel(r.date)
+      if (!monthKey || !monthLabel) return
       if (!months[monthKey]) {
         months[monthKey] = { month: monthLabel, gelir: 0, gider: 0, kar: 0, tamir: 0, satis: 0 }
       }
@@ -141,8 +196,9 @@ export default function ReportsPage() {
     })
 
     filteredSales.forEach(s => {
-      const monthKey = format(parseISO(s.date), "yyyy-MM")
-      const monthLabel = format(parseISO(s.date), "MMM yyyy", { locale: tr })
+      const monthKey = safeMonthKey(s.date)
+      const monthLabel = safeMonthLabel(s.date)
+      if (!monthKey || !monthLabel) return
       if (!months[monthKey]) {
         months[monthKey] = { month: monthLabel, gelir: 0, gider: 0, kar: 0, tamir: 0, satis: 0 }
       }
@@ -160,7 +216,8 @@ export default function ReportsPage() {
   const incomeByCategory = useMemo(() => {
     const cats: Record<string, number> = {}
     filteredFinance.filter(f => f.type === "income").forEach(f => {
-      cats[f.category] = (cats[f.category] || 0) + f.amount
+      const cat = f.category || "Diğer"
+      cats[cat] = (cats[cat] || 0) + (Number(f.amount) || 0)
     })
     return Object.entries(cats).map(([name, value]) => ({ name, value }))
   }, [filteredFinance])
@@ -168,7 +225,8 @@ export default function ReportsPage() {
   const expenseByCategory = useMemo(() => {
     const cats: Record<string, number> = {}
     filteredFinance.filter(f => f.type === "expense").forEach(f => {
-      cats[f.category] = (cats[f.category] || 0) + f.amount
+      const cat = f.category || "Diğer"
+      cats[cat] = (cats[cat] || 0) + (Number(f.amount) || 0)
     })
     return Object.entries(cats).map(([name, value]) => ({ name, value }))
   }, [filteredFinance])
@@ -177,11 +235,12 @@ export default function ReportsPage() {
   const topServices = useMemo(() => {
     const services: Record<string, { name: string; count: number; revenue: number }> = {}
     filteredRepairs.forEach(r => {
-      if (!services[r.serviceType]) {
-        services[r.serviceType] = { name: r.serviceType, count: 0, revenue: 0 }
+      const svc = r.serviceType || "Bilinmiyor"
+      if (!services[svc]) {
+        services[svc] = { name: svc, count: 0, revenue: 0 }
       }
-      services[r.serviceType].count += 1
-      services[r.serviceType].revenue += r.price || 0
+      services[svc].count += 1
+      services[svc].revenue += (Number(r.price) || 0)
     })
     return Object.values(services).sort((a, b) => b.count - a.count).slice(0, 5)
   }, [filteredRepairs])
@@ -189,7 +248,7 @@ export default function ReportsPage() {
   // En değerli müşteriler
   const topCustomers = useMemo(() => {
     return [...customersData]
-      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .sort((a, b) => (Number(b.totalSpent) || 0) - (Number(a.totalSpent) || 0))
       .slice(0, 5)
   }, [customersData])
 
@@ -197,11 +256,12 @@ export default function ReportsPage() {
   const topProducts = useMemo(() => {
     const products: Record<string, { name: string; quantity: number; revenue: number }> = {}
     filteredSales.forEach(s => {
-      if (!products[s.productName]) {
-        products[s.productName] = { name: s.productName, quantity: 0, revenue: 0 }
+      const prod = s.productName || "Bilinmiyor"
+      if (!products[prod]) {
+        products[prod] = { name: prod, quantity: 0, revenue: 0 }
       }
-      products[s.productName].quantity += s.quantity
-      products[s.productName].revenue += s.totalPrice
+      products[prod].quantity += (Number(s.quantity) || 0)
+      products[prod].revenue += (Number(s.totalPrice) || 0)
     })
     return Object.values(products).sort((a, b) => b.quantity - a.quantity).slice(0, 5)
   }, [filteredSales])
@@ -259,7 +319,6 @@ export default function ReportsPage() {
       link.download = `yesiltas-rapor-${format(new Date(), "yyyy-MM-dd")}.csv`
       link.click()
     } else {
-      // PDF formatı - basit metin olarak
       const textContent = JSON.stringify(data, null, 2)
       const blob = new Blob([textContent], { type: "application/json" })
       const link = document.createElement("a")
@@ -433,20 +492,24 @@ export default function ReportsPage() {
                 <CardTitle className="text-white">Aylık Gelir - Gider - Kâr</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="month" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px" }}
-                      labelStyle={{ color: "#e2e8f0" }}
-                    />
-                    <Bar dataKey="gelir" fill="#10b981" name="Gelir" />
-                    <Bar dataKey="gider" fill="#ef4444" name="Gider" />
-                    <Bar dataKey="kar" fill="#3b82f6" name="Kâr" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {monthlyData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="month" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px" }}
+                        labelStyle={{ color: "#e2e8f0" }}
+                      />
+                      <Bar dataKey="gelir" fill="#10b981" name="Gelir" />
+                      <Bar dataKey="gider" fill="#ef4444" name="Gider" />
+                      <Bar dataKey="kar" fill="#3b82f6" name="Kâr" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-slate-400 text-center py-8">Bu dönemde veri bulunmuyor.</p>
+                )}
               </CardContent>
             </Card>
 
@@ -457,25 +520,29 @@ export default function ReportsPage() {
                   <CardTitle className="text-white">Gelir Kategorileri</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={incomeByCategory}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: %${(percent * 100).toFixed(0)}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {incomeByCategory.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {incomeByCategory.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={incomeByCategory}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: %${(percent * 100).toFixed(0)}`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {incomeByCategory.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-slate-400 text-center py-8">Gelir verisi bulunmuyor.</p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -485,25 +552,29 @@ export default function ReportsPage() {
                   <CardTitle className="text-white">Gider Kategorileri</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={expenseByCategory}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: %${(percent * 100).toFixed(0)}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {expenseByCategory.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {expenseByCategory.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={expenseByCategory}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: %${(percent * 100).toFixed(0)}`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {expenseByCategory.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-slate-400 text-center py-8">Gider verisi bulunmuyor.</p>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -546,15 +617,19 @@ export default function ReportsPage() {
                 <CardTitle className="text-white">Aylık Tamir İstatistikleri</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="month" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
-                    <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
-                    <Bar dataKey="tamir" fill="#3b82f6" name="Tamir Sayısı" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {monthlyData.some(m => m.tamir > 0) ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="month" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
+                      <Bar dataKey="tamir" fill="#3b82f6" name="Tamir Sayısı" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-slate-400 text-center py-8">Tamir verisi bulunmuyor.</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -576,14 +651,14 @@ export default function ReportsPage() {
                         <div className="flex items-center gap-4">
                           <Badge className="bg-blue-600">#{index + 1}</Badge>
                           <div>
-                            <p className="font-medium text-white">{customer.name}</p>
-                            <p className="text-sm text-slate-400">{customer.visitCount} ziyaret</p>
+                            <p className="font-medium text-white">{customer.name || "İsimsiz"}</p>
+                            <p className="text-sm text-slate-400">{(customer.visitCount || 0)} ziyaret</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-emerald-400 font-bold">₺{customer.totalSpent.toLocaleString("tr-TR")}</p>
+                          <p className="text-emerald-400 font-bold">₺{(Number(customer.totalSpent) || 0).toLocaleString("tr-TR")}</p>
                           <p className="text-xs text-slate-500">
-                            Son ziyaret: {customer.lastVisit ? format(parseISO(customer.lastVisit), "dd.MM.yyyy") : "-"}
+                            Son ziyaret: {safeFormatDate(customer.lastVisit, "dd.MM.yyyy")}
                           </p>
                         </div>
                       </div>
@@ -633,15 +708,19 @@ export default function ReportsPage() {
                 <CardTitle className="text-white">Aylık Satış İstatistikleri</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="month" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
-                    <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
-                    <Bar dataKey="satis" fill="#10b981" name="Satış Sayısı" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {monthlyData.some(m => m.satis > 0) ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="month" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155" }} />
+                      <Bar dataKey="satis" fill="#10b981" name="Satış Sayısı" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-slate-400 text-center py-8">Satış verisi bulunmuyor.</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
