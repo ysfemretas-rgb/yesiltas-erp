@@ -103,43 +103,11 @@ function normalizeCustomer(raw: any): Customer {
   }
 }
 
-function usePermissionGuard(requiredPermission: string) {
-  const router = useRouter()
+export default function CustomersPage() {
+
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
 
-  useEffect(() => {
-    const userData = localStorage.getItem("yt_user")
-    if (!userData) { router.push("/"); return }
-    try {
-      const user = JSON.parse(userData)
-      if (user.role === "Yönetici" || (user.permissions || []).includes(requiredPermission)) {
-        setAuthorized(true)
-      } else {
-        router.push("/dashboard")
-      }
-    } catch { router.push("/") }
-    setChecking(false)
-  }, [router, requiredPermission])
-
-  return { authorized, checking }
-}
-
-export default function CustomersPage() {
-  const { authorized, checking } = usePermissionGuard("Müşteriler")
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!authorized) return null
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -164,6 +132,27 @@ export default function CustomersPage() {
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
   // Load data from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem("yt_user")
+    if (!userData) {
+      if (typeof window !== "undefined") window.location.href = "/"
+      setChecking(false)
+      return
+    }
+    try {
+      const user = JSON.parse(userData)
+      if (user.role === "Yönetici" || (user.permissions || []).includes("Müşteriler")) {
+        setAuthorized(true)
+      } else {
+        if (typeof window !== "undefined") window.location.href = "/dashboard"
+      }
+    } catch {
+      if (typeof window !== "undefined") window.location.href = "/"
+    }
+    setChecking(false)
+  }, [])
+
+
   useEffect(() => {
     if (typeof window === "undefined") return
 
@@ -539,6 +528,20 @@ export default function CustomersPage() {
       </div>
     )
   }
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) return null
+
 
   return (
     <div className="space-y-6">
