@@ -133,14 +133,17 @@ export default function SuppliersPage() {
   }
 
   const handleEditSupplier = () => {
-    if (!editingSupplier || !newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
+    if (!editingSupplier) return
+    const name = newSupplier.name?.trim()
+    const contactPerson = newSupplier.contactPerson?.trim()
+    if (!name || !contactPerson) {
       alert("Lütfen firma adı ve yetkili kişi alanlarını doldurun!")
       return
     }
     setSuppliers(suppliers.map(s => s.id === editingSupplier.id ? {
       ...s,
-      name: newSupplier.name.trim(),
-      contactPerson: newSupplier.contactPerson.trim(),
+      name: name,
+      contactPerson: contactPerson,
       phone: newSupplier.phone?.trim() || s.phone,
       email: newSupplier.email?.trim() || s.email,
       address: newSupplier.address?.trim() || s.address,
