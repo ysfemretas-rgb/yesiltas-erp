@@ -1,5 +1,42 @@
 "use client"
 
+function usePermissionGuard(requiredPermission: string) {
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      setChecking(false)
+      return
+    }
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+        setChecking(false)
+        return
+      }
+      if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes(requiredPermission)) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [requiredPermission])
+
+  return { authorized, checking }
+}
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +58,6 @@ import {
 } from "@/components/ui/select"
 import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { usePermissionGuard } from "@/components/PermissionGuard"
 
 interface Transaction {
   id: number
