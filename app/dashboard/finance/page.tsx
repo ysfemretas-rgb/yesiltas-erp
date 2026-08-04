@@ -80,30 +80,22 @@ export default function FinancePage() {
     }
   }, [authorized, checking, router])
 
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
+
   const [filterType, setFilterType] = useState<string>("all")
+
   const [filterCategory, setFilterCategory] = useState<string>("all")
+
   const [filterSource, setFilterSource] = useState<string>("all")
+
   const [searchTerm, setSearchTerm] = useState("")
+
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+
   const [isEditOpen, setIsEditOpen] = useState(false)
+
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+
   const [isLoaded, setIsLoaded] = useState(false)
 
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
@@ -113,7 +105,6 @@ export default function FinancePage() {
     source: "manual",
   })
 
-  // Load from localStorage
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
@@ -130,110 +121,25 @@ export default function FinancePage() {
     setIsLoaded(true)
   }, [])
 
-  // Save to localStorage
   useEffect(() => {
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_finance", JSON.stringify(transactions))
   }, [transactions, isLoaded])
 
-  const filteredTransactions = transactions.filter((t) => {
-    const matchesType = filterType === "all" || t.type === filterType
-    const matchesCategory = filterCategory === "all" || t.category === filterCategory
-    const matchesSource = filterSource === "all" || t.source === filterSource
-    const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.customer && t.customer.toLowerCase().includes(searchTerm.toLowerCase()))
-    return matchesType && matchesCategory && matchesSource && matchesSearch
-  })
-
-  const todayStr = new Date().toISOString().split("T")[0]
-  const todayIncome = transactions.filter(t => t.type === "income" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
-  const todayExpense = transactions.filter(t => t.type === "expense" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
-  const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
-  const totalExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-  const balance = totalIncome - totalExpense
-
-  const incomeByCategory = transactions
-    .filter(t => t.type === "income")
-    .reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.amount
-      return acc
-    }, {} as Record<string, number>)
-
-  const expenseByCategory = transactions
-    .filter(t => t.type === "expense")
-    .reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.amount
-      return acc
-    }, {} as Record<string, number>)
-
-  const handleAddTransaction = () => {
-    if (!newTransaction.description || !newTransaction.amount) {
-      alert("Lütfen açıklama ve tutar girin!")
-      return
-    }
-    const transaction: Transaction = {
-      id: Date.now(),
-      description: newTransaction.description,
-      amount: Number(newTransaction.amount),
-      type: newTransaction.type as "income" | "expense",
-      category: newTransaction.category || "Diğer",
-      date: newTransaction.date || new Date().toISOString().split("T")[0],
-      customer: newTransaction.customer,
-      source: "manual",
-    }
-    setTransactions([transaction, ...transactions])
-    setNewTransaction({
-      type: "income",
-      category: "Tamir Geliri",
-      date: new Date().toISOString().split("T")[0],
-      source: "manual",
-    })
-    setIsDialogOpen(false)
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
   }
 
-  const handleUpdateTransaction = () => {
-    if (!editingTransaction) return
-    if (!editingTransaction.description || !editingTransaction.amount) {
-      alert("Lütfen açıklama ve tutar girin!")
-      return
-    }
-    setTransactions(transactions.map(t =>
-      t.id === editingTransaction.id ? editingTransaction : t
-    ))
-    setIsEditOpen(false)
-    setEditingTransaction(null)
-  }
-
-  const handleDeleteTransaction = (id: number) => {
-    const t = transactions.find(tx => tx.id === id)
-    if (!t) return
-    if (!confirm(`\u{26A0} *${t.description}* işlemini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setTransactions(transactions.filter(t => t.id !== id))
-  }
-
-  const openEditDialog = (transaction: Transaction) => {
-    setEditingTransaction({ ...transaction })
-    setIsEditOpen(true)
-  }
-
-  const getSourceIcon = (source: string) => {
-    switch (source) {
-      case "repair": return <Wrench className="h-3 w-3 mr-1" />
-      case "sale": return <ShoppingCart className="h-3 w-3 mr-1" />
-      default: return <HandCoins className="h-3 w-3 mr-1" />
-    }
-  }
-
-  const getSourceLabel = (source: string) => {
-    switch (source) {
-      case "repair": return "Teknik Servis"
-      case "sale": return "Satışlar"
-      default: return "Manuel"
-    }
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
   }
 
   if (!isLoaded) {
@@ -243,6 +149,7 @@ export default function FinancePage() {
       </div>
     )
   }
+
 
   return (
     <div className="space-y-6">
