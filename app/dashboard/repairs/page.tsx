@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { usePermissionGuard } from "@/hooks/usePermissionGuard"
+import { usePermissionGuard } from "@/components/PermissionGuard"
 
 interface InventoryItem {
   id: number

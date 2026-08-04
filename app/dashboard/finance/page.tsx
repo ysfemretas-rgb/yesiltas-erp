@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { usePermissionGuard } from "@/hooks/usePermissionGuard"
+import { usePermissionGuard } from "@/components/PermissionGuard"
 
 interface Transaction {
   id: number
