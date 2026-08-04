@@ -8,8 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Eye, EyeOff } from "lucide-react"
+import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Eye, EyeOff, Check } from "lucide-react"
 
 interface StaffMember {
   id: number
@@ -55,6 +54,39 @@ const getInitialStaff = (): StaffMember[] => [
   { id: 3, name: "Ayşe Demir", email: "ayse@yesiltas.com", phone: "0555 345 6789", role: "Muhasebeci", department: "Muhasebe", joinDate: "2023-06-01", status: "active", permissions: ["Finans", "Raporlar"], salary: 22000 },
   { id: 4, name: "Fatma Şahin", email: "fatma@yesiltas.com", phone: "0555 456 7890", role: "Yönetici", department: "Yönetim", joinDate: "2022-01-10", status: "active", permissions: ALL_PERMISSIONS.map(p => p.key), salary: 45000 },
 ]
+
+// Özel Checkbox component
+function CustomCheckbox({ 
+  id, 
+  checked, 
+  onChange, 
+  label 
+}: { 
+  id: string
+  checked: boolean
+  onChange: () => void
+  label: string 
+}) {
+  return (
+    <div 
+      className="flex items-center space-x-2 cursor-pointer"
+      onClick={onChange}
+    >
+      <div
+        className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+          checked 
+            ? "bg-blue-600 border-blue-600" 
+            : "bg-slate-700 border-slate-500 hover:border-slate-400"
+        }`}
+      >
+        {checked && <Check className="w-3 h-3 text-white" />}
+      </div>
+      <label htmlFor={id} className="text-sm text-slate-300 cursor-pointer select-none">
+        {label}
+      </label>
+    </div>
+  )
+}
 
 export default function StaffPage() {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -362,16 +394,13 @@ export default function StaffPage() {
                   <label className="text-sm font-medium text-slate-300">Erişim İzinleri</label>
                   <div className="grid grid-cols-2 gap-2 p-3 bg-slate-700/50 rounded-lg">
                     {ALL_PERMISSIONS.map((perm) => (
-                      <div key={perm.key} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`perm-new-${perm.key}`}
-                          checked={(newMember.permissions || []).includes(perm.key)}
-                          onCheckedChange={() => togglePermission(perm.key, true)}
-                        />
-                        <label htmlFor={`perm-new-${perm.key}`} className="text-sm text-slate-300 cursor-pointer">
-                          {perm.label}
-                        </label>
-                      </div>
+                      <CustomCheckbox
+                        key={perm.key}
+                        id={`perm-new-${perm.key}`}
+                        checked={(newMember.permissions || []).includes(perm.key)}
+                        onChange={() => togglePermission(perm.key, true)}
+                        label={perm.label}
+                      />
                     ))}
                   </div>
                 </div>
@@ -660,16 +689,13 @@ export default function StaffPage() {
                   <label className="text-sm font-medium text-slate-300">Erişim İzinleri</label>
                   <div className="grid grid-cols-2 gap-2 p-3 bg-slate-700/50 rounded-lg">
                     {ALL_PERMISSIONS.map((perm) => (
-                      <div key={perm.key} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`perm-edit-${perm.key}`}
-                          checked={(editingMember.permissions || []).includes(perm.key)}
-                          onCheckedChange={() => togglePermission(perm.key, false)}
-                        />
-                        <label htmlFor={`perm-edit-${perm.key}`} className="text-sm text-slate-300 cursor-pointer">
-                          {perm.label}
-                        </label>
-                      </div>
+                      <CustomCheckbox
+                        key={perm.key}
+                        id={`perm-edit-${perm.key}`}
+                        checked={(editingMember.permissions || []).includes(perm.key)}
+                        onChange={() => togglePermission(perm.key, false)}
+                        label={perm.label}
+                      />
                     ))}
                   </div>
                 </div>
