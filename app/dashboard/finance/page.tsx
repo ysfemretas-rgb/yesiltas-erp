@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowUpDown, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, Plus, Trash2, Edit, Save, X, Download } from "lucide-react"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { useToast } from "@/hooks/use-toast"
 
 interface Transaction {
   id: string
@@ -66,8 +65,6 @@ export default function FinancePage() {
     categoryBreakdown: [],
   })
   const [isLoaded, setIsLoaded] = useState(false)
-
-  const { toast } = useToast()
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -190,11 +187,7 @@ export default function FinancePage() {
 
   const handleAddTransaction = () => {
     if (!newTransaction.category || !newTransaction.description || !newTransaction.amount) {
-      toast({
-        title: "Hata",
-        description: "Lütfen tüm alanları doldurun.",
-        variant: "destructive",
-      })
+      console.error("Hata: Lütfen tüm alanları doldurun.")
       return
     }
 
@@ -217,10 +210,7 @@ export default function FinancePage() {
     })
     setIsAddOpen(false)
 
-    toast({
-      title: "Başarılı",
-      description: "İşlem başarıyla eklendi.",
-    })
+    console.log("Başarılı: İşlem başarıyla eklendi.")
   }
 
   const handleUpdateTransaction = () => {
@@ -230,19 +220,13 @@ export default function FinancePage() {
     setIsEditOpen(false)
     setEditingTransaction(null)
 
-    toast({
-      title: "Başarılı",
-      description: "İşlem başarıyla güncellendi.",
-    })
+    console.log("Başarılı: İşlem başarıyla güncellendi.")
   }
 
   const handleDeleteTransaction = (id: string) => {
     setTransactions(transactions.filter((t) => t.id !== id))
 
-    toast({
-      title: "Başarılı",
-      description: "İşlem başarıyla silindi.",
-    })
+    console.log("Başarılı: İşlem başarıyla silindi.")
   }
 
   const filteredTransactions = transactions.filter((t) => {
@@ -270,10 +254,7 @@ export default function FinancePage() {
     a.click()
     window.URL.revokeObjectURL(url)
 
-    toast({
-      title: "Başarılı",
-      description: "Rapor indirildi.",
-    })
+    console.log("Başarılı: Rapor indirildi.")
   }
 
   return (
