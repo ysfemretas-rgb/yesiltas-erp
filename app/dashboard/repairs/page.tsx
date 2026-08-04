@@ -1,42 +1,5 @@
 "use client"
 
-function usePermissionGuard(requiredPermission: string) {
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      setChecking(false)
-      return
-    }
-    try {
-      const userStr = localStorage.getItem("yt_user")
-      if (!userStr) {
-        setAuthorized(false)
-        setChecking(false)
-        return
-      }
-      const user = JSON.parse(userStr)
-      if (user.role === "admin") {
-        setAuthorized(true)
-        setChecking(false)
-        return
-      }
-      if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes(requiredPermission)) {
-        setAuthorized(true)
-      } else {
-        setAuthorized(false)
-      }
-    } catch (e) {
-      console.error("Permission guard error:", e)
-      setAuthorized(false)
-    }
-    setChecking(false)
-  }, [requiredPermission])
-
-  return { authorized, checking }
-}
-
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -195,7 +158,38 @@ function normalizeCustomer(raw: any): Customer {
 
 export default function RepairsPage() {
   const router = useRouter()
-  const { authorized, checking } = usePermissionGuard("Tamir")
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Tamir")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
 
   if (checking) {
     return (
@@ -206,9 +200,6 @@ export default function RepairsPage() {
   }
 
   if (!authorized) {
-    if (typeof window !== "undefined") {
-      router.push("/dashboard")
-    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>

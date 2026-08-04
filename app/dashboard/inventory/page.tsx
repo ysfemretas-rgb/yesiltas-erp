@@ -1,42 +1,5 @@
 "use client"
 
-function usePermissionGuard(requiredPermission: string) {
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      setChecking(false)
-      return
-    }
-    try {
-      const userStr = localStorage.getItem("yt_user")
-      if (!userStr) {
-        setAuthorized(false)
-        setChecking(false)
-        return
-      }
-      const user = JSON.parse(userStr)
-      if (user.role === "admin") {
-        setAuthorized(true)
-        setChecking(false)
-        return
-      }
-      if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes(requiredPermission)) {
-        setAuthorized(true)
-      } else {
-        setAuthorized(false)
-      }
-    } catch (e) {
-      console.error("Permission guard error:", e)
-      setAuthorized(false)
-    }
-    setChecking(false)
-  }, [requiredPermission])
-
-  return { authorized, checking }
-}
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -103,7 +66,38 @@ function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "US
 
 export default function InventoryPage() {
   const router = useRouter()
-  const { authorized, checking } = usePermissionGuard("Envanter")
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Envanter")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
 
   if (checking) {
     return (
@@ -114,9 +108,6 @@ export default function InventoryPage() {
   }
 
   if (!authorized) {
-    if (typeof window !== "undefined") {
-      router.push("/dashboard")
-    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
