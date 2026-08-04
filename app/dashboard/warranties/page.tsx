@@ -1,26 +1,26 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "/components/ui/card"
+import { Button } from "/components/ui/button"
+import { Input } from "/components/ui/input"
+import { Badge } from "/components/ui/badge"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
+} from "/components/ui/dialog"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Plus, Shield, AlertTriangle, Search, Calendar, Clock } from "lucide-react"
-import { format, differenceInDays, parseISO } from "date-fns"
+} from "/components/ui/select"
+import { Plus, Shield, AlertTriangle, Search, Calendar, Clock, Pencil, Trash2, Save, MessageCircle } from "lucide-react"
+import { format, differenceInDays, parseISO, addMonths } from "date-fns"
 import { tr } from "date-fns/locale"
 
 interface Warranty {
@@ -36,10 +36,10 @@ interface Warranty {
 }
 
 const initialWarranties: Warranty[] = [
-  { id: 1, deviceName: "iPhone 14 Pro", customerName: "Ahmet Yilmaz", customerPhone: "0555 123 4567", warrantyType: "Ekran Degisimi", startDate: "2024-01-15", endDate: "2024-07-15", status: "active", notes: "Orijinal parca kullanildi" },
-  { id: 2, deviceName: "Samsung S23", customerName: "Mehmet Kaya", customerPhone: "0555 234 5678", warrantyType: "Batarya Degisimi", startDate: "2023-08-01", endDate: "2024-02-01", status: "expired", notes: "" },
-  { id: 3, deviceName: "iPad Air 5", customerName: "Ayse Demir", customerPhone: "0555 345 6789", warrantyType: "Ekran Degisimi", startDate: "2024-06-20", endDate: "2024-12-20", status: "active", notes: "" },
-  { id: 4, deviceName: "MacBook Air M2", customerName: "Fatma Sahin", customerPhone: "0555 456 7890", warrantyType: "Anakart Tamir", startDate: "2024-01-10", endDate: "2024-07-10", status: "expiring", notes: "Anakart degisimi yapildi" },
+  { id: 1, deviceName: "iPhone 14 Pro", customerName: "Ahmet Yılmaz", customerPhone: "0555 123 4567", warrantyType: "Ekran Değişimi", startDate: "2024-01-15", endDate: "2024-07-15", status: "active", notes: "Orijinal parça kullanıldı" },
+  { id: 2, deviceName: "Samsung S23", customerName: "Mehmet Kaya", customerPhone: "0555 234 5678", warrantyType: "Batarya Değişimi", startDate: "2023-08-01", endDate: "2024-02-01", status: "expired", notes: "" },
+  { id: 3, deviceName: "iPad Air 5", customerName: "Ayşe Demir", customerPhone: "0555 345 6789", warrantyType: "Ekran Değişimi", startDate: "2024-06-20", endDate: "2024-12-20", status: "active", notes: "" },
+  { id: 4, deviceName: "MacBook Air M2", customerName: "Fatma Şahin", customerPhone: "0555 456 7890", warrantyType: "Anakart Tamiri", startDate: "2024-01-10", endDate: "2024-07-10", status: "expiring", notes: "Anakart değişimi yapıldı" },
 ]
 
 export default function WarrantiesPage() {
@@ -47,11 +47,38 @@ export default function WarrantiesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+
   const [newWarranty, setNewWarranty] = useState<Partial<Warranty>>({
-    warrantyType: "Ekran Degisimi",
+    warrantyType: "Ekran Değişimi",
     status: "active",
     startDate: new Date().toISOString().split("T")[0],
   })
+
+  // Load from localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const saved = localStorage.getItem("yt_warranties")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setWarranties(parsed)
+        }
+      }
+    } catch (e) {
+      console.error("Load error:", e)
+    }
+    setIsLoaded(true)
+  }, [])
+
+  // Save to localStorage
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    localStorage.setItem("yt_warranties", JSON.stringify(warranties))
+  }, [warranties, isLoaded])
 
   const getDaysRemaining = (endDate: string) => {
     const days = differenceInDays(parseISO(endDate), new Date())
@@ -60,14 +87,16 @@ export default function WarrantiesPage() {
 
   const getStatusBadge = (warranty: Warranty) => {
     const days = getDaysRemaining(warranty.endDate)
-    if (days < 0) return <Badge className="bg-red-900/50 text-red-300 border-red-700">Suresi Doldu</Badge>
-    if (days <= 30) return <Badge className="bg-yellow-900/50 text-yellow-300 border-yellow-700">Bitiyor ({days} gun)</Badge>
-    return <Badge className="bg-green-900/50 text-green-300 border-green-700">Aktif ({days} gun)</Badge>
+    if (days < 0) return <Badge className="bg-red-900/50 text-red-300 border-red-700">Süresi Doldu</Badge>
+    if (days <= 30) return <Badge className="bg-yellow-900/50 text-yellow-300 border-yellow-700">Bitiyor ({days} gün)</Badge>
+    return <Badge className="bg-emerald-900/50 text-emerald-300 border-emerald-700">Aktif ({days} gün)</Badge>
   }
 
   const filteredWarranties = warranties.filter((w) => {
-    const matchesSearch = w.deviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      w.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+    const search = searchTerm.toLowerCase()
+    const matchesSearch = w.deviceName.toLowerCase().includes(search) ||
+      w.customerName.toLowerCase().includes(search) ||
+      w.customerPhone.includes(search)
     const matchesStatus = filterStatus === "all" || w.status === filterStatus
     return matchesSearch && matchesStatus
   })
@@ -77,7 +106,10 @@ export default function WarrantiesPage() {
   const expiredCount = warranties.filter(w => w.status === "expired").length
 
   const handleAddWarranty = () => {
-    if (!newWarranty.deviceName || !newWarranty.customerName) return
+    if (!newWarranty.deviceName || !newWarranty.customerName) {
+      alert("Lütfen cihaz adı ve müşteri adı girin!")
+      return
+    }
     const warranty: Warranty = {
       id: Date.now(),
       deviceName: newWarranty.deviceName,
@@ -90,8 +122,72 @@ export default function WarrantiesPage() {
       notes: newWarranty.notes || "",
     }
     setWarranties([warranty, ...warranties])
-    setNewWarranty({ warrantyType: "Ekran Degisimi", status: "active", startDate: new Date().toISOString().split("T")[0] })
+    setNewWarranty({ warrantyType: "Ekran Değişimi", status: "active", startDate: new Date().toISOString().split("T")[0] })
     setIsDialogOpen(false)
+  }
+
+  const handleUpdateWarranty = () => {
+    if (!editingWarranty) return
+    if (!editingWarranty.deviceName || !editingWarranty.customerName) {
+      alert("Lütfen cihaz adı ve müşteri adı girin!")
+      return
+    }
+    setWarranties(warranties.map(w =>
+      w.id === editingWarranty.id ? editingWarranty : w
+    ))
+    setIsEditOpen(false)
+    setEditingWarranty(null)
+  }
+
+  const handleDeleteWarranty = (id: number) => {
+    const w = warranties.find(item => item.id === id)
+    if (!w) return
+    if (!confirm(`\u{26A0} *${w.deviceName}* garanti kaydını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
+    setWarranties(warranties.filter(item => item.id !== id))
+  }
+
+  const openEditDialog = (warranty: Warranty) => {
+    setEditingWarranty({ ...warranty })
+    setIsEditOpen(true)
+  }
+
+  const sendWhatsApp = (warranty: Warranty) => {
+    const cleanPhone = warranty.customerPhone.replace(/\D/g, "")
+    const days = getDaysRemaining(warranty.endDate)
+    const dateStr = format(parseISO(warranty.endDate), "dd.MM.yyyy", { locale: tr })
+
+    let message = `\u{1F44B} Merhaba *${warranty.customerName}*,\n\n`
+    message += `\u{2705} *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.\n\n`
+    message += `\u{1F4C5} *${warranty.deviceName}* cihazınızın *${warranty.warrantyType}* garantisi *${dateStr}* tarihinde `
+    if (days < 0) {
+      message += `*sona ermiştir*.\n\n`
+      message += `\u{26A0} Garanti kapsamında bir sorun yaşıyorsanız lütfen bizimle iletişime geçiniz.\n`
+    } else if (days <= 30) {
+      message += `*sona erecektir*.\n\n`
+      message += `\u{23F0} Garanti süreniz dolmadan herhangi bir sorun varsa lütfen başvurunuz.\n`
+    } else {
+      message += `*sona erecektir*.\n\n`
+      message += `\u{2705} Garantiniz aktif durumdadır. Herhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.\n`
+    }
+    message += `\n\u{1F3EA} *Yeşiltaş Teknoloji*\n`
+    message += `\u{1F4DE} Bizi tercih ettiğiniz için teşekkür ederiz! \u{1F64F}`
+
+    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+  }
+
+  // Auto-calculate end date from start date + warranty duration
+  const autoCalculateEndDate = (startDate: string, months: number) => {
+    if (!startDate) return ""
+    const end = addMonths(parseISO(startDate), months)
+    return end.toISOString().split("T")[0]
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yükleniyor...</div>
+      </div>
+    )
   }
 
   return (
@@ -100,33 +196,33 @@ export default function WarrantiesPage() {
         <h1 className="text-3xl font-bold tracking-tight text-white">Garanti Takibi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="mr-2 h-4 w-4" />
               Yeni Garanti
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+          <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-white">Yeni Garanti Kaydi</DialogTitle>
+              <DialogTitle className="text-white">Yeni Garanti Kaydı</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Cihaz Adi</label>
+                  <label className="text-sm font-medium text-slate-300">Cihaz Adı <span className="text-red-400">*</span></label>
                   <Input
                     value={newWarranty.deviceName || ""}
                     onChange={(e) => setNewWarranty({ ...newWarranty, deviceName: e.target.value })}
                     placeholder="iPhone 14 Pro"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Musteri Adi</label>
+                  <label className="text-sm font-medium text-slate-300">Müşteri Adı <span className="text-red-400">*</span></label>
                   <Input
                     value={newWarranty.customerName || ""}
                     onChange={(e) => setNewWarranty({ ...newWarranty, customerName: e.target.value })}
-                    placeholder="Ahmet Yilmaz"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    placeholder="Ahmet Yılmaz"
+                    className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
               </div>
@@ -137,7 +233,7 @@ export default function WarrantiesPage() {
                     value={newWarranty.customerPhone || ""}
                     onChange={(e) => setNewWarranty({ ...newWarranty, customerPhone: e.target.value })}
                     placeholder="0555 123 4567"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
                 <div className="space-y-2">
@@ -146,13 +242,13 @@ export default function WarrantiesPage() {
                     value={newWarranty.warrantyType}
                     onValueChange={(value) => setNewWarranty({ ...newWarranty, warrantyType: value })}
                   >
-                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="Ekran Degisimi" className="text-white">Ekran Degisimi</SelectItem>
-                      <SelectItem value="Batarya Degisimi" className="text-white">Batarya Degisimi</SelectItem>
-                      <SelectItem value="Anakart Tamir" className="text-white">Anakart Tamir</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="Ekran Değişimi" className="text-white">Ekran Değişimi</SelectItem>
+                      <SelectItem value="Batarya Değişimi" className="text-white">Batarya Değişimi</SelectItem>
+                      <SelectItem value="Anakart Tamiri" className="text-white">Anakart Tamiri</SelectItem>
                       <SelectItem value="Arka Kapak" className="text-white">Arka Kapak</SelectItem>
                       <SelectItem value="Genel" className="text-white">Genel</SelectItem>
                     </SelectContent>
@@ -161,22 +257,32 @@ export default function WarrantiesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Baslangic Tarihi</label>
+                  <label className="text-sm font-medium text-slate-300">Başlangıç Tarihi</label>
                   <Input
                     type="date"
                     value={newWarranty.startDate}
-                    onChange={(e) => setNewWarranty({ ...newWarranty, startDate: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white"
+                    onChange={(e) => {
+                      const start = e.target.value
+                      setNewWarranty({
+                        ...newWarranty,
+                        startDate: start,
+                        endDate: autoCalculateEndDate(start, 6)
+                      })
+                    }}
+                    className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Bitis Tarihi</label>
+                  <label className="text-sm font-medium text-slate-300">Bitiş Tarihi</label>
                   <Input
                     type="date"
                     value={newWarranty.endDate || ""}
                     onChange={(e) => setNewWarranty({ ...newWarranty, endDate: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-slate-800 border-slate-600 text-white"
                   />
+                  <div className="text-xs text-slate-500">
+                    Başlangıç tarihinden otomatik +6 ay
+                  </div>
                 </div>
               </div>
               <div className="space-y-2">
@@ -185,11 +291,11 @@ export default function WarrantiesPage() {
                   value={newWarranty.notes || ""}
                   onChange={(e) => setNewWarranty({ ...newWarranty, notes: e.target.value })}
                   placeholder="Ek notlar..."
-                  className="bg-slate-800 border-slate-700 text-white"
+                  className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
-              <Button onClick={handleAddWarranty} className="w-full">
-                Kaydet
+              <Button onClick={handleAddWarranty} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Save className="mr-2 h-4 w-4" />Kaydet
               </Button>
             </div>
           </DialogContent>
@@ -197,54 +303,57 @@ export default function WarrantiesPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Toplam Garanti</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-400">Toplam Garanti</CardTitle>
             <Shield className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">{warranties.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Aktif</CardTitle>
-            <Shield className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-slate-400">Aktif</CardTitle>
+            <Shield className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{activeCount}</div>
+            <div className="text-2xl font-bold text-emerald-400">{activeCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Bitmek Uzere</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-400">Bitmek Üzere</CardTitle>
             <Clock className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">{expiringCount}</div>
+            <div className="text-2xl font-bold text-yellow-400">{expiringCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Suresi Dolmus</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-400">Süresi Dolmuş</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{expiredCount}</div>
+            <div className="text-2xl font-bold text-red-400">{expiredCount}</div>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="bg-slate-900 border-slate-800">
+      <Card className="bg-slate-900 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Garanti Listesi</CardTitle>
+          <CardTitle className="text-white flex items-center justify-between">
+            <span>Garanti Listesi</span>
+            <span className="text-sm text-slate-400">{filteredWarranties.length} kayıt</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-slate-500" />
               <Input
-                placeholder="Cihaz veya musteri ara..."
+                placeholder="Cihaz, müşteri veya telefon ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
@@ -255,26 +364,32 @@ export default function WarrantiesPage() {
                 <SelectValue placeholder="Durum" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-700">
-                <SelectItem value="all" className="text-white">Tumu</SelectItem>
+                <SelectItem value="all" className="text-white">Tümü</SelectItem>
                 <SelectItem value="active" className="text-white">Aktif</SelectItem>
-                <SelectItem value="expiring" className="text-white">Bitmek Uzere</SelectItem>
-                <SelectItem value="expired" className="text-white">Suresi Dolmus</SelectItem>
+                <SelectItem value="expiring" className="text-white">Bitmek Üzere</SelectItem>
+                <SelectItem value="expired" className="text-white">Süresi Dolmuş</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-3">
+            {filteredWarranties.length === 0 && (
+              <div className="text-center text-slate-500 py-8">
+                <Shield className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Garanti kaydı bulunamadı.</p>
+              </div>
+            )}
             {filteredWarranties.map((warranty) => (
               <div key={warranty.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 hover:bg-slate-800 transition-colors">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-white text-lg">{warranty.deviceName}</span>
                       {getStatusBadge(warranty)}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
                       <div>
-                        <span className="font-medium text-slate-300">Musteri:</span> {warranty.customerName}
+                        <span className="font-medium text-slate-300">Müşteri:</span> {warranty.customerName}
                       </div>
                       <div>
                         <span className="font-medium text-slate-300">Telefon:</span> {warranty.customerPhone}
@@ -293,12 +408,129 @@ export default function WarrantiesPage() {
                       </div>
                     )}
                   </div>
+                  <div className="flex gap-1 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => sendWhatsApp(warranty)}
+                      className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                      title="WhatsApp ile bilgilendir"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditDialog(warranty)}
+                      className="h-8 w-8 p-0 text-slate-400 hover:text-white"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteWarranty(warranty.id)}
+                      className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Garanti Düzenle</DialogTitle>
+          </DialogHeader>
+          {editingWarranty && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Cihaz Adı <span className="text-red-400">*</span></label>
+                  <Input
+                    value={editingWarranty.deviceName}
+                    onChange={(e) => setEditingWarranty({ ...editingWarranty, deviceName: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Müşteri Adı <span className="text-red-400">*</span></label>
+                  <Input
+                    value={editingWarranty.customerName}
+                    onChange={(e) => setEditingWarranty({ ...editingWarranty, customerName: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Telefon</label>
+                  <Input
+                    value={editingWarranty.customerPhone}
+                    onChange={(e) => setEditingWarranty({ ...editingWarranty, customerPhone: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Garanti Tipi</label>
+                  <Select
+                    value={editingWarranty.warrantyType}
+                    onValueChange={(value) => setEditingWarranty({ ...editingWarranty, warrantyType: value })}
+                  >
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="Ekran Değişimi" className="text-white">Ekran Değişimi</SelectItem>
+                      <SelectItem value="Batarya Değişimi" className="text-white">Batarya Değişimi</SelectItem>
+                      <SelectItem value="Anakart Tamiri" className="text-white">Anakart Tamiri</SelectItem>
+                      <SelectItem value="Arka Kapak" className="text-white">Arka Kapak</SelectItem>
+                      <SelectItem value="Genel" className="text-white">Genel</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Başlangıç Tarihi</label>
+                  <Input
+                    type="date"
+                    value={editingWarranty.startDate}
+                    onChange={(e) => setEditingWarranty({ ...editingWarranty, startDate: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Bitiş Tarihi</label>
+                  <Input
+                    type="date"
+                    value={editingWarranty.endDate}
+                    onChange={(e) => setEditingWarranty({ ...editingWarranty, endDate: e.target.value })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Notlar</label>
+                <Input
+                  value={editingWarranty.notes}
+                  onChange={(e) => setEditingWarranty({ ...editingWarranty, notes: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <Button onClick={handleUpdateWarranty} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Save className="mr-2 h-4 w-4" />Güncelle
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
