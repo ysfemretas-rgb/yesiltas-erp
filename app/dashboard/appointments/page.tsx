@@ -59,30 +59,30 @@ interface Appointment {
 
 const services = ["Ekran Değişimi", "Batarya Değişimi", "Anakart Tamiri", "Yazılım Güncelleme", "Genel Bakım"]
 
-function usePermissionGuard(requiredPermission: string) {
-  const router = useRouter()
+export default function AppointmentsPage() {
+
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
     const userData = localStorage.getItem("yt_user")
-    if (!userData) { router.push("/"); return }
+    if (!userData) {
+      if (typeof window !== "undefined") window.location.href = "/"
+      setChecking(false)
+      return
+    }
     try {
       const user = JSON.parse(userData)
-      if (user.role === "Yönetici" || (user.permissions || []).includes(requiredPermission)) {
+      if (user.role === "Yönetici" || (user.permissions || []).includes("Randevular")) {
         setAuthorized(true)
       } else {
-        router.push("/dashboard")
+        if (typeof window !== "undefined") window.location.href = "/dashboard"
       }
-    } catch { router.push("/") }
+    } catch {
+      if (typeof window !== "undefined") window.location.href = "/"
+    }
     setChecking(false)
-  }, [router, requiredPermission])
-
-  return { authorized, checking }
-}
-
-export default function AppointmentsPage() {
-  const { authorized, checking } = usePermissionGuard("Randevular")
+  }, [])
 
   if (checking) {
     return (
@@ -96,6 +96,7 @@ export default function AppointmentsPage() {
   }
 
   if (!authorized) return null
+
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
