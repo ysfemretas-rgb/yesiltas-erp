@@ -47,17 +47,6 @@ const initialTransactions: Transaction[] = [
 const categories = ["Tamir Geliri", "Satış Geliri", "Parça Maliyeti", "Kira", "Fatura", "Maaş", "Diğer"]
 
 export default function FinancePage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
-  const [filterType, setFilterType] = useState<string>("all")
-  const [filterCategory, setFilterCategory] = useState<string>("all")
-  const [filterSource, setFilterSource] = useState<string>("all")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
-
-  const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
   const router = useRouter()
   const { authorized, checking } = usePermissionGuard("Finans")
 
@@ -70,9 +59,9 @@ export default function FinancePage() {
   }
 
   if (!authorized) {
-    useEffect(() => {
+    if (typeof window !== "undefined") {
       router.push("/dashboard")
-    }, [router])
+    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
@@ -80,6 +69,17 @@ export default function FinancePage() {
     )
   }
 
+  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
+  const [filterType, setFilterType] = useState<string>("all")
+  const [filterCategory, setFilterCategory] = useState<string>("all")
+  const [filterSource, setFilterSource] = useState<string>("all")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
     type: "income",
     category: "Tamir Geliri",
     date: new Date().toISOString().split("T")[0],

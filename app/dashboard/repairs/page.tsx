@@ -66,14 +66,6 @@ function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "US
 }
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterCategory, setFilterCategory] = useState("all")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
   const router = useRouter()
   const { authorized, checking } = usePermissionGuard("Envanter")
 
@@ -86,9 +78,9 @@ export default function InventoryPage() {
   }
 
   if (!authorized) {
-    useEffect(() => {
+    if (typeof window !== "undefined") {
       router.push("/dashboard")
-    }, [router])
+    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
@@ -96,6 +88,14 @@ export default function InventoryPage() {
     )
   }
 
+  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterCategory, setFilterCategory] = useState("all")
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
   const [isLoadingRates, setIsLoadingRates] = useState(false)
 
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
