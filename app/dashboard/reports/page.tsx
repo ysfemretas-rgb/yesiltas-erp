@@ -116,6 +116,7 @@ export default function ReportsPage() {
   const [downloadFormat, setDownloadFormat] = useState<"pdf" | "excel">("excel")
   const [showDownloadDialog, setShowDownloadDialog] = useState(false)
 
+  useEffect(() => {
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -147,7 +148,6 @@ export default function ReportsPage() {
     }
   }, [authorized, checking, router])
 
-  useEffect(() => {
     // Varsayılan tarih aralığı: son 6 ay
     const end = new Date()
     const start = subMonths(end, 6)
@@ -182,23 +182,6 @@ export default function ReportsPage() {
 
   // Tarih filtresi
   const filterByDate = <T extends { date: string }>(data: T[]) => {
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
     if (!dateRange.start || !dateRange.end) return data
     const startDate = safeParseDate(dateRange.start)
     const endDate = safeParseDate(dateRange.end)
@@ -382,6 +365,23 @@ export default function ReportsPage() {
 
     setShowDownloadDialog(false)
   }
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
 
   if (!isLoaded) {
     return (
