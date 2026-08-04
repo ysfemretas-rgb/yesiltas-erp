@@ -86,7 +86,6 @@ export default function SuppliersPage() {
       router.push("/dashboard")
     }
   }, [authorized, checking, router])
-
   useEffect(() => {
     try {
       const saved = localStorage.getItem("yt_suppliers")
@@ -114,23 +113,6 @@ export default function SuppliersPage() {
 
   // localStorage'a kaydet
   useEffect(() => {
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
     if (isLoaded && suppliers.length > 0) {
       localStorage.setItem("yt_suppliers", JSON.stringify(suppliers))
     }
@@ -240,6 +222,23 @@ export default function SuppliersPage() {
 
   const handleMap = (address: string) => {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, "_blank")
+  }
+
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
   }
 
   if (!isLoaded) {
