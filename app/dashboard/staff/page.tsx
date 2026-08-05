@@ -145,7 +145,6 @@ export default function StaffPage() {
       router.push("/dashboard")
     }
   }, [authorized, checking, router])
-
   useEffect(() => {
     try {
       const saved = localStorage.getItem("yt_staff")
@@ -214,23 +213,6 @@ export default function StaffPage() {
   }
 
   const handleAddMember = () => {
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
     if (!newMember.name?.trim() || !newMember.email?.trim()) {
       alert("Lütfen ad soyad ve e-posta alanlarını doldurun!")
       return
@@ -308,6 +290,23 @@ export default function StaffPage() {
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone.replace(/\s/g, "")}`
+  }
+
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
   }
 
   if (!isLoaded) {

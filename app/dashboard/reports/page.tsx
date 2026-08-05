@@ -116,7 +116,6 @@ export default function ReportsPage() {
   const [downloadFormat, setDownloadFormat] = useState<"pdf" | "excel">("excel")
   const [showDownloadDialog, setShowDownloadDialog] = useState(false)
 
-  useEffect(() => {
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -147,7 +146,7 @@ export default function ReportsPage() {
       router.push("/dashboard")
     }
   }, [authorized, checking, router])
-
+  useEffect(() => {
     // Varsayılan tarih aralığı: son 6 ay
     const end = new Date()
     const start = subMonths(end, 6)
@@ -366,6 +365,7 @@ export default function ReportsPage() {
     setShowDownloadDialog(false)
   }
 
+
   if (checking) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -381,7 +381,6 @@ export default function ReportsPage() {
       </div>
     )
   }
-
 
   if (!isLoaded) {
     return (

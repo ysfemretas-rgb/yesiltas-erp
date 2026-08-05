@@ -93,7 +93,6 @@ export default function WarrantiesPage() {
       router.push("/dashboard")
     }
   }, [authorized, checking, router])
-
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
@@ -112,23 +111,6 @@ export default function WarrantiesPage() {
 
   // Save to localStorage
   useEffect(() => {
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_warranties", JSON.stringify(warranties))
   }, [warranties, isLoaded])
@@ -233,6 +215,23 @@ export default function WarrantiesPage() {
     if (!startDate) return ""
     const end = addMonths(parseISO(startDate), months)
     return end.toISOString().split("T")[0]
+  }
+
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
   }
 
   if (!isLoaded) {
