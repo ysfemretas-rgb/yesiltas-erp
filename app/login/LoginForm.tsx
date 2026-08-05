@@ -4,22 +4,12 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Monitor, Eye, EyeOff, Lock, User, CheckCircle2, XCircle } from "lucide-react"
+import { Monitor, Eye, EyeOff, Lock, User, CheckCircle2, XCircle, Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
-interface UserAccount {
-  username: string
-  password: string
-  name: string
-  role: string
-  permissions: string[]
-}
-
-// Varsayılan kullanıcılar (fallback)
-const defaultUsers: UserAccount[] = [
-  { username: "admin", password: "admin123", name: "Emre", role: "Yönetici", permissions: ["Tamir", "Finans", "Envanter", "Personel", "Raporlar", "Ayarlar", "Satış", "Müşteriler", "Randevular", "Tedarikçiler"] },
-  { username: "teknisyen", password: "tek123", name: "Ahmet", role: "Teknisyen", permissions: ["Tamir", "Randevular", "Envanter", "Sarf Malzemeler"] },
-  { username: "kasa", password: "kasa123", name: "Ayşe", role: "Kasiyer", permissions: ["Satış", "Finans", "Müşteriler"] },
-]
+// Kullanıcılar artık kod içinde değil, Supabase Auth'ta saklanıyor.
+// Kurulum talimatı için: supabase-auth-migration.sql dosyasına bakın.
+const EMAIL_DOMAIN = "@yesiltas.local"
 
 export default function LoginForm() {
   const [username, setUsername] = useState("")
@@ -27,6 +17,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [loading, setLoading] = useState(false)
   const [shouldRedirect, setShouldRedirect] = useState(false)
 
   useEffect(() => {
@@ -35,28 +26,7 @@ export default function LoginForm() {
     }
   }, [shouldRedirect])
 
-  const getUsers = (): UserAccount[] => {
-    try {
-      const saved = localStorage.getItem("yt_app_users")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((u: any) => ({
-            username: u.username,
-            password: u.password || "123456",
-            name: u.name,
-            role: u.role,
-            permissions: u.permissions || [],
-          }))
-        }
-      }
-    } catch {
-      // fallback
-    }
-    return defaultUsers
-  }
-
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!username || !password) {
       setError("Lütfen kullanıcı adı ve şifre girin!")
       setSuccess("")
@@ -65,46 +35,66 @@ export default function LoginForm() {
 
     setError("")
     setSuccess("")
+    setLoading(true)
 
-    const allUsers = getUsers()
-    const user = allUsers.find(
-      (u) => u.username === username && u.password === password
-    )
+    try {
+      // Kullanıcı adı, Supabase Auth'ta e-posta olarak saklanıyor
+      // (örn: "admin" -> "admin@yesiltas.local")
+      const email = username.includes("@") ? username : `${username}${EMAIL_DOMAIN}`
 
-    if (user) {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (authError || !authData.user) {
+        setError("Kullanıcı adı veya şifre hatalı!")
+        setLoading(false)
+        return
+      }
+
+      // Profil bilgisini (rol, yetkiler) veritabanından çek
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("username, full_name, role, permissions, is_active")
+        .eq("id", authData.user.id)
+        .single()
+
+      if (profileError || !profile) {
+        setError("Kullanıcı profili bulunamadı. Yöneticinize başvurun.")
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+
+      if (!profile.is_active) {
+        setError("Bu hesap devre dışı bırakılmış.")
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+
+      // Arayüzün geri kalanının (sidebar, sayfa yetkileri) kullandığı
+      // önbellek. Gerçek erişim kontrolü artık RLS ile veritabanı
+      // seviyesinde yapılıyor; bu sadece UI görünürlüğü içindir.
       localStorage.setItem("yt_user", JSON.stringify({
-        username: user.username,
-        name: user.name,
-        role: user.role,
-        permissions: user.permissions,
+        username: profile.username,
+        name: profile.full_name,
+        role: profile.role,
+        permissions: profile.permissions,
         loginTime: new Date().toISOString()
       }))
 
-      // Giriş kaydı ekle
-      try {
-        const records = JSON.parse(localStorage.getItem("yt_login_records") || "[]")
-        records.unshift({
-          id: Date.now(),
-          userId: user.username,
-          username: user.username,
-          name: user.name,
-          action: "login",
-          timestamp: new Date().toISOString().replace("T", " ").slice(0, 16),
-          ip: "local"
-        })
-        localStorage.setItem("yt_login_records", JSON.stringify(records.slice(0, 100)))
-      } catch {
-        // ignore
-      }
-
-      setSuccess(`Giriş başarılı! Hoş geldiniz, ${user.role} ${user.name}. Yönlendiriliyorsunuz...`)
+      setSuccess(`Giriş başarılı! Hoş geldiniz, ${profile.role} ${profile.full_name}. Yönlendiriliyorsunuz...`)
+      setLoading(false)
 
       setTimeout(() => {
         setShouldRedirect(true)
-      }, 1000)
-    } else {
-      setError("Kullanıcı adı veya şifre hatalı!")
-      setSuccess("")
+      }, 800)
+    } catch (err) {
+      console.error("Giriş hatası:", err)
+      setError("Giriş sırasında bir hata oluştu. Tekrar deneyin.")
+      setLoading(false)
     }
   }
 
@@ -131,6 +121,7 @@ export default function LoginForm() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={handleKeyDown}
+              disabled={loading}
               className="border-slate-700 bg-slate-800 pl-10 text-white placeholder:text-slate-500"
             />
           </div>
@@ -147,6 +138,7 @@ export default function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
+              disabled={loading}
               className="border-slate-700 bg-slate-800 pl-10 pr-10 text-white placeholder:text-slate-500"
             />
             <button
@@ -175,37 +167,12 @@ export default function LoginForm() {
 
         <button
           onClick={handleLogin}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
         >
-          Giriş Yap
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
         </button>
-
-        <div className="border-t border-slate-800 pt-4">
-          <p className="mb-2 text-xs font-medium text-slate-500">Demo Hesaplar:</p>
-          <div className="space-y-1 text-xs text-slate-400">
-            <div 
-              className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
-              onClick={() => { setUsername("admin"); setPassword("admin123"); setError(""); setSuccess(""); }}
-            >
-              <span>admin / admin123</span>
-              <span className="text-blue-400">Yönetici</span>
-            </div>
-            <div 
-              className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
-              onClick={() => { setUsername("teknisyen"); setPassword("tek123"); setError(""); setSuccess(""); }}
-            >
-              <span>teknisyen / tek123</span>
-              <span className="text-emerald-400">Teknisyen</span>
-            </div>
-            <div 
-              className="flex justify-between rounded bg-slate-800/50 px-2 py-1 cursor-pointer hover:bg-slate-800"
-              onClick={() => { setUsername("kasa"); setPassword("kasa123"); setError(""); setSuccess(""); }}
-            >
-              <span>kasa / kasa123</span>
-              <span className="text-purple-400">Kasiyer</span>
-            </div>
-          </div>
-        </div>
       </CardContent>
     </Card>
   )

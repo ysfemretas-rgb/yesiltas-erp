@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -439,53 +441,53 @@ export default function CustomersPage() {
 
   const sendWhatsApp = (type: "simple" | "detailed") => {
     if (!selectedCustomer) {
-      alert("Müşteri seçilmedi!")
+      showToast("Müşteri seçilmedi!", "error")
       return
     }
 
     const phone = String(selectedCustomer.phone || selectedCustomer.phone1 || "").replace(/\D/g, "")
     if (!phone || phone.length < 10) {
-      alert("Geçersiz telefon numarası!")
+      showToast("Geçersiz telefon numarası!", "error")
       return
     }
 
     const transactions = getCustomerTransactions(selectedCustomer.id)
     const totalRemaining = transactions.reduce((sum, t) => sum + t.remaining, 0)
 
-    let message = `\uD83D\uDC4B Merhaba *${selectedCustomer.firstName || selectedCustomer.name}*,%0A%0A`
-    message += `\u2705 *Yeşiltaş Teknoloji*'den bilgilendirme mesajıdır.%0A%0A`
+    let message = `\uD83D\uDC4B Merhaba *${selectedCustomer.firstName || selectedCustomer.name}*,\n\n`
+    message += `\u2705 *Yeşiltaş Teknoloji*'den bilgilendirme mesajıdır.\n\n`
 
     if (type === "simple") {
       if (totalRemaining > 0) {
-        message += `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL%0A`
-        message += `\u23F3 Lütfen en kısa sürede ödeme yapınız.%0A`
+        message += `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL\n`
+        message += `\u23F3 Lütfen en kısa sürede ödeme yapınız.\n`
       } else {
-        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!%0A`
+        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!\n`
       }
     } else {
       if (transactions.length > 0) {
-        message += `\uD83D\uDCCB *İşlem Detaylarınız:*%0A%0A`
+        message += `\uD83D\uDCCB *İşlem Detaylarınız:*\n\n`
         transactions.forEach(t => {
-          message += `\uD83D\uDCCC *${t.description}*%0A`
-          message += `   \uD83D\uDCB0 Toplam: ${t.total.toLocaleString("tr-TR")} TL%0A`
-          message += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL%0A`
+          message += `\uD83D\uDCCC *${t.description}*\n`
+          message += `   \uD83D\uDCB0 Toplam: ${t.total.toLocaleString("tr-TR")} TL\n`
+          message += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL\n`
           if (t.remaining > 0) {
-            message += `   \u23F3 Kalan: ${t.remaining.toLocaleString("tr-TR")} TL%0A`
+            message += `   \u23F3 Kalan: ${t.remaining.toLocaleString("tr-TR")} TL\n`
           }
-          message += `   \uD83D\uDCC5 Tarih: ${t.date}%0A%0A`
+          message += `   \uD83D\uDCC5 Tarih: ${t.date}\n\n`
         })
         if (totalRemaining > 0) {
-          message += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL%0A`
+          message += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL\n`
         }
       } else {
-        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır.%0A`
+        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır.\n`
       }
     }
 
-    message += `%0A\uD83D\uDE4F Teşekkür ederiz, iyi günler dileriz!%0A\uD83C\uDFEA *Yeşiltaş Teknoloji*`
+    message += `\n\uD83D\uDE4F Teşekkür ederiz, iyi günler dileriz!\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
 
     const cleanPhone = phone.startsWith("0") ? phone.substring(1) : phone
-    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+    window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
     setIsWhatsAppOpen(false)
   }
 
@@ -543,8 +545,11 @@ export default function CustomersPage() {
   if (!authorized) return null
 
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">Müşteri Yönetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

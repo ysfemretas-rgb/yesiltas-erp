@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -74,7 +76,7 @@ export default function WarrantiesPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Garantiler")) {
         setAuthorized(true)
@@ -142,7 +144,7 @@ export default function WarrantiesPage() {
 
   const handleAddWarranty = () => {
     if (!newWarranty.deviceName || !newWarranty.customerName) {
-      alert("Lütfen cihaz adı ve müşteri adı girin!")
+      showToast("Lütfen cihaz adı ve müşteri adı girin!", "error")
       return
     }
     const warranty: Warranty = {
@@ -164,7 +166,7 @@ export default function WarrantiesPage() {
   const handleUpdateWarranty = () => {
     if (!editingWarranty) return
     if (!editingWarranty.deviceName || !editingWarranty.customerName) {
-      alert("Lütfen cihaz adı ve müşteri adı girin!")
+      showToast("Lütfen cihaz adı ve müşteri adı girin!", "error")
       return
     }
     setWarranties(warranties.map(w =>
@@ -191,23 +193,23 @@ export default function WarrantiesPage() {
     const days = getDaysRemaining(warranty.endDate)
     const dateStr = format(parseISO(warranty.endDate), "dd.MM.yyyy", { locale: tr })
 
-    let message = `\u{1F44B} Merhaba *${warranty.customerName}*,\n\n`
-    message += `\u{2705} *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.\n\n`
+    let message = `\u{1F44B} Merhaba *${warranty.customerName}*,%0A%0A`
+    message += `\u{2705} *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.%0A%0A`
     message += `\u{1F4C5} *${warranty.deviceName}* cihazınızın *${warranty.warrantyType}* garantisi *${dateStr}* tarihinde `
     if (days < 0) {
-      message += `*sona ermiştir*.\n\n`
-      message += `\u{26A0} Garanti kapsamında bir sorun yaşıyorsanız lütfen bizimle iletişime geçiniz.\n`
+      message += `*sona ermiştir*.%0A%0A`
+      message += `\u{26A0} Garanti kapsamında bir sorun yaşıyorsanız lütfen bizimle iletişime geçiniz.%0A`
     } else if (days <= 30) {
-      message += `*sona erecektir*.\n\n`
-      message += `\u{23F0} Garanti süreniz dolmadan herhangi bir sorun varsa lütfen başvurunuz.\n`
+      message += `*sona erecektir*.%0A%0A`
+      message += `\u{23F0} Garanti süreniz dolmadan herhangi bir sorun varsa lütfen başvurunuz.%0A`
     } else {
-      message += `*sona erecektir*.\n\n`
-      message += `\u{2705} Garantiniz aktif durumdadır. Herhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.\n`
+      message += `*sona erecektir*.%0A%0A`
+      message += `\u{2705} Garantiniz aktif durumdadır. Herhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.%0A`
     }
-    message += `\n\u{1F3EA} *Yeşiltaş Teknoloji*\n`
+    message += `%0A\u{1F3EA} *Yeşiltaş Teknoloji*%0A`
     message += `\u{1F4DE} Bizi tercih ettiğiniz için teşekkür ederiz! \u{1F64F}`
 
-    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+    window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
   // Auto-calculate end date from start date + warranty duration
@@ -242,8 +244,11 @@ export default function WarrantiesPage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">Garanti Takibi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

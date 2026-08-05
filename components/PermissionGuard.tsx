@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react"
 
 interface UserData {
-  id: number
   username: string
-  fullName: string
-  role: "admin" | "staff"
+  name: string
+  role: string
   permissions: string[]
 }
 
@@ -30,8 +29,8 @@ export function usePermissionGuard(requiredPermission: string) {
 
       const user: UserData = JSON.parse(userStr)
 
-      // Admin always has access
-      if (user.role === "admin") {
+      // Admin always has access (rol adı "Yönetici" olarak saklanıyor, "admin" değil)
+      if (user.role === "Yönetici") {
         setAuthorized(true)
         setChecking(false)
         return

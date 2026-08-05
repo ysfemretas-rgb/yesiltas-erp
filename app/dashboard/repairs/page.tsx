@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -171,7 +173,7 @@ export default function RepairsPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Tamir")) {
         setAuthorized(true)
@@ -375,7 +377,7 @@ export default function RepairsPage() {
     if (!issue.trim()) missingFields.push("Arıza Açıklaması")
 
     if (missingFields.length > 0) {
-      alert("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+      showToast("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"), "error")
       return false
     }
     return true
@@ -427,7 +429,7 @@ export default function RepairsPage() {
     if (!issue.trim()) missingFields.push("Arıza Açıklaması")
 
     if (missingFields.length > 0) {
-      alert("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"))
+      showToast("Lütfen zorunlu alanlari doldurun:\n\n" + missingFields.map(f => "• " + f).join("\n"), "error")
       return
     }
 
@@ -606,30 +608,33 @@ export default function RepairsPage() {
 
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
-    let message = `\uD83D\uDC4B Merhaba *${repair.customerName}*,%0A%0A`
-    message += `\u2705 *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. \uD83D\uDD27%0A%0A`
+    let message = `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n`
+    message += `\u2705 *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. \uD83D\uDD27\n\n`
 
     if (repair.remaining > 0) {
-      message += `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}%0A`
-      message += `\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}%0A`
-      message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}%0A%0A`
+      message += `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}\n`
+      message += `\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}\n`
+      message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}\n\n`
       message += `\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
     } else {
-      message += `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).%0A`
+      message += `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n`
       message += `\u2705 Hemen teslim alabilirsiniz.`
     }
 
-    message += `%0A%0A\uD83C\uDFEA *Yeşiltaş Teknoloji*%0A\uD83D\uDCDE Bizi tercih ettiğiniz için teşekkür ederiz! \uD83D\uDE4F`
+    message += `\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*\n\uD83D\uDCDE Bizi tercih ettiğiniz için teşekkür ederiz! \uD83D\uDE4F`
 
-    window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+    window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Teknik Servis</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

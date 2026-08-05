@@ -127,7 +127,7 @@ export default function ReportsPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Raporlar")) {
         setAuthorized(true)

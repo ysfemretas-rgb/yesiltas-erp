@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -201,7 +203,7 @@ export default function AppointmentsPage() {
     if (!appt.date) missing.push("Tarih")
     if (!appt.time) missing.push("Saat")
     if (missing.length > 0) {
-      alert("Lütfen zorunlu alanları doldurun: " + missing.join(", "))
+      showToast("Lütfen zorunlu alanları doldurun: " + missing.join(", "), "error")
       return false
     }
     return true
@@ -212,7 +214,7 @@ export default function AppointmentsPage() {
 
     const customer = customers.find(c => c.id === Number(newAppointment.customerId))
     if (!customer) {
-      alert("Müşteri bulunamadı!")
+      showToast("Müşteri bulunamadı!", "error")
       return
     }
 
@@ -264,7 +266,7 @@ export default function AppointmentsPage() {
   const sendWhatsApp = (appointment: Appointment) => {
     try {
       if (!appointment) {
-        alert("Randevu bilgisi bulunamadı!")
+        showToast("Randevu bilgisi bulunamadı!", "error")
         return
       }
 
@@ -280,7 +282,7 @@ export default function AppointmentsPage() {
       }
 
       if (!phone) {
-        alert("Müşteri telefon numarası bulunamadı!")
+        showToast("Müşteri telefon numarası bulunamadı!", "error")
         return
       }
 
@@ -290,7 +292,7 @@ export default function AppointmentsPage() {
       }
 
       if (!cleanPhone || cleanPhone.length < 10) {
-        alert("Geçersiz telefon numarası!")
+        showToast("Geçersiz telefon numarası!", "error")
         return
       }
 
@@ -299,31 +301,31 @@ export default function AppointmentsPage() {
 
       let message = ""
       if (isPast) {
-        message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
-        message += `\u{26A0} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
-        message += `\u{1F4C5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.%0A%0A`
-        message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
-        message += `\u{1F4DE} Lütfen yeni bir randevu oluşturmak için bizimle iletişime geçiniz.%0A%0A`
-        message += `\u{1F64F} İyi günler dileriz!%0A`
+        message = `\u{1F44B} Merhaba *${customerName}*,\n\n`
+        message += `\u{26A0} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\n`
+        message += `\u{1F4C5} Randevu tarihiniz (*${dateStr} - ${appointment.time}*) geçmiştir.\n\n`
+        message += `\u{1F527} Hizmet: *${appointment.service}*\n\n`
+        message += `\u{1F4DE} Lütfen yeni bir randevu oluşturmak için bizimle iletişime geçiniz.\n\n`
+        message += `\u{1F64F} İyi günler dileriz!\n`
         message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
       } else {
-        message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
-        message += `\u{2705} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.%0A%0A`
-        message += `\u{1F4C5} Randevu tarihiniz: *${dateStr} - ${appointment.time}*%0A%0A`
-        message += `\u{1F527} Hizmet: *${appointment.service}*%0A%0A`
-        message += `\u{23F0} Lütfen randevu saatinde gelmeyi unutmayınız.%0A%0A`
-        message += `\u{1F64F} İyi günler dileriz!%0A`
+        message = `\u{1F44B} Merhaba *${customerName}*,\n\n`
+        message += `\u{2705} *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\n`
+        message += `\u{1F4C5} Randevu tarihiniz: *${dateStr} - ${appointment.time}*\n\n`
+        message += `\u{1F527} Hizmet: *${appointment.service}*\n\n`
+        message += `\u{23F0} Lütfen randevu saatinde gelmeyi unutmayınız.\n\n`
+        message += `\u{1F64F} İyi günler dileriz!\n`
         message += `\u{1F3EA} *Yeşiltaş Teknoloji*`
       }
 
       if (appointment.notes) {
-        message += `%0A%0A\u{1F4DD} Not: ${appointment.notes}`
+        message += `\n\n\u{1F4DD} Not: ${appointment.notes}`
       }
 
-      window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+      window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
     } catch (err) {
       console.error("WhatsApp error:", err)
-      alert("WhatsApp gönderilirken hata oluştu!")
+      showToast("WhatsApp gönderilirken hata oluştu!", "error")
     }
   }
 
@@ -339,8 +341,11 @@ export default function AppointmentsPage() {
     }
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">Randevular</h1>
         <Dialog open={isNewAppointmentOpen} onOpenChange={setIsNewAppointmentOpen}>

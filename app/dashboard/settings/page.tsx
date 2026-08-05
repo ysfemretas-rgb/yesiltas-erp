@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -118,7 +120,7 @@ export default function SettingsPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin" || user.role === "Yönetici") {
+      if (user.role === "Yönetici" || user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Ayarlar")) {
         setAuthorized(true)
@@ -195,7 +197,7 @@ export default function SettingsPage() {
 
   const handleAddUser = () => {
     if (!newUser.username?.trim() || !newUser.name?.trim()) {
-      alert("Lütfen kullanıcı adı ve ad soyad alanlarını doldurun!")
+      showToast("Lütfen kullanıcı adı ve ad soyad alanlarını doldurun!", "error")
       return
     }
     const user: AppUser = {
@@ -220,7 +222,7 @@ export default function SettingsPage() {
   const handleSaveEditUser = () => {
     if (!editingUser) return
     if (!editingUser.username?.trim() || !editingUser.name?.trim()) {
-      alert("Lütfen kullanıcı adı ve ad soyad alanlarını doldurun!")
+      showToast("Lütfen kullanıcı adı ve ad soyad alanlarını doldurun!", "error")
       return
     }
     setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...editingUser } : u))
@@ -235,29 +237,29 @@ export default function SettingsPage() {
 
   const handleChangePassword = () => {
     if (passwordData.newPassword.length < 6) {
-      alert("Şifre en az 6 karakter olmalı!")
+      showToast("Şifre en az 6 karakter olmalı!", "error")
       return
     }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert("Şifreler eşleşmiyor!")
+      showToast("Şifreler eşleşmiyor!", "error")
       return
     }
-    alert("Şifreniz başarıyla değiştirildi!")
+    showToast("Şifreniz başarıyla değiştirildi!", "success")
     setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
     setIsPasswordOpen(false)
   }
 
   const handleEditUserPassword = () => {
     if (editPasswordData.newPassword.length < 6) {
-      alert("Şifre en az 6 karakter olmalı!")
+      showToast("Şifre en az 6 karakter olmalı!", "error")
       return
     }
     if (editPasswordData.newPassword !== editPasswordData.confirmPassword) {
-      alert("Şifreler eşleşmiyor!")
+      showToast("Şifreler eşleşmiyor!", "error")
       return
     }
     setUsers(prev => prev.map(u => u.id === editPasswordData.userId ? { ...u, password: editPasswordData.newPassword } : u))
-    alert("Kullanıcı şifresi başarıyla değiştirildi!")
+    showToast("Kullanıcı şifresi başarıyla değiştirildi!", "success")
     setEditPasswordData({ userId: 0, newPassword: "", confirmPassword: "" })
     setIsEditPasswordOpen(false)
   }
@@ -334,8 +336,11 @@ export default function SettingsPage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

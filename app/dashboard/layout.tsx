@@ -30,6 +30,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
+import { supabase } from "@/lib/supabase"
 
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
@@ -61,28 +63,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [currentUser, setCurrentUser] = useState<UserData | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
 
-  const [usdRate, setUsdRate] = useState<number | null>(null)
-  const [lastUpdate, setLastUpdate] = useState<string>("")
   const [usdInput, setUsdInput] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
+  // Kur bilgisi artık merkezi useExchangeRates() hook'undan geliyor —
+  // envanter ve sarf malzeme sayfalarıyla AYNI kaynağı kullanır, böylece
+  // her yerde aynı USD/TRY değeri gösterilir.
+  const { rates, isLoadingRates: isLoading, fetchRates: fetchCurrency } = useExchangeRates()
+  const usdRate = rates.USD || null
+  const lastUpdate = rates.lastUpdated
 
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    try {
-      const userData = localStorage.getItem("yt_user")
-      if (!userData) {
+    ;(async () => {
+      try {
+        // Gerçek oturum kontrolü: sadece localStorage'a değil, Supabase
+        // Auth'un kendi (sunucu tarafından doğrulanan) session'ına bakılır.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          localStorage.removeItem("yt_user")
+          window.location.href = "/login"
+          return
+        }
+
+        const userData = localStorage.getItem("yt_user")
+        if (!userData) {
+          window.location.href = "/login"
+          return
+        }
+        const parsed = JSON.parse(userData)
+        setCurrentUser(parsed)
+      } catch (err) {
+        console.error("Auth error:", err)
         window.location.href = "/login"
-        return
+      } finally {
+        setCheckingAuth(false)
       }
-      const parsed = JSON.parse(userData)
-      setCurrentUser(parsed)
-    } catch (err) {
-      console.error("Auth error:", err)
-      window.location.href = "/login"
-    } finally {
-      setCheckingAuth(false)
-    }
+    })()
 
     try {
       const savedTheme = localStorage.getItem("yt_theme")
@@ -98,33 +114,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
-  const fetchCurrency = async () => {
-    setIsLoading(true)
-    try {
-      const res = await fetch("https://open.er-api.com/v6/latest/USD")
-      const data = await res.json()
-      if (data.rates && data.rates.TRY) {
-        setUsdRate(data.rates.TRY)
-        const now = new Date()
-        setLastUpdate(now.toLocaleString("tr-TR", { 
-          day: "2-digit", month: "2-digit", year: "numeric", 
-          hour: "2-digit", minute: "2-digit", second: "2-digit" 
-        }))
-      }
-    } catch (err) {
-      console.error("Currency fetch error:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchCurrency()
-    const interval = setInterval(fetchCurrency, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     localStorage.removeItem("yt_user")
     window.location.href = "/login"
   }
@@ -171,19 +162,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex h-14 items-center justify-between border-b px-3">
             {!collapsed && (
               <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-blue-500" />
+                <Monitor className="h-5 w-5 text-emerald-500" />
                 <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
               </div>
             )}
             <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleTheme}
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -270,18 +253,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <Monitor className="h-5 w-5 text-blue-500" />
+              <Monitor className="h-5 w-5 text-emerald-500" />
               <span className="text-sm font-bold text-foreground">Yesiltas</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleTheme}
-                className="h-8 w-8 p-0"
-              >
-                {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </Button>
             </div>
           </div>
 

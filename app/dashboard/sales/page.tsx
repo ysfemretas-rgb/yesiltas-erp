@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -109,7 +111,7 @@ export default function SalesPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Satış")) {
         setAuthorized(true)
@@ -332,7 +334,7 @@ export default function SalesPage() {
     // Telefon numarası kontrolü
     const phone = customer.phone || customer.phone1 || ""
     if (!phone) {
-      alert("⚠️ Müşterinin telefon numarası yok! Lütfen müşteri bilgilerini güncelleyin.")
+      showToast("Müşterinin telefon numarası yok! Lütfen müşteri bilgilerini güncelleyin.", "error")
       return
     }
 
@@ -498,7 +500,7 @@ export default function SalesPage() {
   const sendWhatsApp = (sale: Sale) => {
     try {
       if (!sale) {
-        alert("Satış bilgisi bulunamadi!")
+        showToast("Satış bilgisi bulunamadi!", "error")
         return
       }
 
@@ -518,7 +520,7 @@ export default function SalesPage() {
       }
 
       if (!phone) {
-        alert("Müşteri telefon numarasi bulunamadi!")
+        showToast("Müşteri telefon numarasi bulunamadi!", "error")
         return
       }
 
@@ -528,30 +530,30 @@ export default function SalesPage() {
       }
 
       if (!cleanPhone || cleanPhone.length < 10) {
-        alert("Gecersiz telefon numarasi!")
+        showToast("Gecersiz telefon numarasi!", "error")
         return
       }
 
-      const items = (sale.items || []).map(i => `\u{1F4E6} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("%0A")
-      let message = `\u{1F44B} Merhaba *${customerName}*,%0A%0A`
-      message += `\u{2705} *Yeşiltaş Teknoloji* satış isleminiz hakkında bilgi vermek istiyoruz.%0A%0A`
-      message += `\u{1F6D2} *Satış Detaylari:*%0A${items || "Ürün bilgisi yok"}%0A%0A`
-      message += `\u{1F4B0} *Toplam Tutar:* ${(sale.totalAmount || 0).toLocaleString("tr-TR")} TL%0A`
+      const items = (sale.items || []).map(i => `\u{1F4E6} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("\n")
+      let message = `\u{1F44B} Merhaba *${customerName}*,\n\n`
+      message += `\u{2705} *Yeşiltaş Teknoloji* satış isleminiz hakkında bilgi vermek istiyoruz.\n\n`
+      message += `\u{1F6D2} *Satış Detaylari:*\n${items || "Ürün bilgisi yok"}\n\n`
+      message += `\u{1F4B0} *Toplam Tutar:* ${(sale.totalAmount || 0).toLocaleString("tr-TR")} TL\n`
       if (sale.remaining > 0) {
-        message += `\u{1F4B5} *Alınan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL%0A`
-        message += `\u{23F3} *Kalan Borç:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL%0A`
-        message += `\u{1F4B3} *Ödeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
+        message += `\u{1F4B5} *Alınan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL\n`
+        message += `\u{23F3} *Kalan Borç:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL\n`
+        message += `\u{1F4B3} *Ödeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}\n`
       } else {
-        message += `\u{2705} *Ödeme:* Tamamlandı%0A`
-        message += `\u{1F4B3} *Ödeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}%0A`
+        message += `\u{2705} *Ödeme:* Tamamlandı\n`
+        message += `\u{1F4B3} *Ödeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}\n`
       }
-      message += `\u{1F4C5} *Tarih:* ${sale.date}%0A`
-      message += `%0A\u{1F64F} Teşekkür ederiz, iyi günler dileriz!%0A\u{1F3EA} *Yeşiltaş Teknoloji*`
+      message += `\u{1F4C5} *Tarih:* ${sale.date}\n`
+      message += `\n\u{1F64F} Teşekkür ederiz, iyi günler dileriz!\n\u{1F3EA} *Yeşiltaş Teknoloji*`
 
-      window.open(`https://wa.me/90${cleanPhone}?text=${message}`, "_blank")
+      window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
     } catch (err) {
       console.error("WhatsApp error:", err)
-      alert("WhatsApp gonderilirken hata olustu!")
+      showToast("WhatsApp gonderilirken hata olustu!", "error")
     }
   }
 
@@ -584,8 +586,11 @@ export default function SalesPage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">🛒 Satışlar</h1>
         <Button onClick={() => setShowNewSale(true)} className="bg-emerald-600 hover:bg-emerald-700">

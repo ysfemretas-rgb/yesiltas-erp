@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
 
 interface InventoryItem {
   id: number
@@ -79,7 +82,7 @@ export default function InventoryPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Envanter")) {
         setAuthorized(true)
@@ -106,8 +109,7 @@ export default function InventoryPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
-  const [isLoadingRates, setIsLoadingRates] = useState(false)
+  const { rates, isLoadingRates, fetchRates } = useExchangeRates()
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Ekran",
     quantity: 0,
@@ -127,13 +129,7 @@ export default function InventoryPage() {
           setInventory(parsed)
         }
       }
-      const savedRates = localStorage.getItem("yt_exchange_rates")
-      if (savedRates) {
-        const parsed = JSON.parse(savedRates)
-        if (parsed && parsed.USD && parsed.EUR) {
-          setRates(parsed)
-        }
-      }
+      // Kur bilgisi artık useExchangeRates() hook'u tarafından okunuyor/önbelleğe alınıyor.
     } catch (e) {
       console.error("Load error:", e)
     }
@@ -143,16 +139,6 @@ export default function InventoryPage() {
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_inventory", JSON.stringify(inventory))
   }, [inventory, isLoaded])
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_exchange_rates", JSON.stringify(rates))
-  }, [rates, isLoaded])
-  useEffect(() => {
-    if (isLoaded) {
-      fetchRates()
-    }
-  }, [isLoaded])
-
   if (checking) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -176,34 +162,7 @@ export default function InventoryPage() {
   // Save to localStorage
 
 
-  // Fetch live exchange rates from Frankfurter API (free, no key)
-  const fetchRates = async () => {
-    setIsLoadingRates(true)
-    try {
-      // Fetch USD/TRY and EUR/TRY directly
-      const [usdRes, eurRes] = await Promise.all([
-        fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=TRY"),
-        fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=TRY"),
-      ])
-      if (!usdRes.ok || !eurRes.ok) throw new Error("Rate fetch failed")
-      const usdData = await usdRes.json()
-      const eurData = await eurRes.json()
-      const usdRate = usdData.rates.TRY || 34.5
-      const eurRate = eurData.rates.TRY || 37.2
-      setRates({
-        USD: Math.round(usdRate * 100) / 100,
-        EUR: Math.round(eurRate * 100) / 100,
-        lastUpdated: new Date().toLocaleString("tr-TR"),
-      })
-    } catch (err) {
-      console.error("Exchange rate error:", err)
-      alert("\u{26A0} Kur bilgisi alınamadı! Manuel güncelleme yapabilirsiniz.")
-    } finally {
-      setIsLoadingRates(false)
-    }
-  }
-
-  // Auto-fetch rates on mount
+  // Kur bilgisi artık merkezi useExchangeRates() hook'undan geliyor (yukarıda).
 
   const categories = Array.from(new Set(inventory.map(i => i.category)))
 
@@ -239,7 +198,7 @@ export default function InventoryPage() {
 
   const handleAddItem = () => {
     if (!newItem.name || !newItem.sku) {
-      alert("Lütfen ürün adı ve SKU kodu girin!")
+      showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
       return
     }
     const salePrice = calculateSalePrice(
@@ -270,7 +229,7 @@ export default function InventoryPage() {
   const handleUpdateItem = () => {
     if (!editingItem) return
     if (!editingItem.name || !editingItem.sku) {
-      alert("Lütfen ürün adı ve SKU kodu girin!")
+      showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
       return
     }
     const salePrice = calculateSalePrice(
@@ -310,8 +269,11 @@ export default function InventoryPage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">Stok Yönetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

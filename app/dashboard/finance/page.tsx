@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -77,7 +79,7 @@ export default function FinancePage() {
       }
       try {
         const user = JSON.parse(userData)
-        if (user.role === "admin" || (user.permissions && user.permissions.includes("Finans"))) {
+        if (user.role === "Yönetici" || (user.permissions && user.permissions.includes("Finans"))) {
           setAuthorized(true)
         }
       } catch {
@@ -146,7 +148,7 @@ export default function FinancePage() {
 
   const handleAddTransaction = () => {
     if (!newTransaction.description || !newTransaction.amount) {
-      alert("Lütfen açıklama ve tutar girin!")
+      showToast("Lütfen açıklama ve tutar girin!", "error")
       return
     }
     const transaction: Transaction = {
@@ -172,7 +174,7 @@ export default function FinancePage() {
   const handleUpdateTransaction = () => {
     if (!editingTransaction) return
     if (!editingTransaction.description || !editingTransaction.amount) {
-      alert("Lütfen açıklama ve tutar girin!")
+      showToast("Lütfen açıklama ve tutar girin!", "error")
       return
     }
     setTransactions(transactions.map(t =>
@@ -238,8 +240,11 @@ export default function FinancePage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">Finans Yönetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

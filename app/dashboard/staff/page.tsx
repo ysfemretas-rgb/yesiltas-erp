@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -126,7 +128,7 @@ export default function StaffPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Personel")) {
         setAuthorized(true)
@@ -214,7 +216,7 @@ export default function StaffPage() {
 
   const handleAddMember = () => {
     if (!newMember.name?.trim() || !newMember.email?.trim()) {
-      alert("Lütfen ad soyad ve e-posta alanlarını doldurun!")
+      showToast("Lütfen ad soyad ve e-posta alanlarını doldurun!", "error")
       return
     }
     const member: StaffMember = {
@@ -251,7 +253,7 @@ export default function StaffPage() {
   const handleSaveEdit = () => {
     if (!editingMember) return
     if (!editingMember.name?.trim() || !editingMember.email?.trim()) {
-      alert("Lütfen ad soyad ve e-posta alanlarını doldurun!")
+      showToast("Lütfen ad soyad ve e-posta alanlarını doldurun!", "error")
       return
     }
     setStaff(prev => prev.map(s => s.id === editingMember.id ? { ...editingMember } : s))
@@ -284,7 +286,7 @@ export default function StaffPage() {
 
   const handleWhatsApp = (phone: string, name: string) => {
     const cleanPhone = phone.replace(/\s/g, "").replace(/^0/, "+90")
-    const message = `Merhaba ${name}, Yeşiltaş Teknoloji'den bilgilendirme:`
+    const message = `Merhaba ${name}, 👋\n\n*Yeşiltaş Teknoloji* olarak sizinle iletişime geçmek istedik.\n\nMüsait olduğunuzda dönüş yapabilir misiniz?\n\n🏪 *Yeşiltaş Teknoloji*`
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
@@ -320,8 +322,11 @@ export default function StaffPage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

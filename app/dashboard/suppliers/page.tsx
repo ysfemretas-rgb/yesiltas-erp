@@ -1,5 +1,7 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -67,7 +69,7 @@ export default function SuppliersPage() {
         return
       }
       const user = JSON.parse(userStr)
-      if (user.role === "admin") {
+      if (user.role === "Yönetici") {
         setAuthorized(true)
       } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Tedarikçiler")) {
         setAuthorized(true)
@@ -146,7 +148,7 @@ export default function SuppliersPage() {
 
   const handleAddSupplier = () => {
     if (!newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
-      alert("Lütfen firma adı ve yetkili kişi alanlarını doldurun!")
+      showToast("Lütfen firma adı ve yetkili kişi alanlarını doldurun!", "error")
       return
     }
     const supplier: Supplier = {
@@ -172,7 +174,7 @@ export default function SuppliersPage() {
     const name = newSupplier.name?.trim()
     const contactPerson = newSupplier.contactPerson?.trim()
     if (!name || !contactPerson) {
-      alert("Lütfen firma adı ve yetkili kişi alanlarını doldurun!")
+      showToast("Lütfen firma adı ve yetkili kişi alanlarını doldurun!", "error")
       return
     }
     setSuppliers(suppliers.map(s => s.id === editingSupplier.id ? {
@@ -212,7 +214,7 @@ export default function SuppliersPage() {
 
   const handleWhatsApp = (phone: string, name: string) => {
     const cleanPhone = phone.replace(/\s/g, "").replace(/^0/, "+90")
-    const message = `Merhaba ${name}, Yeşiltaş Teknoloji'den iletişim:`
+    const message = `Merhaba ${name}, 👋\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\nSipariş/tedarik konusunda görüşmek istiyoruz, müsait olduğunuzda dönüş yapabilir misiniz?\n\n🏪 *Yeşiltaş Teknoloji*`
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
@@ -252,8 +254,11 @@ export default function SuppliersPage() {
     )
   }
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

@@ -1,15 +1,19 @@
 "use client"
 
 import { useEffect } from "react"
+import { supabase } from "@/lib/supabase"
 
 export default function HomePage() {
   useEffect(() => {
-    const user = localStorage.getItem("yt_user")
-    if (user) {
-      window.location.href = "/dashboard"
-    } else {
-      window.location.href = "/login"
-    }
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        window.location.href = "/dashboard"
+      } else {
+        localStorage.removeItem("yt_user")
+        window.location.href = "/login"
+      }
+    })()
   }, [])
 
   return (

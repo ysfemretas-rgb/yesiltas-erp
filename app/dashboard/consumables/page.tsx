@@ -1,7 +1,10 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -69,8 +72,7 @@ export default function ConsumablesPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<Consumable | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
-  const [isLoadingRates, setIsLoadingRates] = useState(false)
+  const { rates, isLoadingRates, fetchRates } = useExchangeRates()
 
   const [newItem, setNewItem] = useState<Partial<Consumable>>({
     category: "Temizlik",
@@ -113,13 +115,7 @@ export default function ConsumablesPage() {
           setConsumables(parsed)
         }
       }
-      const savedRates = localStorage.getItem("yt_exchange_rates")
-      if (savedRates) {
-        const parsed = JSON.parse(savedRates)
-        if (parsed && parsed.USD && parsed.EUR) {
-          setRates(parsed)
-        }
-      }
+      // Kur bilgisi artık useExchangeRates() hook'u tarafından okunuyor/önbelleğe alınıyor.
     } catch (e) {
       console.error("Load error:", e)
     }
@@ -132,40 +128,7 @@ export default function ConsumablesPage() {
     localStorage.setItem("yt_consumables", JSON.stringify(consumables))
   }, [consumables, isLoaded])
 
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_exchange_rates", JSON.stringify(rates))
-  }, [rates, isLoaded])
-
-  // Fetch live exchange rates from Frankfurter API
-  const fetchRates = async () => {
-    setIsLoadingRates(true)
-    try {
-      const [usdRes, eurRes] = await Promise.all([
-        fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=TRY"),
-        fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=TRY"),
-      ])
-      if (!usdRes.ok || !eurRes.ok) throw new Error("Rate fetch failed")
-      const usdData = await usdRes.json()
-      const eurData = await eurRes.json()
-      const usdRate = usdData.rates.TRY || 34.5
-      const eurRate = eurData.rates.TRY || 37.2
-      setRates({
-        USD: Math.round(usdRate * 100) / 100,
-        EUR: Math.round(eurRate * 100) / 100,
-        lastUpdated: new Date().toLocaleString("tr-TR"),
-      })
-    } catch (err) {
-      console.error("Exchange rate error:", err)
-      alert("\u{26A0} Kur bilgisi alınamadı! Manuel güncelleme yapabilirsiniz.")
-    } finally {
-      setIsLoadingRates(false)
-    }
-  }
-
-  useEffect(() => {
-    if (isLoaded) fetchRates()
-  }, [isLoaded])
+  // Kur bilgisi artık merkezi useExchangeRates() hook'undan geliyor (yukarıda).
 
   const categories = Array.from(new Set(consumables.map(c => c.category)))
 
@@ -190,7 +153,7 @@ export default function ConsumablesPage() {
 
   const handleAddItem = () => {
     if (!newItem.name) {
-      alert("Lütfen malzeme adı girin!")
+      showToast("Lütfen malzeme adı girin!", "error")
       return
     }
     const item: Consumable = {
@@ -213,7 +176,7 @@ export default function ConsumablesPage() {
   const handleUpdateItem = () => {
     if (!editingItem) return
     if (!editingItem.name) {
-      alert("Lütfen malzeme adı girin!")
+      showToast("Lütfen malzeme adı girin!", "error")
       return
     }
     setConsumables(consumables.map(item =>
@@ -261,8 +224,11 @@ export default function ConsumablesPage() {
   if (!authorized) return null
 
 
+  const { toast, showToast, hideToast } = useToast()
+
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">Sarf Malzeme Takibi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
