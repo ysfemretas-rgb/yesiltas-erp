@@ -109,6 +109,14 @@ export default function InventoryPage() {
   const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
   const [isLoadingRates, setIsLoadingRates] = useState(false)
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
+    category: "Ekran",
+    quantity: 0,
+    minQuantity: 5,
+    purchasePrice: 0,
+    purchaseCurrency: "USD",
+    profitMargin: 30,
+    salePrice: 0,
+  })
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
@@ -162,14 +170,6 @@ export default function InventoryPage() {
   }
 
 
-    category: "Ekran",
-    quantity: 0,
-    minQuantity: 5,
-    purchasePrice: 0,
-    purchaseCurrency: "USD",
-    profitMargin: 30,
-    salePrice: 0,
-  })
 
   // Load from localStorage
 

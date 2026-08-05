@@ -94,7 +94,15 @@ export default function AppointmentsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const [newAppointment, setNewAppointment] = useState<Partial<Appointment>>({
+    date: new Date().toISOString().split("T")[0],
+    time: "09:00",
+    status: "scheduled",
+    service: services[0]
+  })
   const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({
+    name: "",
+    phone: ""
+  })
   useEffect(() => {
     const savedCustomers = localStorage.getItem("yt_customers")
     const savedAppointments = localStorage.getItem("yt_appointments")
@@ -136,15 +144,7 @@ export default function AppointmentsPage() {
 
 
 
-    date: new Date().toISOString().split("T")[0],
-    time: "09:00",
-    status: "scheduled",
-    service: services[0]
-  })
 
-    name: "",
-    phone: ""
-  })
 
   // Load from localStorage on mount
 
