@@ -68,6 +68,9 @@ const ALL_ROLES = ["Yönetici", "Teknisyen", "Kasiyer", "Muhasebeci"]
 const ALL_PERMISSIONS = ["Tamir", "Finans", "Envanter", "Personel", "Raporlar", "Ayarlar", "Satış", "Müşteriler", "Randevular", "Tedarikçiler", "Garantiler", "Sarf Malzemeler"]
 
 export default function SettingsPage() {
+
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
   const router = useRouter()
   const [isLoaded, setIsLoaded] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
@@ -104,6 +107,36 @@ export default function SettingsPage() {
   })
 
   // localStorage'dan yükle
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const userStr = localStorage.getItem("yt_user")
+      if (!userStr) {
+        setAuthorized(false)
+        setChecking(false)
+        return
+      }
+      const user = JSON.parse(userStr)
+      if (user.role === "admin" || user.role === "Yönetici") {
+        setAuthorized(true)
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Ayarlar")) {
+        setAuthorized(true)
+      } else {
+        setAuthorized(false)
+      }
+    } catch (e) {
+      console.error("Permission guard error:", e)
+      setAuthorized(false)
+    }
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authorized && !checking) {
+      router.push("/dashboard")
+    }
+  }, [authorized, checking, router])
   useEffect(() => {
     try {
       const companySaved = localStorage.getItem("yt_company")
@@ -273,6 +306,29 @@ export default function SettingsPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-slate-400">Yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Yetki kontrol ediliyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="text-red-400 text-xl mb-4">Yetkisiz erişim</div>
+          <p className="text-slate-400">Bu sayfaya erişim izniniz yok. Yönlendiriliyor...</p>
         </div>
       </div>
     )
