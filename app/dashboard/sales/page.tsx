@@ -111,7 +111,7 @@ export default function SalesPage() {
       const user = JSON.parse(userStr)
       if (user.role === "admin") {
         setAuthorized(true)
-      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Satışlar")) {
+      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Satış")) {
         setAuthorized(true)
       } else {
         setAuthorized(false)
