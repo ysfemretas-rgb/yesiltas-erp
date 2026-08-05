@@ -795,16 +795,16 @@ export default function CustomersPage() {
                   </div>
                   <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button size="sm" variant="outline" onClick={() => openWhatsAppDialog(customer)} className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10">
-                      <MessageCircle className="h-4 w-4" />
+                      <MessageCircle className="h-4 w-4 mr-1" />📱 WhatsApp
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => openDebtDialog(customer)} className="border-slate-600 text-slate-300 hover:text-white">
-                      <CreditCard className="h-4 w-4" />
+                      <CreditCard className="h-4 w-4 mr-1" />💰 Borç
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => openEdit(customer)} className="border-slate-600 text-slate-300 hover:text-white">
-                      <Edit3 className="h-4 w-4" />
+                    <Button size="sm" variant="outline" onClick={() => openEdit(customer)} className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
+                      <Edit3 className="h-4 w-4 mr-1" />✏️ Düzenle
                     </Button>
                     <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                     </Button>
                   </div>
                 </div>

@@ -526,7 +526,7 @@ export default function FinancePage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => openEditDialog(transaction)}
-                    className="h-6 w-6 p-0 text-slate-400 hover:text-white"
+                    className="h-7 px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                   >
                     <Pencil className="h-3 w-3" />
                   </Button>
@@ -534,7 +534,7 @@ export default function FinancePage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteTransaction(transaction.id)}
-                    className="h-6 w-6 p-0 text-slate-400 hover:text-red-400"
+                    className="h-7 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>

@@ -464,31 +464,30 @@ export default function WarrantiesPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-1 ml-2">
+                  <div className="flex gap-1 ml-2 flex-wrap">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => sendWhatsApp(warranty)}
-                      className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                      title="WhatsApp ile bilgilendir"
+                      className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
                     >
-                      <MessageCircle className="h-4 w-4" />
+                      <MessageCircle className="w-3 h-3 mr-1" />📱 WhatsApp
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => openEditDialog(warranty)}
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-white"
+                      className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteWarranty(warranty.id)}
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
                     </Button>
                   </div>
                 </div>

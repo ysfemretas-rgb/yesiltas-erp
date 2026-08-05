@@ -658,17 +658,17 @@ export default function InventoryPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openEditDialog(item)}
-                        className="h-8 w-8 p-0 text-slate-400 hover:text-white"
+                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-4 w-4 mr-1" />✏️ Düzenle
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                       </Button>
                     </div>
                   </div>

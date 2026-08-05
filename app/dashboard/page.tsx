@@ -89,9 +89,10 @@ export default function DashboardPage() {
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
-    if (hour < 12) return "Gunaydin"
-    if (hour < 18) return "Iyi gunler"
-    return "Iyi aksamlar"
+    if (hour >= 5 && hour < 12) return "Günaydın"
+    if (hour >= 12 && hour < 18) return "İyi günler"
+    if (hour >= 18 && hour < 22) return "İyi akşamlar"
+    return "İyi geceler"
   }, [])
 
   const stats = useMemo(() => {
@@ -153,7 +154,7 @@ export default function DashboardPage() {
           {greeting}, {currentUser?.role} {currentUser?.name}
         </h1>
         <p className="text-slate-400 mt-1 text-sm lg:text-base">
-          Yesiltas Teknoloji Teknik Servis Yonetim Sistemine hos geldiniz.
+          Yeşiltaş Teknoloji Teknik Servis Yönetim Sistemine hoş geldiniz.
         </p>
       </div>
 
@@ -166,7 +167,7 @@ export default function DashboardPage() {
         </Link>
         <Link href="/dashboard/sales">
           <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-xs lg:text-sm h-auto py-2 lg:py-3">
-            <ShoppingCart className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Satis
+            <ShoppingCart className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />Yeni Satış
           </Button>
         </Link>
         <Link href="/dashboard/customers">
@@ -197,13 +198,13 @@ export default function DashboardPage() {
           <Card className="bg-slate-900 border-slate-700 hover:border-blue-500/50 transition-colors cursor-pointer">
             <CardHeader className="pb-1 lg:pb-2">
               <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
-                Toplam Musteri
+                Toplam Müşteri
                 <Users className="h-3 w-3 lg:h-4 lg:w-4 text-blue-500" />
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-white">{stats.totalCustomers}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -218,7 +219,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-white">{stats.activeRepairs}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -233,7 +234,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-emerald-400">{stats.completedRepairs}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -248,7 +249,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-green-400">{formatCurrency(stats.totalIncome)}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -263,7 +264,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-amber-400">{stats.pendingRepairs}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -272,13 +273,13 @@ export default function DashboardPage() {
           <Card className="bg-slate-900 border-slate-700 hover:border-cyan-500/50 transition-colors cursor-pointer">
             <CardHeader className="pb-1 lg:pb-2">
               <CardTitle className="text-xs lg:text-sm text-slate-400 flex items-center justify-between">
-                Toplam Satis
+                Toplam Satış
                 <ShoppingCart className="h-3 w-3 lg:h-4 lg:w-4 text-cyan-500" />
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-cyan-400">{stats.totalSales}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -293,7 +294,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl lg:text-3xl font-bold text-pink-400">{stats.todayAppointments}</div>
-              <p className="text-xs text-slate-500 mt-1">Detaylar icin tiklayin →</p>
+              <p className="text-xs text-slate-500 mt-1">Detaylar için tıklayın →</p>
             </CardContent>
           </Card>
         </Link>
@@ -303,7 +304,7 @@ export default function DashboardPage() {
       <Card className="bg-slate-900 border-slate-700">
         <CardHeader>
           <CardTitle className="text-white text-base lg:text-lg flex items-center justify-between">
-            <span>Son Islemler</span>
+            <span>Son İşlemler</span>
             <Link href="/dashboard/repairs">
               <span className="text-xs text-blue-400 hover:text-blue-300">Tumunu Gor →</span>
             </Link>

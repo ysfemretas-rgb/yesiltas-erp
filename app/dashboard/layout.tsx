@@ -20,9 +20,6 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Moon,
-  Sun,
-  Monitor,
   UserCircle,
   Menu,
   X,
@@ -36,8 +33,8 @@ import { supabase } from "@/lib/supabase"
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
   { href: "/dashboard/repairs", icon: Wrench, label: "Teknik Servis", color: "text-orange-400" },
-  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satislar", color: "text-cyan-400" },
-  { href: "/dashboard/customers", icon: Users, label: "Musteriler", color: "text-violet-400" },
+  { href: "/dashboard/sales", icon: ShoppingCart, label: "Satışlar", color: "text-cyan-400" },
+  { href: "/dashboard/customers", icon: Users, label: "Müşteriler", color: "text-violet-400" },
   { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
   { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
   { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
@@ -45,7 +42,7 @@ const menuItems = [
   { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
   { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
   { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },
-  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikciler", color: "text-rose-400" },
+  { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikçiler", color: "text-rose-400" },
   { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
 ]
 
@@ -162,8 +159,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex h-14 items-center justify-between border-b px-3">
             {!collapsed && (
               <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-emerald-500" />
-                <span className="text-base font-bold text-foreground truncate">Yesiltas Teknoloji</span>
+                <img src="/header-logo.png" alt="Yeşiltaş Teknoloji" className="h-6 w-6" />
+                <span className="text-base font-bold text-foreground truncate">Yeşiltaş Teknoloji</span>
               </div>
             )}
             <div className="flex items-center gap-1">
@@ -191,7 +188,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-2">
                 <UserCircle className="h-8 w-8 text-primary" />
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Hos geldiniz,</p>
+                  <p className="text-xs text-muted-foreground">Hoş geldiniz,</p>
                   <p className="truncate text-sm font-semibold text-foreground">
                     {currentUser.role} {currentUser.name}
                   </p>
@@ -253,8 +250,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <Monitor className="h-5 w-5 text-emerald-500" />
-              <span className="text-sm font-bold text-foreground">Yesiltas</span>
+              <img src="/header-logo.png" alt="Yeşiltaş Teknoloji" className="h-6 w-6" />
+              <span className="text-sm font-bold text-foreground">Yeşiltaş</span>
             </div>
             <div className="flex items-center gap-2">
             </div>

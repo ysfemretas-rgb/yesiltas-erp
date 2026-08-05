@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Eye, EyeOff, Check } from "lucide-react"
+import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Eye, EyeOff, Check, MessageCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface StaffMember {
@@ -609,7 +609,7 @@ export default function StaffPage() {
                         className="border-slate-600 text-slate-300 hover:bg-slate-600"
                         onClick={() => handleCall(member.phone)}
                       >
-                        <Phone className="w-3 h-3" />
+                        <Phone className="w-3 h-3 mr-1" />📞 Ara
                       </Button>
                       <Button
                         size="sm"
@@ -617,7 +617,7 @@ export default function StaffPage() {
                         className="border-emerald-600 text-emerald-400 hover:bg-emerald-900/30"
                         onClick={() => handleWhatsApp(member.phone, member.name)}
                       >
-                        <span className="text-xs font-bold">W</span>
+                        <MessageCircle className="w-3 h-3 mr-1" />📱 WhatsApp
                       </Button>
                       <Button
                         size="sm"
@@ -625,7 +625,7 @@ export default function StaffPage() {
                         className="border-blue-600 text-blue-400 hover:bg-blue-900/30"
                         onClick={() => handleEditMember(member)}
                       >
-                        <Pencil className="w-3 h-3" />
+                        <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
                       </Button>
                       <Button
                         size="sm"
@@ -633,7 +633,7 @@ export default function StaffPage() {
                         className="border-red-600 text-red-400 hover:bg-red-900/30"
                         onClick={() => setShowDeleteConfirm(member.id)}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
                       </Button>
                     </div>
                   </div>

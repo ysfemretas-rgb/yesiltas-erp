@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
+import { validateIMEI } from "@/lib/validation"
 import { 
   Wrench, 
   Plus, 
@@ -44,6 +45,7 @@ interface Repair {
   remaining: number
   paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
   notes: string
+  imei?: string
   createdAt: string
   completedAt?: string
 }
@@ -214,6 +216,7 @@ export default function RepairsPage() {
   const [brand, setBrand] = useState("")
   const [model, setModel] = useState("")
   const [issue, setIssue] = useState("")
+  const [imei, setImei] = useState("")
   const [cost, setCost] = useState("")
   const [paymentType, setPaymentType] = useState<string>("unpaid")
   const [paidAmount, setPaidAmount] = useState("")
@@ -400,6 +403,7 @@ export default function RepairsPage() {
       brand,
       model,
       issue,
+      imei: imei.trim() || undefined,
       status: "waiting",
       cost: costNum,
       paid: paidNum,
@@ -449,6 +453,7 @@ export default function RepairsPage() {
       brand,
       model,
       issue,
+      imei: imei.trim() || undefined,
       cost: costNum,
       paid: paidNum,
       remaining: remainingNum,
@@ -551,6 +556,7 @@ export default function RepairsPage() {
     setBrand(repair.brand)
     setModel(repair.model)
     setIssue(repair.issue)
+    setImei(repair.imei || "")
     setCost(repair.cost.toString())
     setPaymentType(repair.paymentType)
     setPaidAmount(repair.paid.toString())
@@ -572,6 +578,7 @@ export default function RepairsPage() {
     setBrand("")
     setModel("")
     setIssue("")
+    setImei("")
     setCost("")
     setPaymentType("unpaid")
     setPaidAmount("")
@@ -756,6 +763,20 @@ export default function RepairsPage() {
               </div>
 
               <div className="space-y-2">
+                <Label className="text-slate-300">IMEI (opsiyonel)</Label>
+                <Input
+                  value={imei}
+                  onChange={(e) => setImei(e.target.value)}
+                  className="bg-slate-800 border-slate-600 text-white font-mono"
+                  placeholder="15 haneli IMEI numarası"
+                  maxLength={17}
+                />
+                {imei && !validateIMEI(imei) && (
+                  <p className="text-xs text-red-400">IMEI 15 haneli olmalı.</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-slate-300">Arıza Açıklaması <span className="text-red-400">*</span></Label>
                 <Textarea value={issue} onChange={(e) => setIssue(e.target.value)} className="bg-slate-800 border-slate-600 text-white min-h-[80px]" placeholder="Cihazda yasanan sorunu detayli aciklayin..." />
               </div>
@@ -874,95 +895,96 @@ export default function RepairsPage() {
       </div>
 
       <Card className="bg-slate-900 border-slate-700">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-700 hover:bg-transparent">
-                <TableHead className="text-slate-400">ID</TableHead>
-                <TableHead className="text-slate-400">Müşteri</TableHead>
-                <TableHead className="text-slate-400">Telefon</TableHead>
-                <TableHead className="text-slate-400">Cihaz</TableHead>
-                <TableHead className="text-slate-400">Arıza</TableHead>
-                <TableHead className="text-slate-400">Durum</TableHead>
-                <TableHead className="text-slate-400">Ücret</TableHead>
-                <TableHead className="text-slate-400">Ödeme</TableHead>
-                <TableHead className="text-slate-400">Tarih</TableHead>
-                <TableHead className="text-slate-400 text-right">Islemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRepairs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center text-slate-500 py-8">
-                    Kayit bulunamadi.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredRepairs.map((repair) => (
-                  <TableRow key={repair.id} className="border-slate-700 hover:bg-slate-800/50">
-                    <TableCell className="text-slate-300 font-mono">#{repair.id}</TableCell>
-                    <TableCell className="text-white font-medium">{repair.customerName}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-slate-300 text-sm">{repair.phone1}</span>
-                        {repair.phone2 && <span className="text-slate-400 text-xs">{repair.phone2}</span>}
+        <CardHeader>
+          <CardTitle className="text-white flex items-center justify-between">
+            <span>🔧 Tamir Listesi</span>
+            <span className="text-sm text-slate-400">{filteredRepairs.length} kayıt</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredRepairs.length === 0 ? (
+            <p className="text-slate-500 text-center py-8">📝 Kayıt bulunamadı.</p>
+          ) : (
+            <div className="space-y-2">
+              {filteredRepairs.map((repair) => (
+                <div key={repair.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-white">#{repair.id} — {repair.customerName}</div>
+                      <div className="text-xs text-slate-400">
+                        📱 {repair.phone1}{repair.phone2 ? ` / ${repair.phone2}` : ""} | 🔧 {repair.brand} {repair.model} | ⚠️ {repair.issue}
                       </div>
-                    </TableCell>
-                    <TableCell className="text-slate-300">{repair.brand} {repair.model}</TableCell>
-                    <TableCell className="text-slate-300 max-w-[200px] truncate">{repair.issue}</TableCell>
-                    <TableCell>{getStatusBadge(repair.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-white font-medium">{formatCurrency(repair.cost)}</span>
+                      {repair.imei && (
+                        <div className="text-xs text-slate-500 font-mono">IMEI: {repair.imei}</div>
+                      )}
+                      <div className="text-xs text-slate-500 mt-0.5">📅 {repair.createdAt}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-emerald-400">
+                        {formatCurrency(repair.cost)}
                         {repair.remaining > 0 && (
-                          <span className="text-amber-400 text-xs">Kalan: {formatCurrency(repair.remaining)}</span>
+                          <span className="text-amber-400 text-xs font-normal ml-1">(Kalan: {formatCurrency(repair.remaining)})</span>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell>{getPaymentBadge(repair.paymentType, repair.remaining)}</TableCell>
-                    <TableCell className="text-slate-400 text-sm">{repair.createdAt}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {repair.status === "completed" && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => sendWhatsApp(repair)}
-                            className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                            title="📱 WhatsApp ile bilgilendir"
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Select 
-                          value={repair.status} 
-                          onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
-                        >
-                          <SelectTrigger className="h-8 w-[130px] bg-slate-800 border-slate-600 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-600">
-                            <SelectItem value="waiting">Bekliyor</SelectItem>
-                            <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-                            <SelectItem value="completed">Tamamlandı</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button variant="ghost" size="sm" onClick={() => openNoteDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                          <AlertCircle className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(repair)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRepair(repair.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-400">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <div className="flex gap-1 justify-end mt-1">
+                        {getStatusBadge(repair.status)}
+                        {getPaymentBadge(repair.paymentType, repair.remaining)}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex gap-2 flex-wrap items-center">
+                    {repair.status === "completed" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                        onClick={() => sendWhatsApp(repair)}
+                      >
+                        <MessageCircle className="w-3 h-3 mr-1" />📱 WhatsApp
+                      </Button>
+                    )}
+                    <Select
+                      value={repair.status}
+                      onValueChange={(v) => handleStatusChange(repair.id, v as Repair["status"])}
+                    >
+                      <SelectTrigger className="h-8 w-[140px] bg-slate-900 border-slate-600 text-xs text-slate-300">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="waiting">⏳ Bekliyor</SelectItem>
+                        <SelectItem value="in_progress">🔧 Devam Ediyor</SelectItem>
+                        <SelectItem value="completed">✅ Tamamlandı</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                      onClick={() => openNoteDialog(repair)}
+                    >
+                      <AlertCircle className="w-3 h-3 mr-1" />📝 Not
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                      onClick={() => openEditDialog(repair)}
+                    >
+                      <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      onClick={() => handleDeleteRepair(repair.id)}
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1017,6 +1039,19 @@ export default function RepairsPage() {
                 <Label className="text-slate-300">Ücret (TL)</Label>
                 <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">IMEI (opsiyonel)</Label>
+              <Input
+                value={imei}
+                onChange={(e) => setImei(e.target.value)}
+                className="bg-slate-800 border-slate-600 text-white font-mono"
+                placeholder="15 haneli IMEI numarası"
+                maxLength={17}
+              />
+              {imei && !validateIMEI(imei) && (
+                <p className="text-xs text-red-400">IMEI 15 haneli olmalı.</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label className="text-slate-300">Arıza Açıklaması <span className="text-red-400">*</span></Label>

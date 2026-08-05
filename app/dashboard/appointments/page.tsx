@@ -547,23 +547,23 @@ export default function AppointmentsPage() {
                     </div>
                     <div className="flex gap-1 flex-wrap justify-end">
                       <Button size="sm" variant="outline" onClick={() => sendWhatsApp(appointment)} className="border-green-700 text-green-400 hover:bg-green-900/30">
-                        <MessageCircle className="h-4 w-4" />
+                        <MessageCircle className="h-4 w-4 mr-1" />📱 WhatsApp
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleEditClick(appointment)} className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                        <Pencil className="h-4 w-4" />
+                      <Button size="sm" variant="outline" onClick={() => handleEditClick(appointment)} className="border-blue-700 text-blue-400 hover:bg-blue-900/30">
+                        <Pencil className="h-4 w-4 mr-1" />✏️ Düzenle
                       </Button>
                       {appointment.status === "scheduled" && (
                         <>
                           <Button size="sm" onClick={() => updateStatus(appointment.id, "completed")} className="bg-emerald-600 hover:bg-emerald-700">
-                            <CheckCircle2 className="h-4 w-4" />
+                            <CheckCircle2 className="h-4 w-4 mr-1" />✅ Tamamla
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => updateStatus(appointment.id, "cancelled")} className="bg-red-900/50 hover:bg-red-800 border-red-800">
-                            <X className="h-4 w-4" />
+                            <X className="h-4 w-4 mr-1" />❌ İptal
                           </Button>
                         </>
                       )}
                       <Button size="sm" variant="destructive" onClick={() => handleDeleteAppointment(appointment.id)} className="bg-red-900/50 hover:bg-red-800 border-red-800">
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                       </Button>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import { Toast, useToast } from "@/components/toast"
 import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -102,6 +103,11 @@ function safeMonthLabel(dateStr: string | undefined | null): string | null {
 }
 
 export default function ReportsPage() {
+  const { toast, showToast, hideToast } = useToast()
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
+  }
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -354,12 +360,66 @@ export default function ReportsPage() {
       link.download = `yesiltas-rapor-${format(new Date(), "yyyy-MM-dd")}.csv`
       link.click()
     } else {
-      const textContent = JSON.stringify(data, null, 2)
-      const blob = new Blob([textContent], { type: "application/json" })
-      const link = document.createElement("a")
-      link.href = URL.createObjectURL(blob)
-      link.download = `yesiltas-rapor-${format(new Date(), "yyyy-MM-dd")}.json`
-      link.click()
+      const rows = (label: string, arr: (string | number)[][]) =>
+        `<h3>${label}</h3><table><tbody>${arr.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+
+      const html = `
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Yeşiltaş Teknoloji - Rapor</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #111; padding: 32px; }
+              h1 { color: #059669; margin-bottom: 4px; }
+              h2 { color: #444; font-weight: normal; margin-top: 0; font-size: 14px; }
+              h3 { margin-top: 24px; margin-bottom: 6px; color: #059669; border-bottom: 2px solid #059669; padding-bottom: 4px; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+              td { padding: 6px 8px; border-bottom: 1px solid #ddd; font-size: 13px; }
+              tr:first-child td { font-weight: bold; background: #f0fdf4; }
+              @media print { body { padding: 0; } }
+            </style>
+          </head>
+          <body>
+            <h1>Yeşiltaş Teknoloji</h1>
+            <h2>Rapor — ${data.tarihAraligi}</h2>
+            ${rows("Özet", [
+              ["Toplam Gelir", formatCurrency(data.ozet.toplamGelir)],
+              ["Toplam Gider", formatCurrency(data.ozet.toplamGider)],
+              ["Net Kâr", formatCurrency(data.ozet.netKar)],
+              ["Toplam Tamir", String(data.ozet.toplamTamir)],
+              ["Toplam Satış", String(data.ozet.toplamSatis)],
+            ])}
+            ${rows("Aylık Rapor", [
+              ["Ay", "Gelir", "Gider", "Kâr", "Tamir", "Satış"],
+              ...data.aylikRapor.map(m => [m.month, formatCurrency(m.gelir), formatCurrency(m.gider), formatCurrency(m.kar), String(m.tamir), String(m.satis)])
+            ])}
+            ${rows("En Çok Yapılan Hizmetler", [
+              ["Hizmet", "Adet", "Gelir"],
+              ...data.topHizmetler.map(h => [h.name, String(h.count), formatCurrency(h.revenue)])
+            ])}
+            ${rows("En Değerli Müşteriler", [
+              ["Müşteri", "Toplam Harcama", "Ziyaret Sayısı"],
+              ...data.topMusteriler.map(c => [c.name, formatCurrency(c.totalSpent), String(c.visitCount)])
+            ])}
+            ${rows("En Çok Satan Ürünler", [
+              ["Ürün", "Adet", "Gelir"],
+              ...data.topUrunler.map(p => [p.name, String(p.quantity), formatCurrency(p.revenue)])
+            ])}
+          </body>
+        </html>
+      `
+
+      const printWindow = window.open("", "_blank")
+      if (printWindow) {
+        printWindow.document.write(html)
+        printWindow.document.close()
+        printWindow.onload = () => {
+          printWindow.focus()
+          printWindow.print()
+        }
+      } else {
+        showToast("Yazdırma penceresi açılamadı. Tarayıcınızın pop-up engelleyicisini kontrol edin.", "error")
+      }
     }
 
     setShowDownloadDialog(false)
@@ -395,6 +455,7 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -423,7 +484,7 @@ export default function ReportsPage() {
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
                         <SelectItem value="excel">Excel (CSV)</SelectItem>
-                        <SelectItem value="pdf">JSON</SelectItem>
+                        <SelectItem value="pdf">PDF</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
