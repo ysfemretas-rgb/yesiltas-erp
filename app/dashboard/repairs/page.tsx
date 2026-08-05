@@ -250,6 +250,29 @@ export default function RepairsPage() {
       localStorage.setItem("yt_finance", JSON.stringify(financeTransactions))
     }
   }, [repairs, customers, notes, financeTransactions])
+  const filteredRepairs = useMemo(() => {
+    return repairs.filter((r) => {
+      const matchesSearch =
+        search === "" ||
+        r.customerName.toLowerCase().includes(search.toLowerCase()) ||
+        r.phone1.includes(search) ||
+        r.phone2.includes(search) ||
+        r.device.toLowerCase().includes(search.toLowerCase()) ||
+        r.brand.toLowerCase().includes(search.toLowerCase()) ||
+        r.model.toLowerCase().includes(search.toLowerCase())
+      const matchesStatus = statusFilter === "all" || r.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [repairs, search, statusFilter])
+  const stats = useMemo(() => {
+    const total = repairs.length
+    const waiting = repairs.filter((r) => r.status === "waiting").length
+    const inProgress = repairs.filter((r) => r.status === "in_progress").length
+    const completed = repairs.filter((r) => r.status === "completed").length
+    const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
+    const totalRemaining = repairs.reduce((sum, r) => sum + r.remaining, 0)
+    return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
+  }, [repairs])
 
   if (checking) {
     return (
@@ -276,30 +299,7 @@ export default function RepairsPage() {
 
   // Save to localStorage
 
-  const filteredRepairs = useMemo(() => {
-    return repairs.filter((r) => {
-      const matchesSearch =
-        search === "" ||
-        r.customerName.toLowerCase().includes(search.toLowerCase()) ||
-        r.phone1.includes(search) ||
-        r.phone2.includes(search) ||
-        r.device.toLowerCase().includes(search.toLowerCase()) ||
-        r.brand.toLowerCase().includes(search.toLowerCase()) ||
-        r.model.toLowerCase().includes(search.toLowerCase())
-      const matchesStatus = statusFilter === "all" || r.status === statusFilter
-      return matchesSearch && matchesStatus
-    })
-  }, [repairs, search, statusFilter])
 
-  const stats = useMemo(() => {
-    const total = repairs.length
-    const waiting = repairs.filter((r) => r.status === "waiting").length
-    const inProgress = repairs.filter((r) => r.status === "in_progress").length
-    const completed = repairs.filter((r) => r.status === "completed").length
-    const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
-    const totalRemaining = repairs.reduce((sum, r) => sum + r.remaining, 0)
-    return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
-  }, [repairs])
 
   const handleCustomerSelect = (value: string) => {
     if (value === "new") {
