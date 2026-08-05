@@ -99,22 +99,6 @@ export default function InventoryPage() {
     }
   }, [authorized, checking, router])
 
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
@@ -124,18 +108,7 @@ export default function InventoryPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [rates, setRates] = useState<ExchangeRates>({ USD: 34.5, EUR: 37.2, lastUpdated: "" })
   const [isLoadingRates, setIsLoadingRates] = useState(false)
-
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
-    category: "Ekran",
-    quantity: 0,
-    minQuantity: 5,
-    purchasePrice: 0,
-    purchaseCurrency: "USD",
-    profitMargin: 30,
-    salePrice: 0,
-  })
-
-  // Load from localStorage
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
@@ -158,17 +131,50 @@ export default function InventoryPage() {
     }
     setIsLoaded(true)
   }, [])
-
-  // Save to localStorage
   useEffect(() => {
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_inventory", JSON.stringify(inventory))
   }, [inventory, isLoaded])
-
   useEffect(() => {
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_exchange_rates", JSON.stringify(rates))
   }, [rates, isLoaded])
+  useEffect(() => {
+    if (isLoaded) {
+      fetchRates()
+    }
+  }, [isLoaded])
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
+
+    category: "Ekran",
+    quantity: 0,
+    minQuantity: 5,
+    purchasePrice: 0,
+    purchaseCurrency: "USD",
+    profitMargin: 30,
+    salePrice: 0,
+  })
+
+  // Load from localStorage
+
+  // Save to localStorage
+
 
   // Fetch live exchange rates from Frankfurter API (free, no key)
   const fetchRates = async () => {
@@ -198,11 +204,6 @@ export default function InventoryPage() {
   }
 
   // Auto-fetch rates on mount
-  useEffect(() => {
-    if (isLoaded) {
-      fetchRates()
-    }
-  }, [isLoaded])
 
   const categories = Array.from(new Set(inventory.map(i => i.category)))
 

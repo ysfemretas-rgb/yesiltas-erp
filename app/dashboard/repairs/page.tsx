@@ -191,22 +191,6 @@ export default function RepairsPage() {
     }
   }, [authorized, checking, router])
 
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetki kontrol ediliyor...</div>
-      </div>
-    )
-  }
-
-  if (!authorized) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
-      </div>
-    )
-  }
-
   const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [notes, setNotes] = useState<Note[]>(initialNotes)
@@ -219,8 +203,6 @@ export default function RepairsPage() {
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false)
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null)
   const [noteText, setNoteText] = useState("")
-
-  // Form states
   const [customerId, setCustomerId] = useState<string>("")
   const [customerName, setCustomerName] = useState("")
   const [phone1, setPhone1] = useState("")
@@ -234,15 +216,11 @@ export default function RepairsPage() {
   const [paidAmount, setPaidAmount] = useState("")
   const [notesInput, setNotesInput] = useState("")
   const [isNewCustomer, setIsNewCustomer] = useState(false)
-
-  // New customer form
   const [newCustomerName, setNewCustomerName] = useState("")
   const [newCustomerPhone1, setNewCustomerPhone1] = useState("")
   const [newCustomerPhone2, setNewCustomerPhone2] = useState("")
   const [newCustomerEmail, setNewCustomerEmail] = useState("")
   const [newCustomerAddress, setNewCustomerAddress] = useState("")
-
-  // Load from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -264,8 +242,6 @@ export default function RepairsPage() {
       }
     }
   }, [])
-
-  // Save to localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("yt_repairs", JSON.stringify(repairs))
@@ -274,6 +250,31 @@ export default function RepairsPage() {
       localStorage.setItem("yt_finance", JSON.stringify(financeTransactions))
     }
   }, [repairs, customers, notes, financeTransactions])
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetki kontrol ediliyor...</div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white">Yetkisiz erişim. Yönlendiriliyor...</div>
+      </div>
+    )
+  }
+
+
+  // Form states
+
+  // New customer form
+
+  // Load from localStorage
+
+  // Save to localStorage
 
   const filteredRepairs = useMemo(() => {
     return repairs.filter((r) => {

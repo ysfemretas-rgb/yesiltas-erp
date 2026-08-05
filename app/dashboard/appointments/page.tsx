@@ -84,20 +84,6 @@ export default function AppointmentsPage() {
     setChecking(false)
   }, [])
 
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!authorized) return null
-
-
   const [customers, setCustomers] = useState<Customer[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -107,20 +93,8 @@ export default function AppointmentsPage() {
   const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
-
   const [newAppointment, setNewAppointment] = useState<Partial<Appointment>>({
-    date: new Date().toISOString().split("T")[0],
-    time: "09:00",
-    status: "scheduled",
-    service: services[0]
-  })
-
   const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({
-    name: "",
-    phone: ""
-  })
-
-  // Load from localStorage on mount
   useEffect(() => {
     const savedCustomers = localStorage.getItem("yt_customers")
     const savedAppointments = localStorage.getItem("yt_appointments")
@@ -143,11 +117,38 @@ export default function AppointmentsPage() {
       }
     }
   }, [])
-
-  // Save to localStorage
   useEffect(() => {
     localStorage.setItem("yt_appointments", JSON.stringify(appointments))
   }, [appointments])
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Yetki kontrolü yapılıyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) return null
+
+
+
+    date: new Date().toISOString().split("T")[0],
+    time: "09:00",
+    status: "scheduled",
+    service: services[0]
+  })
+
+    name: "",
+    phone: ""
+  })
+
+  // Load from localStorage on mount
+
+  // Save to localStorage
 
   const isPastDate = (dateStr: string) => {
     const today = new Date()
