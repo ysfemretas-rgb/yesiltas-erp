@@ -69,7 +69,6 @@ const ALL_PERMISSIONS = ["Tamir", "Finans", "Envanter", "Personel", "Raporlar", 
 
 export default function SettingsPage() {
   const router = useRouter()
-  const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
 
