@@ -106,6 +106,7 @@ function normalizeCustomer(raw: any): Customer {
 }
 
 export default function CustomersPage() {
+  const { toast, showToast, hideToast } = useToast()
 
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -544,8 +545,6 @@ export default function CustomersPage() {
 
   if (!authorized) return null
 
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

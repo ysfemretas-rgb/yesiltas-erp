@@ -68,6 +68,7 @@ function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "US
 }
 
 export default function InventoryPage() {
+  const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -268,8 +269,6 @@ export default function InventoryPage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

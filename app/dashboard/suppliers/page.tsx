@@ -37,6 +37,7 @@ const getInitialSuppliers = (): Supplier[] => [
 ]
 
 export default function SuppliersPage() {
+  const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -253,8 +254,6 @@ export default function SuppliersPage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">

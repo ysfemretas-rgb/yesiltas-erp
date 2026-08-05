@@ -159,6 +159,7 @@ function normalizeCustomer(raw: any): Customer {
 }
 
 export default function RepairsPage() {
+  const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -629,8 +630,6 @@ export default function RepairsPage() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

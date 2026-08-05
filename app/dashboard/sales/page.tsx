@@ -74,6 +74,7 @@ const paymentMethods = [
 ]
 
 export default function SalesPage() {
+  const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -585,8 +586,6 @@ export default function SalesPage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

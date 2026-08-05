@@ -70,6 +70,7 @@ const ALL_ROLES = ["Yönetici", "Teknisyen", "Kasiyer", "Muhasebeci"]
 const ALL_PERMISSIONS = ["Tamir", "Finans", "Envanter", "Personel", "Raporlar", "Ayarlar", "Satış", "Müşteriler", "Randevular", "Tedarikçiler", "Garantiler", "Sarf Malzemeler"]
 
 export default function SettingsPage() {
+  const { toast, showToast, hideToast } = useToast()
 
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -335,8 +336,6 @@ export default function SettingsPage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">

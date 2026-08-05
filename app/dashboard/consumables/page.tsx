@@ -60,6 +60,7 @@ function priceInTRY(price: number, currency: "TRY" | "USD" | "EUR", rates: Excha
 }
 
 export default function ConsumablesPage() {
+  const { toast, showToast, hideToast } = useToast()
 
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -223,8 +224,6 @@ export default function ConsumablesPage() {
 
   if (!authorized) return null
 
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

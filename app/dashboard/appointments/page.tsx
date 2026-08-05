@@ -62,6 +62,7 @@ interface Appointment {
 const services = ["Ekran Değişimi", "Batarya Değişimi", "Anakart Tamiri", "Yazılım Güncelleme", "Genel Bakım"]
 
 export default function AppointmentsPage() {
+  const { toast, showToast, hideToast } = useToast()
 
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -340,8 +341,6 @@ export default function AppointmentsPage() {
       default: return <Badge variant="outline">Bilinmiyor</Badge>
     }
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

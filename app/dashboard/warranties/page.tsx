@@ -46,6 +46,7 @@ const initialWarranties: Warranty[] = [
 ]
 
 export default function WarrantiesPage() {
+  const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
   const [warranties, setWarranties] = useState<Warranty[]>(initialWarranties)
   const [authorized, setAuthorized] = useState(false)
@@ -243,8 +244,6 @@ export default function WarrantiesPage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

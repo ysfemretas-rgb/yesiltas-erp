@@ -47,6 +47,7 @@ const initialTransactions: Transaction[] = [
 const categories = ["Tamir Geliri", "Satış Geliri", "Parça Maliyeti", "Kira", "Fatura", "Maaş", "Diğer"]
 
 export default function FinancePage() {
+  const { toast, showToast, hideToast } = useToast()
 
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -239,8 +240,6 @@ export default function FinancePage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="space-y-6">

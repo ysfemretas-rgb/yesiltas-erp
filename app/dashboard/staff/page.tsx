@@ -92,6 +92,7 @@ function CustomCheckbox({
 }
 
 export default function StaffPage() {
+  const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -321,8 +322,6 @@ export default function StaffPage() {
       </div>
     )
   }
-
-  const { toast, showToast, hideToast } = useToast()
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
