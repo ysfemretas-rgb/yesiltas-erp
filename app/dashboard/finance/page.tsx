@@ -488,7 +488,8 @@ export default function FinancePage() {
             </div>
           </div>
 
-          <div className="rounded-md border border-slate-700">
+          <div className="rounded-md border border-slate-700 overflow-x-auto">
+            <div className="min-w-[800px]">
             <div className="grid grid-cols-12 gap-2 p-3 text-sm font-medium text-slate-400 border-b border-slate-700 bg-slate-800/50">
               <div className="col-span-2">Açıklama</div>
               <div className="col-span-2">Kategori</div>
@@ -546,6 +547,7 @@ export default function FinancePage() {
                 İşlem bulunamadı.
               </div>
             )}
+            </div>
           </div>
         </CardContent>
       </Card>

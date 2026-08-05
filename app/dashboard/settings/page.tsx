@@ -361,12 +361,12 @@ export default function SettingsPage() {
         )}
 
         <Tabs defaultValue="company">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-slate-800">
-            <TabsTrigger value="company" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Şirket</TabsTrigger>
-            <TabsTrigger value="user" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcı</TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcılar</TabsTrigger>
-            <TabsTrigger value="logins" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Giriş/Çıkış</TabsTrigger>
-            <TabsTrigger value="system" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Sistem</TabsTrigger>
+          <TabsList className="flex w-full gap-1 overflow-x-auto lg:w-[600px] bg-slate-800 p-1">
+            <TabsTrigger value="company" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Şirket</TabsTrigger>
+            <TabsTrigger value="user" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcı</TabsTrigger>
+            <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcılar</TabsTrigger>
+            <TabsTrigger value="logins" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Giriş/Çıkış</TabsTrigger>
+            <TabsTrigger value="system" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Sistem</TabsTrigger>
           </TabsList>
 
           {/* Şirket Bilgileri */}
