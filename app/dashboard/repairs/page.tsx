@@ -2,6 +2,9 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { QrDialog } from "@/components/repairs/QrDialog"
+import { NoteDialog } from "@/components/repairs/NoteDialog"
+import { getRepairStatusBadge as getStatusBadge, getRepairPaymentBadge as getPaymentBadge, formatCurrency } from "@/components/repairs/RepairBadges"
 
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
@@ -10,24 +13,17 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { validateIMEI } from "@/lib/validation"
 import { 
   Wrench, 
   Plus, 
   Search, 
-  Clock, 
   CheckCircle, 
   AlertCircle,
   MessageCircle,
-  CreditCard,
-  Banknote,
-  Receipt,
   Pencil,
   Trash2,
-  Wallet,
   QrCode
 } from "lucide-react"
 
@@ -561,32 +557,6 @@ export default function RepairsPage() {
     setIsNewCustomer(false)
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "waiting":
-        return <Badge variant="outline" className="border-amber-500 text-amber-400"><Clock className="h-3 w-3 mr-1" />Bekliyor</Badge>
-      case "in_progress":
-        return <Badge variant="outline" className="border-blue-500 text-blue-400"><AlertCircle className="h-3 w-3 mr-1" />Devam Ediyor</Badge>
-      case "completed":
-        return <Badge variant="outline" className="border-emerald-500 text-emerald-400"><CheckCircle className="h-3 w-3 mr-1" />Tamamlandı</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
-  const getPaymentBadge = (type: string, remaining: number) => {
-    if (remaining > 0 && type !== "unpaid") {
-      return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi ({formatCurrency(remaining)} kaldi)</Badge>
-    }
-    switch (type) {
-      case "cash": return <Badge className="bg-emerald-600"><Banknote className="h-3 w-3 mr-1" />Nakit</Badge>
-      case "card": return <Badge className="bg-blue-600"><CreditCard className="h-3 w-3 mr-1" />Kart</Badge>
-      case "transfer": return <Badge className="bg-violet-600"><Receipt className="h-3 w-3 mr-1" />Havale</Badge>
-      case "partial": return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kismi</Badge>
-      default: return <Badge variant="secondary">Odenmedi</Badge>
-    }
-  }
-
   const getRepairNotes = (repairId: number) => notes.filter((n) => n.repairId === repairId)
 
   const sendWhatsApp = (repair: Repair) => {
@@ -607,10 +577,6 @@ export default function RepairsPage() {
     message += `\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*\n\uD83D\uDCDE Bizi tercih ettiğiniz için teşekkür ederiz! \uD83D\uDE4F`
 
     window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
 
   return (
@@ -1085,88 +1051,17 @@ export default function RepairsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
-        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Notlar - {selectedRepair?.customerName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-slate-300">Yeni Not Ekle</Label>
-              <div className="flex gap-2">
-                <Textarea 
-                  value={noteText} 
-                  onChange={(e) => setNoteText(e.target.value)} 
-                  className="bg-slate-800 border-slate-600 text-white flex-1" 
-                  placeholder="Not yazin..."
-                />
-                <Button onClick={handleAddNote} className="bg-blue-600 hover:bg-blue-700 self-end">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              <Label className="text-slate-300">Geçmiş Notlar</Label>
-              {getRepairNotes(selectedRepair?.id || 0).length === 0 ? (
-                <p className="text-slate-500 text-sm">Heniz not eklenmemis.</p>
-              ) : (
-                getRepairNotes(selectedRepair?.id || 0).map((note) => (
-                  <div key={note.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                    <p className="text-white text-sm">{note.text}</p>
-                    <p className="text-slate-500 text-xs mt-1">{note.author} - {note.createdAt}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <NoteDialog
+        open={isNoteDialogOpen}
+        onOpenChange={setIsNoteDialogOpen}
+        customerName={selectedRepair?.customerName}
+        notes={getRepairNotes(selectedRepair?.id || 0)}
+        noteText={noteText}
+        onNoteTextChange={setNoteText}
+        onAddNote={handleAddNote}
+      />
 
-      <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
-        <DialogContent className="max-w-sm bg-slate-900 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">📱 Cihaz QR Etiketi</DialogTitle>
-          </DialogHeader>
-          {selectedRepair && (
-            <div className="flex flex-col items-center gap-3 py-4">
-              <div className="rounded-lg bg-white p-3">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    [
-                      `Kayit No: #${selectedRepair.id}`,
-                      `Musteri: ${selectedRepair.customerName}`,
-                      `Cihaz: ${selectedRepair.brand} ${selectedRepair.model}`,
-                      selectedRepair.imei ? `IMEI: ${selectedRepair.imei}` : null,
-                      `Ariza: ${selectedRepair.issue}`,
-                      `Tarih: ${selectedRepair.createdAt}`,
-                    ]
-                      .filter(Boolean)
-                      .join("\n")
-                  )}`}
-                  alt="Cihaz QR Kodu"
-                  width={220}
-                  height={220}
-                />
-              </div>
-              <div className="text-center text-sm text-slate-300">
-                <p className="font-medium text-white">#{selectedRepair.id} — {selectedRepair.customerName}</p>
-                <p>{selectedRepair.brand} {selectedRepair.model}</p>
-                {selectedRepair.imei && <p className="font-mono text-xs text-slate-500">IMEI: {selectedRepair.imei}</p>}
-              </div>
-              <p className="text-xs text-slate-500 text-center">
-                Bu kodu yazdırıp cihaza yapıştırabilirsiniz — telefonla okutunca kayıt bilgileri görünür.
-              </p>
-              <Button
-                variant="outline"
-                className="border-slate-600 text-slate-300"
-                onClick={() => window.print()}
-              >
-                🖨️ Yazdır
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <QrDialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen} repair={selectedRepair} />
 
       <Dialog open={isNewCustomerDialogOpen} onOpenChange={setIsNewCustomerDialogOpen}>
         <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
