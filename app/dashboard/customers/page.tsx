@@ -382,6 +382,22 @@ export default function CustomersPage() {
       return
     }
 
+    let iban = ""
+    let accountName = ""
+    try {
+      const companyRaw = typeof window !== "undefined" ? localStorage.getItem("yt_company") : null
+      if (companyRaw) {
+        const companyData = JSON.parse(companyRaw)
+        iban = companyData?.iban || ""
+        accountName = companyData?.accountName || ""
+      }
+    } catch {
+      // yoksay
+    }
+    const paymentLine = iban
+      ? `\uD83C\uDFE6 IBAN ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.\n${iban}${accountName ? ` (${accountName})` : ""}\n\uD83D\uDCDD Açıklama kısmını boş bırakabilirsiniz.\n\uD83E\uDDFE Ödeme sonrası dekontu bize iletmenizi rica ederiz.\n`
+      : `\uD83C\uDFE6 Havale/EFT ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.\n`
+
     const transactions = getCustomerTransactions(selectedCustomer.id)
     const totalRemaining = transactions.reduce((sum, t) => sum + t.remaining, 0)
 
@@ -391,7 +407,7 @@ export default function CustomersPage() {
     if (type === "simple") {
       if (totalRemaining > 0) {
         message += `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL\n`
-        message += `\u23F3 Lütfen en kısa sürede ödeme yapınız.\n`
+        message += paymentLine
       } else {
         message += `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!\n`
       }
@@ -409,6 +425,7 @@ export default function CustomersPage() {
         })
         if (totalRemaining > 0) {
           message += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL\n`
+          message += paymentLine
         }
       } else {
         message += `\uD83C\uDF89 Borcunuz bulunmamaktadır.\n`

@@ -59,7 +59,7 @@ export default function TodayPage() {
           title: `${w.customerName} — ${w.deviceName}`,
           subtitle: d < 0 ? `Garanti süresi doldu` : `Garanti ${d} gün içinde bitiyor`,
           phone: w.customerPhone,
-          message: `👋 Merhaba ${w.customerName},\n\n🛡️ *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.\n\n${w.deviceName} cihazınızın garantisi ${d < 0 ? "sona ermiştir" : `${d} gün içinde sona erecektir`}.\n\nHerhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.\n\n🏪 Yeşiltaş Teknoloji`,
+          message: `\uD83D\uDC4B Merhaba ${w.customerName},\n\n\uD83D\uDEE1\uFE0F *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.\n\n${w.deviceName} cihazınızın garantisi ${d < 0 ? "sona ermiştir" : `${d} gün içinde sona erecektir`}.\n\nHerhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
         })
       }
     } catch (e) {
@@ -78,7 +78,7 @@ export default function TodayPage() {
           title: `${a.customerName} — ${a.service}`,
           subtitle: d === 0 ? `Randevu bugün, saat ${a.time}` : `Randevu yarın, saat ${a.time}`,
           phone: a.customerPhone,
-          message: `👋 Merhaba ${a.customerName},\n\n📅 *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\n${d === 0 ? "Bugünkü" : "Yarınki"} randevunuz: ${a.time} — ${a.service}\n\nGörüşmek üzere!\n\n🏪 Yeşiltaş Teknoloji`,
+          message: `\uD83D\uDC4B Merhaba ${a.customerName},\n\n\uD83D\uDCC5 *Yeşiltaş Teknoloji*'den randevu hatırlatmasıdır.\n\n${d === 0 ? "Bugünkü" : "Yarınki"} randevunuz: ${a.time} — ${a.service}\n\nGörüşmek üzere!\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
         })
       }
     } catch (e) {
@@ -87,6 +87,21 @@ export default function TodayPage() {
 
     try {
       const customers = await fetchCustomers()
+      let iban = ""
+      let accountName = ""
+      try {
+        const companyRaw = typeof window !== "undefined" ? localStorage.getItem("yt_company") : null
+        if (companyRaw) {
+          const companyData = JSON.parse(companyRaw)
+          iban = companyData?.iban || ""
+          accountName = companyData?.accountName || ""
+        }
+      } catch {
+        // yoksay
+      }
+      const paymentLine = iban
+        ? `\uD83C\uDFE6 IBAN ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.\n${iban}${accountName ? ` (${accountName})` : ""}\n\uD83D\uDCDD Açıklama kısmını boş bırakabilirsiniz.\n\uD83E\uDDFE Ödeme sonrası dekontu bize iletmenizi rica ederiz.`
+        : `\uD83C\uDFE6 Havale/EFT ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.`
       for (const c of customers) {
         const phone = c.phone || c.phone1 || ""
         if (!phone || !c.totalDebt || c.totalDebt <= 0) continue
@@ -96,7 +111,7 @@ export default function TodayPage() {
           title: c.name,
           subtitle: `${c.totalDebt.toLocaleString("tr-TR")} TL borcu var`,
           phone,
-          message: `👋 Merhaba ${c.name},\n\n💰 *Yeşiltaş Teknoloji*'den ödeme hatırlatmasıdır.\n\nHesabınızda ${c.totalDebt.toLocaleString("tr-TR")} TL bakiye bulunmaktadır. Müsait olduğunuzda uğrayabilir misiniz?\n\nTeşekkür ederiz.\n\n🏪 Yeşiltaş Teknoloji`,
+          message: `\uD83D\uDC4B Merhaba ${c.name},\n\n\uD83D\uDCB0 *Yeşiltaş Teknoloji*'den ödeme hatırlatmasıdır.\n\nHesabınızda ${c.totalDebt.toLocaleString("tr-TR")} TL bakiye bulunmaktadır.\n\n${paymentLine}\n\nTeşekkür ederiz.\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
         })
       }
     } catch (e) {
@@ -115,7 +130,7 @@ export default function TodayPage() {
           title: `${r.customerName} — ${r.brand} ${r.model}`,
           subtitle: `${waitingDays} gündür bekliyor, durum bilgisi verilebilir`,
           phone: r.phone1,
-          message: `👋 Merhaba ${r.customerName},\n\n🔧 *Yeşiltaş Teknoloji*'den bilgilendirmedir.\n\n${r.brand} ${r.model} cihazınızla ilgileniyoruz, en kısa sürede size dönüş yapacağız.\n\nSabrınız için teşekkür ederiz.\n\n🏪 Yeşiltaş Teknoloji`,
+          message: `\uD83D\uDC4B Merhaba ${r.customerName},\n\n\uD83D\uDD27 *Yeşiltaş Teknoloji*'den bilgilendirmedir.\n\n${r.brand} ${r.model} cihazınızla ilgileniyoruz, en kısa sürede size dönüş yapacağız.\n\nSabrınız için teşekkür ederiz.\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
         })
       }
     } catch (e) {
