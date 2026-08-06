@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
+  ListChecks, 
   Wrench, 
   Package, 
   ShoppingCart, 
@@ -33,6 +34,7 @@ import { NotificationBell } from "@/components/NotificationBell"
 
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
+  { href: "/dashboard/today", icon: ListChecks, label: "Bugün", color: "text-fuchsia-400" },
   { href: "/dashboard/repairs", icon: Wrench, label: "Teknik Servis", color: "text-orange-400" },
   { href: "/dashboard/sales", icon: ShoppingCart, label: "Satışlar", color: "text-cyan-400" },
   { href: "/dashboard/customers", icon: Users, label: "Müşteriler", color: "text-violet-400" },
