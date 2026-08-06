@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
   ListChecks, 
+  ClipboardList, 
   Wrench, 
   Package, 
   ShoppingCart, 
@@ -39,6 +40,7 @@ const menuItems = [
   { href: "/dashboard/sales", icon: ShoppingCart, label: "Satışlar", color: "text-cyan-400" },
   { href: "/dashboard/customers", icon: Users, label: "Müşteriler", color: "text-violet-400" },
   { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
+  { href: "/dashboard/tasks", icon: ClipboardList, label: "Görevler", color: "text-fuchsia-400" },
   { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
   { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
   { href: "/dashboard/finance", icon: DollarSign, label: "Finans", color: "text-green-400" },

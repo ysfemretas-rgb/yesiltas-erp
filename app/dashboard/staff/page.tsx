@@ -23,6 +23,7 @@ const ALL_PERMISSIONS = [
   { key: "Finans", label: "Finans" },
   { key: "Garantiler", label: "Garantiler" },
   { key: "Müşteriler", label: "Müşteriler" },
+  { key: "Görevler", label: "Görevler" },
   { key: "Personel", label: "Personel Yönetimi" },
   { key: "Raporlar", label: "Raporlar" },
   { key: "Ayarlar", label: "Ayarlar" },
