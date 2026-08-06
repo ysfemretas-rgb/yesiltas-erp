@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { InventoryItem, fetchInventory, createInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,35 +27,11 @@ import {
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 
-interface InventoryItem {
-  id: number
-  name: string
-  sku: string
-  category: string
-  quantity: number
-  minQuantity: number
-  purchasePrice: number
-  purchaseCurrency: "TRY" | "USD" | "EUR"
-  profitMargin: number
-  salePrice: number
-  supplier: string
-  location: string
-}
-
 interface ExchangeRates {
   USD: number
   EUR: number
   lastUpdated: string
 }
-
-const initialInventory: InventoryItem[] = [
-  { id: 1, name: "iPhone 14 Pro Ekran", sku: "IP14P-SCR-001", category: "Ekran", quantity: 12, minQuantity: 5, purchasePrice: 25, purchaseCurrency: "USD", profitMargin: 40, salePrice: 0, supplier: "EkranTedarik", location: "Raf A-1" },
-  { id: 2, name: "Samsung S23 Batarya", sku: "SS23-BAT-001", category: "Batarya", quantity: 8, minQuantity: 10, purchasePrice: 8, purchaseCurrency: "USD", profitMargin: 35, salePrice: 0, supplier: "SamsungParts", location: "Raf B-2" },
-  { id: 3, name: "iPhone 13 Arka Kapak", sku: "IP13-BCK-001", category: "Kapak", quantity: 25, minQuantity: 10, purchasePrice: 5, purchaseCurrency: "USD", profitMargin: 50, salePrice: 0, supplier: "AppleParts", location: "Raf A-3" },
-  { id: 4, name: "USB-C Şarj Portu", sku: "USBC-PRT-001", category: "Port", quantity: 3, minQuantity: 15, purchasePrice: 1.5, purchaseCurrency: "USD", profitMargin: 60, salePrice: 0, supplier: "GenelTedarik", location: "Raf C-1" },
-  { id: 5, name: "iPad Air 5 Ekran", sku: "IPA5-SCR-001", category: "Ekran", quantity: 6, minQuantity: 3, purchasePrice: 35, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, supplier: "EkranTedarik", location: "Raf A-2" },
-  { id: 6, name: "MacBook Air M2 Batarya", sku: "MBA-M2-BAT-001", category: "Batarya", quantity: 4, minQuantity: 2, purchasePrice: 45, purchaseCurrency: "USD", profitMargin: 25, salePrice: 0, supplier: "AppleParts", location: "Raf B-1" },
-]
 
 function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "USD" | "EUR", profitMargin: number, rates: ExchangeRates): number {
   let priceInTRY = purchasePrice
@@ -71,7 +48,7 @@ export default function InventoryPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Envanter")
 
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -89,25 +66,20 @@ export default function InventoryPage() {
     salePrice: 0,
   })
   useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const saved = localStorage.getItem("yt_inventory")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setInventory(parsed)
-        }
-      }
-      // Kur bilgisi artık useExchangeRates() hook'u tarafından okunuyor/önbelleğe alınıyor.
-    } catch (e) {
-      console.error("Load error:", e)
-    }
-    setIsLoaded(true)
+    let cancelled = false
+    fetchInventory()
+      .then((data) => {
+        if (!cancelled) setInventory(data)
+      })
+      .catch((e) => {
+        console.error("Load error:", e)
+        if (!cancelled) showToast("Envanter yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_inventory", JSON.stringify(inventory))
-  }, [inventory, isLoaded])
   if (checking) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -159,13 +131,21 @@ export default function InventoryPage() {
   const totalSaleValue = inventoryWithPrices.reduce((sum, item) => sum + (item.salePrice * item.quantity), 0)
   const totalProfit = totalSaleValue - totalPurchaseValue
 
-  const updateQuantity = (id: number, delta: number) => {
-    setInventory(inventory.map(item =>
-      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-    ))
+  const updateQuantity = async (id: string, delta: number) => {
+    const item = inventory.find(i => i.id === id)
+    if (!item) return
+    const newQuantity = Math.max(0, item.quantity + delta)
+    setInventory(inventory.map(i => i.id === id ? { ...i, quantity: newQuantity } : i))
+    try {
+      await updateInventoryItem(id, { quantity: newQuantity })
+    } catch (e) {
+      console.error(e)
+      setInventory(inventory)
+      showToast("Stok güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.name || !newItem.sku) {
       showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
       return
@@ -176,26 +156,31 @@ export default function InventoryPage() {
       Number(newItem.profitMargin) || 0,
       rates
     )
-    const item: InventoryItem = {
-      id: Date.now(),
-      name: newItem.name,
-      sku: newItem.sku,
-      category: newItem.category || "Diğer",
-      quantity: Number(newItem.quantity) || 0,
-      minQuantity: Number(newItem.minQuantity) || 5,
-      purchasePrice: Number(newItem.purchasePrice) || 0,
-      purchaseCurrency: newItem.purchaseCurrency || "TRY",
-      profitMargin: Number(newItem.profitMargin) || 0,
-      salePrice: salePrice,
-      supplier: newItem.supplier || "",
-      location: newItem.location || "",
+    try {
+      const item = await createInventoryItem({
+        name: newItem.name,
+        sku: newItem.sku,
+        category: newItem.category || "Diğer",
+        quantity: Number(newItem.quantity) || 0,
+        minQuantity: Number(newItem.minQuantity) || 5,
+        purchasePrice: Number(newItem.purchasePrice) || 0,
+        purchaseCurrency: newItem.purchaseCurrency || "TRY",
+        profitMargin: Number(newItem.profitMargin) || 0,
+        salePrice: salePrice,
+        supplier: newItem.supplier || "",
+        location: newItem.location || "",
+      })
+      setInventory([item, ...inventory])
+      setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
+      setIsDialogOpen(false)
+      showToast("Ürün eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Ürün eklenirken bir sorun oluştu.", "error")
     }
-    setInventory([item, ...inventory])
-    setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
-    setIsDialogOpen(false)
   }
 
-  const handleUpdateItem = () => {
+  const handleUpdateItem = async () => {
     if (!editingItem) return
     if (!editingItem.name || !editingItem.sku) {
       showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
@@ -207,18 +192,30 @@ export default function InventoryPage() {
       editingItem.profitMargin,
       rates
     )
-    setInventory(inventory.map(item =>
-      item.id === editingItem.id ? { ...editingItem, salePrice } : item
-    ))
-    setIsEditOpen(false)
-    setEditingItem(null)
+    try {
+      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, salePrice })
+      setInventory(inventory.map(item => item.id === updated.id ? updated : item))
+      setIsEditOpen(false)
+      setEditingItem(null)
+      showToast("Ürün güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Ürün güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteItem = (id: number) => {
+  const handleDeleteItem = async (id: string) => {
     const item = inventory.find(i => i.id === id)
     if (!item) return
     if (!confirm(`\u{26A0} *${item.name}* ürününü silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setInventory(inventory.filter(item => item.id !== id))
+    try {
+      await deleteInventoryItem(id)
+      setInventory(inventory.filter(item => item.id !== id))
+      showToast("Ürün silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Ürün silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openEditDialog = (item: InventoryItem) => {
