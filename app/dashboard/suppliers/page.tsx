@@ -12,29 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, Trash2, Edit3, X, ExternalLink, MessageCircle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 
-interface Supplier {
-  id: number
-  name: string
-  contactPerson: string
-  phone: string
-  email: string
-  address: string
-  category: string
-  rating: number
-  status: "active" | "inactive"
-  totalOrders: number
-  lastOrderDate: string
-}
+import { Supplier, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/suppliers"
 
 const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
-
-const getInitialSuppliers = (): Supplier[] => [
-  { id: 1, name: "EkranTedarik A.Ş.", contactPerson: "Ali Yılmaz", phone: "0212 123 4567", email: "info@ekrantedarik.com", address: "İstanbul, Kadıköy", category: "Ekran", rating: 5, status: "active", totalOrders: 45, lastOrderDate: "2024-01-15" },
-  { id: 2, name: "SamsungParts", contactPerson: "Mehmet Kaya", phone: "0216 234 5678", email: "satis@samsungparts.com", address: "İstanbul, Ümraniye", category: "Batarya", rating: 4, status: "active", totalOrders: 32, lastOrderDate: "2024-01-10" },
-  { id: 3, name: "AppleParts", contactPerson: "Ayşe Demir", phone: "0232 345 6789", email: "destek@appleparts.com", address: "İzmir, Bornova", category: "Kapak", rating: 5, status: "active", totalOrders: 28, lastOrderDate: "2024-01-08" },
-  { id: 4, name: "GenelTedarik", contactPerson: "Fatma Şahin", phone: "0312 456 7890", email: "iletisim@geneltedarik.com", address: "Ankara, Çankaya", category: "Port", rating: 3, status: "inactive", totalOrders: 15, lastOrderDate: "2023-12-20" },
-  { id: 5, name: "KimyaTedarik", contactPerson: "Veli Can", phone: "0212 567 8901", email: "siparis@kimyatedarik.com", address: "İstanbul, Maltepe", category: "Yapıştırıcı", rating: 4, status: "active", totalOrders: 22, lastOrderDate: "2024-01-12" },
-]
 
 export default function SuppliersPage() {
   const { toast, showToast, hideToast } = useToast()
@@ -48,7 +28,7 @@ export default function SuppliersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({
     category: "Ekran",
     rating: 5,
@@ -56,38 +36,22 @@ export default function SuppliersPage() {
     totalOrders: 0,
   })
 
-  // localStorage'dan yükle
+  // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("yt_suppliers")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSuppliers(parsed)
-        } else {
-          const initial = getInitialSuppliers()
-          setSuppliers(initial)
-          localStorage.setItem("yt_suppliers", JSON.stringify(initial))
-        }
-      } else {
-        const initial = getInitialSuppliers()
-        setSuppliers(initial)
-        localStorage.setItem("yt_suppliers", JSON.stringify(initial))
-      }
-    } catch {
-      const initial = getInitialSuppliers()
-      setSuppliers(initial)
-      localStorage.setItem("yt_suppliers", JSON.stringify(initial))
-    }
-    setIsLoaded(true)
+    let cancelled = false
+    fetchSuppliers()
+      .then((data) => {
+        if (!cancelled) setSuppliers(data)
+      })
+      .catch((err) => {
+        console.error("Tedarikçiler yüklenemedi:", err)
+        if (!cancelled) showToast("Tedarikçiler yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
-
-  // localStorage'a kaydet
-  useEffect(() => {
-    if (isLoaded && suppliers.length > 0) {
-      localStorage.setItem("yt_suppliers", JSON.stringify(suppliers))
-    }
-  }, [suppliers, isLoaded])
 
   const getRatingStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -115,30 +79,35 @@ export default function SuppliersPage() {
   const activeCount = suppliers.filter(s => s.status === "active").length
   const totalOrders = suppliers.reduce((sum, s) => sum + (Number(s.totalOrders) || 0), 0)
 
-  const handleAddSupplier = () => {
+  const handleAddSupplier = async () => {
     if (!newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
       showToast("Lütfen firma adı ve yetkili kişi alanlarını doldurun!", "error")
       return
     }
-    const supplier: Supplier = {
-      id: Date.now(),
-      name: newSupplier.name.trim(),
-      contactPerson: newSupplier.contactPerson.trim(),
-      phone: newSupplier.phone?.trim() || "",
-      email: newSupplier.email?.trim() || "",
-      address: newSupplier.address?.trim() || "",
-      category: newSupplier.category || "Diğer",
-      rating: Number(newSupplier.rating) || 5,
-      status: "active",
-      totalOrders: 0,
-      lastOrderDate: new Date().toISOString().split("T")[0],
+    try {
+      const supplier = await createSupplier({
+        name: newSupplier.name.trim(),
+        contactPerson: newSupplier.contactPerson.trim(),
+        phone: newSupplier.phone?.trim() || "",
+        email: newSupplier.email?.trim() || "",
+        address: newSupplier.address?.trim() || "",
+        category: newSupplier.category || "Diğer",
+        rating: Number(newSupplier.rating) || 5,
+        status: "active",
+        totalOrders: 0,
+        lastOrderDate: new Date().toISOString().split("T")[0],
+      })
+      setSuppliers([supplier, ...suppliers])
+      setNewSupplier({ category: "Ekran", rating: 5, status: "active", totalOrders: 0 })
+      setIsDialogOpen(false)
+      showToast("Tedarikçi eklendi.", "success")
+    } catch (err) {
+      console.error(err)
+      showToast("Tedarikçi eklenirken bir sorun oluştu.", "error")
     }
-    setSuppliers([supplier, ...suppliers])
-    setNewSupplier({ category: "Ekran", rating: 5, status: "active", totalOrders: 0 })
-    setIsDialogOpen(false)
   }
 
-  const handleEditSupplier = () => {
+  const handleEditSupplier = async () => {
     if (!editingSupplier) return
     const name = newSupplier.name?.trim()
     const contactPerson = newSupplier.contactPerson?.trim()
@@ -146,24 +115,37 @@ export default function SuppliersPage() {
       showToast("Lütfen firma adı ve yetkili kişi alanlarını doldurun!", "error")
       return
     }
-    setSuppliers(suppliers.map(s => s.id === editingSupplier.id ? {
-      ...s,
-      name: name,
-      contactPerson: contactPerson,
-      phone: newSupplier.phone?.trim() || s.phone,
-      email: newSupplier.email?.trim() || s.email,
-      address: newSupplier.address?.trim() || s.address,
-      category: newSupplier.category || s.category,
-      rating: Number(newSupplier.rating) || s.rating,
-      status: (newSupplier.status as "active" | "inactive") || s.status,
-    } : s))
-    setIsEditOpen(false)
-    setEditingSupplier(null)
+    try {
+      const updated = await updateSupplier(editingSupplier.id, {
+        name,
+        contactPerson,
+        phone: newSupplier.phone?.trim() || editingSupplier.phone,
+        email: newSupplier.email?.trim() || editingSupplier.email,
+        address: newSupplier.address?.trim() || editingSupplier.address,
+        category: newSupplier.category || editingSupplier.category,
+        rating: Number(newSupplier.rating) || editingSupplier.rating,
+        status: (newSupplier.status as "active" | "inactive") || editingSupplier.status,
+      })
+      setSuppliers(suppliers.map(s => s.id === updated.id ? updated : s))
+      setIsEditOpen(false)
+      setEditingSupplier(null)
+      showToast("Tedarikçi güncellendi.", "success")
+    } catch (err) {
+      console.error(err)
+      showToast("Tedarikçi güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteSupplier = (id: number) => {
-    setSuppliers(suppliers.filter(s => s.id !== id))
-    setShowDeleteConfirm(null)
+  const handleDeleteSupplier = async (id: string) => {
+    try {
+      await deleteSupplier(id)
+      setSuppliers(suppliers.filter(s => s.id !== id))
+      setShowDeleteConfirm(null)
+      showToast("Tedarikçi silindi.", "success")
+    } catch (err) {
+      console.error(err)
+      showToast("Tedarikçi silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openEdit = (supplier: Supplier) => {
