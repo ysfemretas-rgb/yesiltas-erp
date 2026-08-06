@@ -204,7 +204,7 @@ export default function TodayPage() {
                       onClick={() => sendWhatsApp(item)}
                       className="bg-emerald-600 hover:bg-emerald-700"
                     >
-                      <MessageCircle className="h-4 w-4 mr-1" />📱 WhatsApp Gönder
+                      <MessageCircle className="h-4 w-4 mr-1" />WhatsApp Gönder
                     </Button>
                   </div>
                 ))}

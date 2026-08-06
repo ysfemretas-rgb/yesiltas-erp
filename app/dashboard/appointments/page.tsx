@@ -340,7 +340,7 @@ export default function AppointmentsPage() {
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-white">Randevular</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">📅 Randevular</h1>
         <Dialog open={isNewAppointmentOpen} onOpenChange={setIsNewAppointmentOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -541,24 +541,24 @@ export default function AppointmentsPage() {
                     </div>
                     <div className="flex gap-1 flex-wrap justify-end">
                       <Button size="sm" variant="outline" onClick={() => sendWhatsApp(appointment)} className="border-green-700 text-green-400 hover:bg-green-900/30">
-                        <MessageCircle className="h-4 w-4 mr-1" />📱 WhatsApp
+                        <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => handleEditClick(appointment)} className="border-blue-700 text-blue-400 hover:bg-blue-900/30">
-                        <Pencil className="h-4 w-4 mr-1" />✏️ Düzenle
+                        <Pencil className="h-4 w-4 mr-1" />Düzenle
                       </Button>
                       {appointment.status === "scheduled" && (
                         <>
                           <Button size="sm" onClick={() => updateStatus(appointment.id, "completed")} className="bg-emerald-600 hover:bg-emerald-700">
-                            <CheckCircle2 className="h-4 w-4 mr-1" />✅ Tamamla
+                            <CheckCircle2 className="h-4 w-4 mr-1" />Tamamla
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => updateStatus(appointment.id, "cancelled")} className="bg-red-900/50 hover:bg-red-800 border-red-800">
-                            <X className="h-4 w-4 mr-1" />❌ İptal
+                            <X className="h-4 w-4 mr-1" />İptal
                           </Button>
                         </>
                       )}
                       {isManager && (
                       <Button size="sm" variant="destructive" onClick={() => handleDeleteAppointment(appointment.id)} className="bg-red-900/50 hover:bg-red-800 border-red-800">
-                        <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
+                        <Trash2 className="h-4 w-4 mr-1" />Sil
                       </Button>
                       )}
                     </div>

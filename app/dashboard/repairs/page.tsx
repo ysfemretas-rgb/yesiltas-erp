@@ -500,7 +500,7 @@ export default function RepairsPage() {
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Teknik Servis</h1>
+        <h1 className="text-2xl font-bold text-white">🔧 Teknik Servis</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -798,7 +798,7 @@ export default function RepairsPage() {
                         className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
                         onClick={() => sendWhatsApp(repair)}
                       >
-                        <MessageCircle className="w-3 h-3 mr-1" />📱 WhatsApp
+                        <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
                       </Button>
                     )}
                     <Select
@@ -820,7 +820,7 @@ export default function RepairsPage() {
                       className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
                       onClick={() => openNoteDialog(repair)}
                     >
-                      <AlertCircle className="w-3 h-3 mr-1" />📝 Not
+                      <AlertCircle className="w-3 h-3 mr-1" />Not
                     </Button>
                     <Button
                       size="sm"
@@ -836,7 +836,7 @@ export default function RepairsPage() {
                       className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       onClick={() => openEditDialog(repair)}
                     >
-                      <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
+                      <Pencil className="w-3 h-3 mr-1" />Düzenle
                     </Button>
                     {isManager && (
                     <Button
@@ -845,7 +845,7 @@ export default function RepairsPage() {
                       className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                       onClick={() => handleDeleteRepair(repair.id)}
                     >
-                      <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
+                      <Trash2 className="w-3 h-3 mr-1" />Sil
                     </Button>
                     )}
                   </div>

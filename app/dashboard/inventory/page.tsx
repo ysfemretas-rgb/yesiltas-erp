@@ -241,7 +241,7 @@ export default function InventoryPage() {
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-white">Stok Yönetimi</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">📦 Stok Yönetimi</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -627,7 +627,7 @@ export default function InventoryPage() {
                         onClick={() => openEditDialog(item)}
                         className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       >
-                        <Pencil className="h-4 w-4 mr-1" />✏️ Düzenle
+                        <Pencil className="h-4 w-4 mr-1" />Düzenle
                       </Button>
                       {isManager && (
                       <Button
@@ -636,7 +636,7 @@ export default function InventoryPage() {
                         onClick={() => handleDeleteItem(item.id)}
                         className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                       >
-                        <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
+                        <Trash2 className="h-4 w-4 mr-1" />Sil
                       </Button>
                       )}
                     </div>

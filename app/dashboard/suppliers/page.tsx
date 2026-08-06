@@ -214,7 +214,7 @@ export default function SuppliersPage() {
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">Tedarikçi Yönetimi</h1>
+            <h1 className="text-3xl font-bold text-white">🚚 Tedarikçi Yönetimi</h1>
             <p className="text-slate-400 mt-1">Tedarikçi firmalarını yönetin</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -445,20 +445,20 @@ export default function SuppliersPage() {
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-600" onClick={() => handleCall(supplier.phone)}>
-                        <Phone className="h-3 w-3 mr-1" />📞 Ara
+                        <Phone className="h-3 w-3 mr-1" />Ara
                       </Button>
                       <Button size="sm" variant="outline" className="border-emerald-600 text-emerald-400 hover:bg-emerald-900/30" onClick={() => handleWhatsApp(supplier.phone, supplier.contactPerson)}>
-                        <MessageCircle className="h-3 w-3 mr-1" />📱 WhatsApp
+                        <MessageCircle className="h-3 w-3 mr-1" />WhatsApp
                       </Button>
                       <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => handleMap(supplier.address)}>
-                        <ExternalLink className="h-3 w-3 mr-1" />📍 Harita
+                        <ExternalLink className="h-3 w-3 mr-1" />Harita
                       </Button>
                       <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => openEdit(supplier)}>
-                        <Edit3 className="h-3 w-3 mr-1" />✏️ Düzenle
+                        <Edit3 className="h-3 w-3 mr-1" />Düzenle
                       </Button>
                       {isManager && (
                       <Button size="sm" variant="outline" className="border-red-600 text-red-400 hover:bg-red-900/30" onClick={() => setShowDeleteConfirm(supplier.id)}>
-                        <Trash2 className="h-3 w-3 mr-1" />🗑️ Sil
+                        <Trash2 className="h-3 w-3 mr-1" />Sil
                       </Button>
                       )}
                     </div>

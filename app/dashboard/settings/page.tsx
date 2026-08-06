@@ -4,6 +4,7 @@ import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect, useRef } from "react"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { supabase } from "@/lib/supabase"
 import { SupabaseHealthCheck } from "@/components/SupabaseHealthCheck"
 import { ActivityLogViewer } from "@/components/ActivityLogViewer"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Save, Building, User, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Upload } from "lucide-react"
+import { Save, Building, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Upload } from "lucide-react"
 import { exportBackup, readBackupFile, restoreBackup } from "@/lib/backup"
 
 interface CompanySettings {
@@ -207,7 +208,7 @@ export default function SettingsPage() {
     setShowDeleteConfirm(null)
   }
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (passwordData.newPassword.length < 6) {
       showToast("Şifre en az 6 karakter olmalı!", "error")
       return
@@ -216,9 +217,16 @@ export default function SettingsPage() {
       showToast("Şifreler eşleşmiyor!", "error")
       return
     }
-    showToast("Şifreniz başarıyla değiştirildi!", "success")
-    setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
-    setIsPasswordOpen(false)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword })
+      if (error) throw error
+      showToast("Şifreniz başarıyla değiştirildi!", "success")
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+      setIsPasswordOpen(false)
+    } catch (e) {
+      console.error(e)
+      showToast("Şifre değiştirilirken bir sorun oluştu.", "error")
+    }
   }
 
   const handleEditUserPassword = () => {
@@ -315,7 +323,7 @@ export default function SettingsPage() {
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">Ayarlar</h1>
+            <h1 className="text-3xl font-bold text-white">⚙️ Ayarlar</h1>
             <p className="text-slate-400 mt-1">Sistem ve şirket ayarlarını yönetin</p>
           </div>
           <Button onClick={handleSaveCompany} className="bg-blue-600 hover:bg-blue-700">
@@ -332,14 +340,13 @@ export default function SettingsPage() {
         )}
 
         <Tabs defaultValue="company">
-          <TabsList className="flex w-full gap-1 overflow-x-auto lg:w-[600px] bg-slate-800 p-1">
+          <TabsList className="flex w-full gap-1 overflow-x-auto bg-slate-800 p-1">
             <TabsTrigger value="company" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Şirket</TabsTrigger>
-            <TabsTrigger value="user" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcı</TabsTrigger>
             <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcılar</TabsTrigger>
             <TabsTrigger value="logins" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Giriş/Çıkış</TabsTrigger>
             <TabsTrigger value="system" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Sistem</TabsTrigger>
-            <TabsTrigger value="status" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">🔌 Bağlantı Durumu</TabsTrigger>
-            <TabsTrigger value="activity" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">📋 Aktivite Logu</TabsTrigger>
+            <TabsTrigger value="status" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Bağlantı Durumu</TabsTrigger>
+            <TabsTrigger value="activity" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Aktivite Logu</TabsTrigger>
           </TabsList>
 
           {/* Şirket Bilgileri */}
@@ -423,47 +430,6 @@ export default function SettingsPage() {
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Mevcut Kullanıcı */}
-          <TabsContent value="user" className="space-y-4">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <User className="h-5 w-5 text-purple-400" />
-                  Mevcut Kullanıcı
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-700 border border-slate-600">
-                  <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
-                    {currentUser?.name?.charAt(0) || "A"}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-white text-lg">{currentUser?.name || "Admin"}</div>
-                    <div className="text-sm text-slate-400">{currentUser?.role || "Yönetici"}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Ad Soyad</label>
-                    <Input value={currentUser?.name || ""} disabled className="bg-slate-700 border-slate-600 text-slate-400" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Rol</label>
-                    <Input value={currentUser?.role || ""} disabled className="bg-slate-700 border-slate-600 text-slate-400" />
-                  </div>
-                </div>
-
-                <Separator className="bg-slate-600" />
-
-                <Button onClick={() => setIsPasswordOpen(true)} className="w-full bg-blue-600 hover:bg-blue-700">
-                  <KeyRound className="mr-2 h-4 w-4" />
-                  Şifre Değiştir
-                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -632,6 +598,18 @@ export default function SettingsPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-3 rounded-lg border border-slate-600 bg-slate-700/50">
                   <div className="flex items-center gap-3">
+                    <KeyRound className="h-5 w-5 text-purple-400" />
+                    <div>
+                      <div className="font-medium text-white">Şifreniz</div>
+                      <div className="text-sm text-slate-400">Kendi giriş şifrenizi değiştirin</div>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => setIsPasswordOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+                    Değiştir
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-600 bg-slate-700/50">
+                  <div className="flex items-center gap-3">
                     <Bell className="h-5 w-5 text-blue-400" />
                     <div>
                       <div className="font-medium text-white">Bildirimler</div>
@@ -745,15 +723,15 @@ export default function SettingsPage() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Mevcut Şifre</label>
+                <label className="text-sm font-medium text-slate-300">Yeni Şifre</label>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
                   <Input
                     type={showPassword ? "text" : "password"}
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
                     className="pl-9 pr-10 bg-slate-700 border-slate-600 text-white"
-                    placeholder="Mevcut şifreniz"
+                    placeholder="En az 6 karakter"
                   />
                   <button
                     type="button"
@@ -765,16 +743,6 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Yeni Şifre</label>
-                <Input
-                  type="password"
-                  value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  placeholder="En az 6 karakter"
-                />
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Şifre Tekrar</label>
                 <Input
                   type="password"
@@ -784,7 +752,7 @@ export default function SettingsPage() {
                   placeholder="Yeni şifreyi tekrar girin"
                 />
               </div>
-              <Button onClick={handleChangePassword} disabled={!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword} className="bg-blue-600 hover:bg-blue-700">
+              <Button onClick={handleChangePassword} disabled={!passwordData.newPassword || !passwordData.confirmPassword} className="bg-blue-600 hover:bg-blue-700">
                 <KeyRound className="mr-2 h-4 w-4" />
                 Şifreyi Değiştir
               </Button>

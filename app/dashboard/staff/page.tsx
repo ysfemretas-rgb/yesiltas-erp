@@ -281,7 +281,7 @@ export default function StaffPage() {
         {/* Başlık */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">Personel Yönetimi</h1>
+            <h1 className="text-3xl font-bold text-white">🧑‍💼 Personel Yönetimi</h1>
             <p className="text-slate-400 mt-1">Ekip üyelerini yönetin ve yetkilendirin</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -541,7 +541,7 @@ export default function StaffPage() {
                         className="border-slate-600 text-slate-300 hover:bg-slate-600"
                         onClick={() => handleCall(member.phone)}
                       >
-                        <Phone className="w-3 h-3 mr-1" />📞 Ara
+                        <Phone className="w-3 h-3 mr-1" />Ara
                       </Button>
                       <Button
                         size="sm"
@@ -549,7 +549,7 @@ export default function StaffPage() {
                         className="border-emerald-600 text-emerald-400 hover:bg-emerald-900/30"
                         onClick={() => handleWhatsApp(member.phone, member.name)}
                       >
-                        <MessageCircle className="w-3 h-3 mr-1" />📱 WhatsApp
+                        <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
                       </Button>
                       <Button
                         size="sm"
@@ -557,7 +557,7 @@ export default function StaffPage() {
                         className="border-blue-600 text-blue-400 hover:bg-blue-900/30"
                         onClick={() => handleEditMember(member)}
                       >
-                        <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
+                        <Pencil className="w-3 h-3 mr-1" />Düzenle
                       </Button>
                       {isManager && (
                       <Button
@@ -566,7 +566,7 @@ export default function StaffPage() {
                         className="border-red-600 text-red-400 hover:bg-red-900/30"
                         onClick={() => setShowDeleteConfirm(member.id)}
                       >
-                        <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
+                        <Trash2 className="w-3 h-3 mr-1" />Sil
                       </Button>
                       )}
                     </div>
