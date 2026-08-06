@@ -2,6 +2,9 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { Repair, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
+import { fetchCustomers, createCustomer } from "@/lib/customers"
+import { createTransaction } from "@/lib/finance"
 import { QrDialog } from "@/components/repairs/QrDialog"
 import { NoteDialog } from "@/components/repairs/NoteDialog"
 import { getRepairStatusBadge as getStatusBadge, getRepairPaymentBadge as getPaymentBadge, formatCurrency } from "@/components/repairs/RepairBadges"
@@ -27,28 +30,9 @@ import {
   QrCode
 } from "lucide-react"
 
-interface Repair {
-  id: number
-  customerName: string
-  phone1: string
-  phone2: string
-  device: string
-  brand: string
-  model: string
-  issue: string
-  status: "waiting" | "in_progress" | "completed"
-  cost: number
-  paid: number
-  remaining: number
-  paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
-  notes: string
-  imei?: string
-  createdAt: string
-  completedAt?: string
-}
 
 interface Customer {
-  id: number
+  id: string
   name: string
   phone1: string
   phone2: string
@@ -58,113 +42,19 @@ interface Customer {
 
 interface Note {
   id: number
-  repairId: number
+  repairId: string
   text: string
   createdAt: string
   author: string
-}
-
-interface FinanceTransaction {
-  id: number
-  description: string
-  amount: number
-  type: "income" | "expense"
-  category: string
-  date: string
-  customer?: string
-  source: "repair" | "sale" | "manual"
-  sourceId?: number
-}
-
-const initialRepairs: Repair[] = [
-  {
-    id: 1,
-    customerName: "Ahmet Yilmaz",
-    phone1: "0532 123 4567",
-    phone2: "",
-    device: "Telefon",
-    brand: "Apple",
-    model: "iPhone 14 Pro",
-    issue: "Ekran kirildi",
-    status: "completed",
-    cost: 4500,
-    paid: 4500,
-    remaining: 0,
-    paymentType: "cash",
-    notes: "Ekran degistirildi, test edildi.",
-    createdAt: "2026-07-28",
-    completedAt: "2026-07-29",
-  },
-  {
-    id: 2,
-    customerName: "Mehmet Demir",
-    phone1: "0533 987 6543",
-    phone2: "0544 111 2222",
-    device: "Laptop",
-    brand: "Dell",
-    model: "XPS 15",
-    issue: "Sarj olmuyor",
-    status: "in_progress",
-    cost: 1200,
-    paid: 0,
-    remaining: 1200,
-    paymentType: "unpaid",
-    notes: "Sarj soketi kontrol ediliyor.",
-    createdAt: "2026-07-30",
-  },
-  {
-    id: 3,
-    customerName: "Ayse Kaya",
-    phone1: "0555 444 3333",
-    phone2: "",
-    device: "Tablet",
-    brand: "Samsung",
-    model: "Galaxy Tab S8",
-    issue: "Dokunmatik calismiyor",
-    status: "waiting",
-    cost: 800,
-    paid: 0,
-    remaining: 800,
-    paymentType: "unpaid",
-    notes: "Parca siparisi verildi.",
-    createdAt: "2026-08-01",
-  },
-]
-
-const initialCustomers: Customer[] = [
-  { id: 1, name: "Ahmet Yilmaz", phone1: "0532 123 4567", phone2: "", email: "ahmet@email.com", address: "Istanbul" },
-  { id: 2, name: "Mehmet Demir", phone1: "0533 987 6543", phone2: "0544 111 2222", email: "mehmet@email.com", address: "Ankara" },
-  { id: 3, name: "Ayse Kaya", phone1: "0555 444 3333", phone2: "", email: "ayse@email.com", address: "Izmir" },
-]
-
-const initialNotes: Note[] = [
-  { id: 1, repairId: 2, text: "Parca siparisi verildi, 2 gun surecek.", createdAt: "2026-07-30 10:00", author: "Teknisyen" },
-]
-
-const initialFinance: FinanceTransaction[] = [
-  { id: 1, description: "iPhone 14 Pro Ekran Degisimi", amount: 4500, type: "income", category: "Tamir Geliri", date: "2026-07-29", customer: "Ahmet Yilmaz", source: "repair", sourceId: 1 },
-]
-
-// Helper to normalize customer data from different sources
-function normalizeCustomer(raw: any): Customer {
-  return {
-    id: raw.id || 0,
-    name: raw.name || raw.fullName || raw.customerName || "",
-    phone1: raw.phone1 || raw.phone || raw.telefon || raw.tel1 || raw.phoneNumber || "",
-    phone2: raw.phone2 || raw.phoneSecondary || raw.tel2 || "",
-    email: raw.email || raw.e_posta || "",
-    address: raw.address || raw.adres || "",
-  }
 }
 
 export default function RepairsPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Tamir")
 
-  const [repairs, setRepairs] = useState<Repair[]>(initialRepairs)
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
-  const [notes, setNotes] = useState<Note[]>(initialNotes)
-  const [financeTransactions, setFinanceTransactions] = useState<FinanceTransaction[]>(initialFinance)
+  const [repairs, setRepairs] = useState<Repair[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -194,34 +84,40 @@ export default function RepairsPage() {
   const [newCustomerEmail, setNewCustomerEmail] = useState("")
   const [newCustomerAddress, setNewCustomerAddress] = useState("")
   useEffect(() => {
+    let cancelled = false
+
     if (typeof window !== "undefined") {
       try {
-        const savedRepairs = localStorage.getItem("yt_repairs")
-        const savedCustomers = localStorage.getItem("yt_customers")
         const savedNotes = localStorage.getItem("yt_repair_notes")
-        const savedFinance = localStorage.getItem("yt_finance")
-        if (savedRepairs) setRepairs(JSON.parse(savedRepairs))
-        if (savedCustomers) {
-          const parsed = JSON.parse(savedCustomers)
-          // Normalize customers to ensure phone1 field exists
-          const normalized = Array.isArray(parsed) ? parsed.map(normalizeCustomer) : []
-          setCustomers(normalized)
-        }
         if (savedNotes) setNotes(JSON.parse(savedNotes))
-        if (savedFinance) setFinanceTransactions(JSON.parse(savedFinance))
       } catch (e) {
-        console.error("Load error:", e)
+        console.error("Not verisi yüklenemedi:", e)
       }
     }
+
+    fetchCustomers()
+      .then((data) => {
+        if (!cancelled) setCustomers(data.map(c => ({ id: c.id, name: c.name, phone1: c.phone1 || c.phone, phone2: c.phone2, email: c.email, address: c.address })))
+      })
+      .catch((e) => console.error("Müşteriler yüklenemedi:", e))
+
+    fetchRepairs()
+      .then((data) => {
+        if (!cancelled) setRepairs(data)
+      })
+      .catch((e) => {
+        console.error("Tamir kayıtları yüklenemedi:", e)
+        if (!cancelled) showToast("Tamir kayıtları yüklenirken bir sorun oluştu.", "error")
+      })
+
+    return () => { cancelled = true }
   }, [])
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("yt_repairs", JSON.stringify(repairs))
-      localStorage.setItem("yt_customers", JSON.stringify(customers))
       localStorage.setItem("yt_repair_notes", JSON.stringify(notes))
-      localStorage.setItem("yt_finance", JSON.stringify(financeTransactions))
     }
-  }, [repairs, customers, notes, financeTransactions])
+  }, [repairs, notes])
   const filteredRepairs = useMemo(() => {
     return repairs.filter((r) => {
       const matchesSearch =
@@ -292,49 +188,66 @@ export default function RepairsPage() {
     }
   }
 
-  const handleAddNewCustomer = () => {
+  const handleAddNewCustomer = async () => {
     if (!newCustomerName.trim() || !newCustomerPhone1.trim()) return
-    const newId = Math.max(...customers.map((c) => c.id), 0) + 1
-    const newCustomer: Customer = {
-      id: newId,
-      name: newCustomerName,
-      phone1: newCustomerPhone1,
-      phone2: newCustomerPhone2,
-      email: newCustomerEmail,
-      address: newCustomerAddress,
+    try {
+      const created = await createCustomer({
+        name: newCustomerName,
+        firstName: newCustomerName.split(" ")[0] || newCustomerName,
+        lastName: newCustomerName.split(" ").slice(1).join(" "),
+        phone: newCustomerPhone1,
+        phone2: newCustomerPhone2 || "",
+        email: newCustomerEmail || "",
+        address: newCustomerAddress || "",
+        status: "active",
+        lastVisit: new Date().toISOString().split("T")[0],
+      })
+      const newCustomer: Customer = {
+        id: created.id,
+        name: created.name,
+        phone1: created.phone,
+        phone2: created.phone2 || "",
+        email: created.email,
+        address: created.address,
+      }
+      setCustomers([...customers, newCustomer])
+      setCustomerId(newCustomer.id)
+      setCustomerName(newCustomerName)
+      setPhone1(newCustomerPhone1)
+      setPhone2(newCustomerPhone2)
+      setIsNewCustomerDialogOpen(false)
+      setIsNewCustomer(false)
+      setNewCustomerName("")
+      setNewCustomerPhone1("")
+      setNewCustomerPhone2("")
+      setNewCustomerEmail("")
+      setNewCustomerAddress("")
+      showToast("Müşteri eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Müşteri eklenirken bir sorun oluştu.", "error")
     }
-    setCustomers([...customers, newCustomer])
-    setCustomerId(newId.toString())
-    setCustomerName(newCustomerName)
-    setPhone1(newCustomerPhone1)
-    setPhone2(newCustomerPhone2)
-    setIsNewCustomerDialogOpen(false)
-    setIsNewCustomer(false)
-    setNewCustomerName("")
-    setNewCustomerPhone1("")
-    setNewCustomerPhone2("")
-    setNewCustomerEmail("")
-    setNewCustomerAddress("")
   }
 
   const calculateRemaining = (totalCost: number, paid: number) => {
     return Math.max(0, totalCost - paid)
   }
 
-  const addFinanceTransaction = (repair: Repair) => {
+  const addFinanceTransaction = async (repair: Repair) => {
     if (repair.paid <= 0) return
-    const newTransaction: FinanceTransaction = {
-      id: Date.now(),
-      description: `${repair.brand} ${repair.model} ${repair.device} Tamiri`,
-      amount: repair.paid,
-      type: "income",
-      category: "Tamir Geliri",
-      date: new Date().toISOString().split("T")[0],
-      customer: repair.customerName,
-      source: "repair",
-      sourceId: repair.id,
+    try {
+      await createTransaction({
+        type: "income",
+        category: "Tamir Geliri",
+        amount: repair.paid,
+        description: `${repair.brand} ${repair.model} ${repair.device} Tamiri`,
+        date: new Date().toISOString().split("T")[0],
+        customer: repair.customerName,
+        source: "repair",
+      })
+    } catch (e) {
+      console.error("Finans kaydı oluşturulamadı:", e)
     }
-    setFinanceTransactions(prev => [newTransaction, ...prev])
   }
 
   const validateForm = () => {
@@ -353,43 +266,47 @@ export default function RepairsPage() {
     return true
   }
 
-  const handleAddRepair = () => {
+  const handleAddRepair = async () => {
     if (!validateForm()) return
 
-    const newId = Math.max(...repairs.map((r) => r.id), 0) + 1
     const costNum = parseFloat(cost) || 0
     const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
     const remainingNum = calculateRemaining(costNum, paidNum)
-    const newRepair: Repair = {
-      id: newId,
-      customerName,
-      phone1,
-      phone2,
-      device,
-      brand,
-      model,
-      issue,
-      imei: imei.trim() || undefined,
-      status: "waiting",
-      cost: costNum,
-      paid: paidNum,
-      remaining: remainingNum,
-      paymentType: paymentType as Repair["paymentType"],
-      notes: notesInput,
-      createdAt: new Date().toISOString().split("T")[0],
-    }
-    setRepairs([newRepair, ...repairs])
+    try {
+      const newRepair = await createRepair({
+        customerName,
+        phone1,
+        phone2,
+        device,
+        brand,
+        model,
+        issue,
+        imei: imei.trim() || undefined,
+        status: "waiting",
+        cost: costNum,
+        paid: paidNum,
+        remaining: remainingNum,
+        paymentType: paymentType as Repair["paymentType"],
+        notes: notesInput,
+        createdAt: new Date().toISOString().split("T")[0],
+      })
+      setRepairs([newRepair, ...repairs])
 
-    // Add to finance if payment made
-    if (paidNum > 0) {
-      addFinanceTransaction({ ...newRepair, id: newId })
-    }
+      // Add to finance if payment made
+      if (paidNum > 0) {
+        await addFinanceTransaction(newRepair)
+      }
 
-    resetForm()
-    setIsDialogOpen(false)
+      resetForm()
+      setIsDialogOpen(false)
+      showToast("Tamir kaydı eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Tamir kaydı eklenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleUpdateRepair = () => {
+  const handleUpdateRepair = async () => {
     if (!selectedRepair) return
 
     const missingFields: string[] = []
@@ -410,93 +327,91 @@ export default function RepairsPage() {
       : (paymentType === "unpaid" ? 0 : costNum)
     const remainingNum = calculateRemaining(costNum, paidNum)
 
-    const updatedRepair: Repair = {
-      ...selectedRepair,
-      customerName,
-      phone1,
-      phone2,
-      device,
-      brand,
-      model,
-      issue,
-      imei: imei.trim() || undefined,
-      cost: costNum,
-      paid: paidNum,
-      remaining: remainingNum,
-      paymentType: paymentType as Repair["paymentType"],
-      notes: notesInput,
-    }
+    try {
+      const updatedRepair = await updateRepair(selectedRepair.id, {
+        customerName,
+        phone1,
+        phone2,
+        device,
+        brand,
+        model,
+        issue,
+        imei: imei.trim() || undefined,
+        cost: costNum,
+        paid: paidNum,
+        remaining: remainingNum,
+        paymentType: paymentType as Repair["paymentType"],
+        notes: notesInput,
+      })
 
-    setRepairs(
-      repairs.map((r) =>
-        r.id === selectedRepair.id ? updatedRepair : r
-      )
-    )
+      setRepairs(repairs.map((r) => r.id === selectedRepair.id ? updatedRepair : r))
 
-    // Update finance if payment changed
-    if (paidNum > selectedRepair.paid) {
-      const diff = paidNum - selectedRepair.paid
-      const newTransaction: FinanceTransaction = {
-        id: Date.now(),
-        description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Ödeme`,
-        amount: diff,
-        type: "income",
-        category: "Tamir Geliri",
-        date: new Date().toISOString().split("T")[0],
-        customer: updatedRepair.customerName,
-        source: "repair",
-        sourceId: updatedRepair.id,
+      // Update finance if payment changed
+      if (paidNum > selectedRepair.paid) {
+        const diff = paidNum - selectedRepair.paid
+        await createTransaction({
+          type: "income",
+          category: "Tamir Geliri",
+          amount: diff,
+          description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Ödeme`,
+          date: new Date().toISOString().split("T")[0],
+          customer: updatedRepair.customerName,
+          source: "repair",
+        })
       }
-      setFinanceTransactions(prev => [newTransaction, ...prev])
-    }
 
-    setIsEditDialogOpen(false)
-    setSelectedRepair(null)
+      setIsEditDialogOpen(false)
+      setSelectedRepair(null)
+      showToast("Tamir kaydı güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Tamir kaydı güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleStatusChange = (id: number, newStatus: Repair["status"]) => {
+  const handleStatusChange = async (id: string, newStatus: Repair["status"]) => {
     const repair = repairs.find(r => r.id === id)
     if (!repair) return
 
-    const updatedRepair = {
-      ...repair,
-      status: newStatus,
-      completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : repair.completedAt,
-    }
+    const wasAlreadyCompleted = repair.status === "completed"
 
-    setRepairs(
-      repairs.map((r) =>
-        r.id === id ? updatedRepair : r
-      )
-    )
+    try {
+      const updatedRepair = await updateRepair(id, {
+        status: newStatus,
+        completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : repair.completedAt,
+      })
 
-    // Add to finance when completed and has payment
-    if (newStatus === "completed" && repair.paid > 0) {
-      // Check if already added
-      const alreadyAdded = financeTransactions.some(t => t.source === "repair" && t.sourceId === id && t.description.includes("Tamamlandı"))
-      if (!alreadyAdded) {
-        const newTransaction: FinanceTransaction = {
-          id: Date.now(),
-          description: `${repair.brand} ${repair.model} - Tamir Tamamlandı`,
-          amount: repair.paid,
+      setRepairs(repairs.map((r) => r.id === id ? updatedRepair : r))
+
+      // Add to finance when completed and has payment (sadece ilk kez tamamlanınca)
+      if (newStatus === "completed" && !wasAlreadyCompleted && repair.paid > 0) {
+        await createTransaction({
           type: "income",
           category: "Tamir Geliri",
+          amount: repair.paid,
+          description: `${repair.brand} ${repair.model} - Tamir Tamamlandı`,
           date: new Date().toISOString().split("T")[0],
           customer: repair.customerName,
           source: "repair",
-          sourceId: repair.id,
-        }
-        setFinanceTransactions(prev => [newTransaction, ...prev])
+        })
       }
+    } catch (e) {
+      console.error(e)
+      showToast("Durum güncellenirken bir sorun oluştu.", "error")
     }
   }
 
-  const handleDeleteRepair = (id: number) => {
+  const handleDeleteRepair = async (id: string) => {
     if (confirm("Bu tamir kaydini silmek istediginize emin misiniz?")) {
-      setRepairs(repairs.filter((r) => r.id !== id))
-      setNotes(notes.filter((n) => n.repairId !== id))
-      // Remove related finance transactions
-      setFinanceTransactions(financeTransactions.filter(t => !(t.source === "repair" && t.sourceId === id)))
+      try {
+        await deleteRepair(id)
+        setRepairs(repairs.filter((r) => r.id !== id))
+        setNotes(notes.filter((n) => n.repairId !== id))
+        showToast("Tamir kaydı silindi.", "success")
+      } catch (e) {
+        console.error(e)
+        showToast("Tamir kaydı silinirken bir sorun oluştu.", "error")
+      }
     }
   }
 
@@ -557,7 +472,7 @@ export default function RepairsPage() {
     setIsNewCustomer(false)
   }
 
-  const getRepairNotes = (repairId: number) => notes.filter((n) => n.repairId === repairId)
+  const getRepairNotes = (repairId: string) => notes.filter((n) => n.repairId === repairId)
 
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
@@ -1055,7 +970,7 @@ export default function RepairsPage() {
         open={isNoteDialogOpen}
         onOpenChange={setIsNoteDialogOpen}
         customerName={selectedRepair?.customerName}
-        notes={getRepairNotes(selectedRepair?.id || 0)}
+        notes={getRepairNotes(selectedRepair?.id || "")}
         noteText={noteText}
         onNoteTextChange={setNoteText}
         onAddNote={handleAddNote}

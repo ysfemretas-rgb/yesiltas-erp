@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface RepairForQr {
-  id: number
+  id: string
   customerName: string
   brand: string
   model: string

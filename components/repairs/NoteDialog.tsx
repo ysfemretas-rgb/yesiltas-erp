@@ -8,7 +8,7 @@ import { Plus } from "lucide-react"
 
 interface Note {
   id: number
-  repairId: number
+  repairId: string
   text: string
   createdAt: string
   author: string
