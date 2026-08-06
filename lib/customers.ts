@@ -92,7 +92,7 @@ function customerToRow(c: Partial<Customer>) {
 }
 
 export async function fetchCustomers(): Promise<Customer[]> {
-  const { data: customerRows, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false })
+  const { data: customerRows, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!customerRows || customerRows.length === 0) && typeof window !== "undefined") {

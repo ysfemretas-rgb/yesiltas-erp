@@ -44,7 +44,7 @@ function toRow(c: Partial<Consumable>) {
 }
 
 export async function fetchConsumables(): Promise<Consumable[]> {
-  const { data, error } = await supabase.from("consumables").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("consumables").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

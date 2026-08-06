@@ -47,7 +47,7 @@ export async function deleteTransactionsBySource(source: "repair" | "sale", sour
 }
 
 export async function fetchTransactions(): Promise<Transaction[]> {
-  const { data, error } = await supabase.from("transactions").select("*").order("transaction_date", { ascending: false })
+  const { data, error } = await supabase.from("transactions").select("*").order("transaction_date", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

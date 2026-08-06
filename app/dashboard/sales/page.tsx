@@ -15,6 +15,7 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
 import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/lib/customers"
+import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { Product, fetchProducts, createProduct, updateProduct, deleteProduct } from "@/lib/products"
 
@@ -54,6 +55,7 @@ export default function SalesPage() {
   const [showNewSale, setShowNewSale] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
   const [newProduct, setNewProduct] = useState<Partial<Product>>({})
+  const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [showEditSale, setShowEditSale] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
   const [editCart, setEditCart] = useState<SaleItem[]>([])
@@ -129,7 +131,7 @@ export default function SalesPage() {
           : item
       ))
     } else {
-      setCart([...cart, { productId: product.id, name: product.name, price: product.price, quantity }])
+      setCart([...cart, { productId: product.id, name: product.name, price: product.price, purchasePrice: product.purchasePrice, quantity }])
     }
   }
 
@@ -143,7 +145,7 @@ export default function SalesPage() {
           : item
       ))
     } else {
-      setEditCart([...editCart, { productId: product.id, name: product.name, price: product.price, quantity }])
+      setEditCart([...editCart, { productId: product.id, name: product.name, price: product.price, purchasePrice: product.purchasePrice, quantity }])
     }
   }
 
@@ -185,19 +187,43 @@ export default function SalesPage() {
       return
     }
     try {
-      const product = await createProduct({
-        name: newProduct.name.trim(),
-        category: newProduct.category || "",
-        price: Number(newProduct.price) || 0,
-        stock: Number(newProduct.stock) || 0,
-      })
-      setProducts([product, ...products])
+      if (editingProductId) {
+        const updated = await updateProduct(editingProductId, {
+          name: newProduct.name.trim(),
+          category: newProduct.category || "",
+          price: Number(newProduct.price) || 0,
+          purchasePrice: Number(newProduct.purchasePrice) || 0,
+          stock: Number(newProduct.stock) || 0,
+        })
+        setProducts(products.map(p => p.id === updated.id ? updated : p))
+        setEditingProductId(null)
+        showToast("Ürün güncellendi.", "success")
+      } else {
+        const product = await createProduct({
+          name: newProduct.name.trim(),
+          category: newProduct.category || "",
+          price: Number(newProduct.price) || 0,
+          purchasePrice: Number(newProduct.purchasePrice) || 0,
+          stock: Number(newProduct.stock) || 0,
+        })
+        setProducts([product, ...products])
+        showToast("Ürün eklendi.", "success")
+      }
       setNewProduct({})
-      showToast("Ürün eklendi.", "success")
     } catch (e) {
       console.error(e)
-      showToast("Ürün eklenirken bir sorun oluştu.", "error")
+      showToast("Ürün kaydedilirken bir sorun oluştu.", "error")
     }
+  }
+
+  const handleEditProductClick = (p: Product) => {
+    setEditingProductId(p.id)
+    setNewProduct({ name: p.name, category: p.category, price: p.price, purchasePrice: p.purchasePrice, stock: p.stock })
+  }
+
+  const handleCancelEditProduct = () => {
+    setEditingProductId(null)
+    setNewProduct({})
   }
 
   const handleDeleteProduct = async (id: string) => {
@@ -214,6 +240,10 @@ export default function SalesPage() {
 
   const handleAddNewCustomer = async () => {
     if (!newCustomerName.trim() || !newCustomerPhone.trim()) return
+    if (!validatePhone(newCustomerPhone)) {
+      showToast("Telefon numarası geçerli görünmüyor (05XX XXX XX XX formatında olmalı).", "error")
+      return
+    }
     try {
       const created = await createCustomer({
         name: newCustomerName.trim(),
@@ -585,11 +615,19 @@ Bu işlem geri alınamaz!`)) return
             <div className="grid grid-cols-2 gap-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
               <Input placeholder="Ürün adı *" value={newProduct.name || ""} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} className="bg-slate-900 border-slate-600 text-white col-span-2" />
               <Input placeholder="Kategori" value={newProduct.category || ""} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} className="bg-slate-900 border-slate-600 text-white" />
-              <Input type="number" placeholder="Fiyat" value={newProduct.price || ""} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
-              <Input type="number" placeholder="Stok" value={newProduct.stock || ""} onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white col-span-2" />
-              <Button onClick={handleAddProduct} className="bg-emerald-600 hover:bg-emerald-700 col-span-2">
-                <Plus className="w-4 h-4 mr-2" />Ürünü Ekle
-              </Button>
+              <Input type="number" placeholder="Satış Fiyatı" value={newProduct.price || ""} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
+              <Input type="number" placeholder="Alış Fiyatı (kâr hesabı için)" value={newProduct.purchasePrice || ""} onChange={(e) => setNewProduct({ ...newProduct, purchasePrice: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
+              <Input type="number" placeholder="Stok" value={newProduct.stock || ""} onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
+              <div className="col-span-2 flex gap-2">
+                <Button onClick={handleAddProduct} className="bg-emerald-600 hover:bg-emerald-700 flex-1">
+                  {editingProductId ? <><Pencil className="w-4 h-4 mr-2" />Güncelle</> : <><Plus className="w-4 h-4 mr-2" />Ürünü Ekle</>}
+                </Button>
+                {editingProductId && (
+                  <Button onClick={handleCancelEditProduct} variant="outline" className="border-slate-600 text-slate-300">
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {products.length === 0 ? (
@@ -601,11 +639,16 @@ Bu işlem geri alınamaz!`)) return
                       <div className="text-sm font-medium text-white">{p.name}</div>
                       <div className="text-xs text-slate-400">{p.category} · {formatCurrency(p.price)} · Stok: {p.stock}</div>
                     </div>
-                    {isManager && (
-                      <Button size="sm" variant="ghost" onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                        <Trash2 className="h-4 w-4" />
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => handleEditProductClick(p)} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                    )}
+                      {isManager && (
+                        <Button size="sm" variant="ghost" onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -680,6 +723,17 @@ Bu işlem geri alınamaz!`)) return
                   </button>
                 </div>
               )}
+
+              {selectedCustomer && (() => {
+                const custName = customers.find(c => c.id === selectedCustomer)?.name
+                const pastSales = sales.filter(s => s.customerName === custName)
+                if (pastSales.length === 0) return null
+                return (
+                  <div className="rounded-lg border border-indigo-700/50 bg-indigo-900/10 p-3 text-xs text-slate-400">
+                    🕘 Bu müşterinin daha önce {pastSales.length} satışı var (son: {pastSales[0]?.date})
+                  </div>
+                )
+              })()}
 
               <Button
                 variant="outline"

@@ -169,7 +169,7 @@ export default function ReportsPage() {
             productName: s.items.map(i => i.name).join(", ") || "—",
             quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
             totalPrice: s.totalAmount,
-            profit: 0,
+            profit: s.items.reduce((sum, i) => sum + (i.price - (i.purchasePrice || 0)) * i.quantity, 0),
             date: s.date,
           }))
 

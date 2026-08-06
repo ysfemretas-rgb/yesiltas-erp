@@ -5,6 +5,7 @@ export interface Product {
   id: string
   name: string
   price: number
+  purchasePrice: number
   stock: number
   category: string
 }
@@ -14,6 +15,7 @@ function fromRow(row: any): Product {
     id: row.id,
     name: row.name ?? "",
     price: Number(row.price) || 0,
+    purchasePrice: Number(row.purchase_price) || 0,
     stock: row.stock ?? 0,
     category: row.category ?? "",
   }
@@ -23,13 +25,14 @@ function toRow(p: Partial<Product>) {
   const row: Record<string, unknown> = {}
   if (p.name !== undefined) row.name = p.name
   if (p.price !== undefined) row.price = p.price
+  if (p.purchasePrice !== undefined) row.purchase_price = p.purchasePrice
   if (p.stock !== undefined) row.stock = p.stock
   if (p.category !== undefined) row.category = p.category
   return row
 }
 
 export async function fetchProducts(): Promise<Product[]> {
-  const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

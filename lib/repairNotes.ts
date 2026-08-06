@@ -23,7 +23,7 @@ function fromRow(row: any): RepairNote {
 // geçmiş notlar kaybolmaz (istenirse elle bakılabilir) ama yeni notlar artık
 // hep Supabase'e yazılır.
 export async function fetchRepairNotes(): Promise<RepairNote[]> {
-  const { data, error } = await supabase.from("repair_notes").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("repair_notes").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
   return (data || []).map(fromRow)
 }

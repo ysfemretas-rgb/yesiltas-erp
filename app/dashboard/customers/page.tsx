@@ -4,6 +4,7 @@ import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt } from "@/lib/customers"
+import { validatePhone } from "@/lib/validation"
 import { CustomerWhatsAppDialog } from "@/components/customers/CustomerWhatsAppDialog"
 import { CustomerDebtDialog } from "@/components/customers/CustomerDebtDialog"
 
@@ -273,6 +274,10 @@ export default function CustomersPage() {
     const phone = newCustomer.phone || newCustomer.phone1 || ""
 
     if (!firstName || !lastName || !phone) return
+    if (!validatePhone(phone)) {
+      showToast("Telefon numarası geçerli görünmüyor (05XX XXX XX XX formatında olmalı). Yine de kaydetmek istersen kontrol et.", "error")
+      return
+    }
 
     try {
       const customer = await createCustomer({

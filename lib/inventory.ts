@@ -50,7 +50,7 @@ function toRow(i: Partial<InventoryItem>) {
 }
 
 export async function fetchInventory(): Promise<InventoryItem[]> {
-  const { data, error } = await supabase.from("inventory").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("inventory").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

@@ -274,6 +274,16 @@ export default function WarrantiesPage() {
                   </Select>
                 </div>
               </div>
+
+              {newWarranty.customerPhone && newWarranty.customerPhone.trim().length >= 6 && (() => {
+                const pastWarranties = warranties.filter(w => w.customerPhone && w.customerPhone.replace(/\D/g, "") === newWarranty.customerPhone!.replace(/\D/g, ""))
+                if (pastWarranties.length === 0) return null
+                return (
+                  <div className="rounded-lg border border-indigo-700/50 bg-indigo-900/10 p-3 text-xs text-slate-400">
+                    🕘 Bu müşterinin daha önce {pastWarranties.length} garanti kaydı var (son: {pastWarranties[0]?.deviceName})
+                  </div>
+                )
+              })()}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Başlangıç Tarihi</label>

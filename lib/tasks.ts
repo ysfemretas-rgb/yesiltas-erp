@@ -37,7 +37,7 @@ function toRow(t: Partial<Task>) {
 }
 
 export async function fetchTasks(): Promise<Task[]> {
-  const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
   return (data || []).map(fromRow)
 }

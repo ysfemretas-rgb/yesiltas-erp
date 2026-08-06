@@ -5,6 +5,7 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Appointment, fetchAppointments, createAppointment, updateAppointment, deleteAppointment } from "@/lib/appointments"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
+import { validatePhone } from "@/lib/validation"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -146,6 +147,10 @@ export default function AppointmentsPage() {
 
   const handleAddCustomer = async () => {
     if (!newCustomer.name || !newCustomer.phone) return
+    if (!validatePhone(newCustomer.phone)) {
+      showToast("Telefon numarası geçerli görünmüyor (05XX XXX XX XX formatında olmalı).", "error")
+      return
+    }
     try {
       const customer = await createCustomer({
         name: newCustomer.name,

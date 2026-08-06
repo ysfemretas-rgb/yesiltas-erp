@@ -44,7 +44,7 @@ function toRow(s: Partial<StaffMember>) {
 }
 
 export async function fetchStaff(): Promise<StaffMember[]> {
-  const { data, error } = await supabase.from("staff").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("staff").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

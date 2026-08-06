@@ -5,6 +5,7 @@ export interface SaleItem {
   productId: string
   name: string
   price: number
+  purchasePrice?: number
   quantity: number
 }
 
@@ -57,7 +58,7 @@ function toRow(s: Partial<Sale>) {
 }
 
 export async function fetchSales(): Promise<Sale[]> {
-  const { data, error } = await supabase.from("sales").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("sales").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

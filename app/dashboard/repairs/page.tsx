@@ -6,6 +6,7 @@ import { useIsManager } from "@/hooks/useIsManager"
 import { Repair, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
+import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { QrDialog } from "@/components/repairs/QrDialog"
 import { NoteDialog } from "@/components/repairs/NoteDialog"
@@ -182,6 +183,10 @@ export default function RepairsPage() {
 
   const handleAddNewCustomer = async () => {
     if (!newCustomerName.trim() || !newCustomerPhone1.trim()) return
+    if (!validatePhone(newCustomerPhone1)) {
+      showToast("Telefon numarası geçerli görünmüyor (05XX XXX XX XX formatında olmalı).", "error")
+      return
+    }
     try {
       const created = await createCustomer({
         name: newCustomerName,

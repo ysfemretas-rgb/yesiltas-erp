@@ -43,7 +43,7 @@ function toRow(a: Partial<Appointment>) {
 }
 
 export async function fetchAppointments(): Promise<Appointment[]> {
-  const { data, error } = await supabase.from("appointments").select("*").order("appointment_date", { ascending: true })
+  const { data, error } = await supabase.from("appointments").select("*").order("appointment_date", { ascending: true }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

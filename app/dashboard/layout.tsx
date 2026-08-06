@@ -116,6 +116,80 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
+  // Oturum süresi dolarsa (ya da başka bir sekmeden çıkış yapılırsa) otomatik
+  // olarak giriş sayfasına yönlendir — aksi halde kullanıcı anlaşılmaz
+  // hatalarla karşılaşabiliyordu.
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        localStorage.removeItem("yt_user")
+        window.location.href = "/login"
+      }
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  // Bir yönetici, personelin rolünü/yetkilerini değiştirirse, bu değişikliğin
+  // o kullanıcının ekranına çıkış yapmasını beklemeden birkaç dakika içinde
+  // yansıması için profilini periyodik olarak tazeler.
+  useEffect(() => {
+    const refreshProfile = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username, full_name, role, permissions, is_active")
+          .eq("id", session.user.id)
+          .single()
+        if (!profile) return
+        if (!profile.is_active) {
+          await supabase.auth.signOut()
+          localStorage.removeItem("yt_user")
+          window.location.href = "/login"
+          return
+        }
+        const existingRaw = localStorage.getItem("yt_user")
+        const existing = existingRaw ? JSON.parse(existingRaw) : {}
+        const updated = {
+          ...existing,
+          username: profile.username,
+          name: profile.full_name,
+          role: profile.role,
+          permissions: profile.permissions,
+        }
+        localStorage.setItem("yt_user", JSON.stringify(updated))
+        setCurrentUser(updated)
+      } catch (e) {
+        console.error("Profil tazeleme hatası:", e)
+      }
+    }
+
+    const interval = setInterval(refreshProfile, 3 * 60 * 1000)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshProfile()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [])
+
+  // İnternet bağlantısı durumu — koptuğunda kullanıcıya net bir uyarı göster.
+  const [isOnline, setIsOnline] = useState(true)
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener("online", goOnline)
+    window.addEventListener("offline", goOffline)
+    return () => {
+      window.removeEventListener("online", goOnline)
+      window.removeEventListener("offline", goOffline)
+    }
+  }, [])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     localStorage.removeItem("yt_user")
@@ -148,6 +222,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={darkMode ? "dark" : ""}>
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-red-600 text-white text-sm text-center py-1.5">
+          ⚠️ İnternet bağlantısı yok — değişiklikler kaydedilmiyor olabilir.
+        </div>
+      )}
       <div className="flex h-screen bg-background transition-colors">
         {mobileOpen && (
           <div 

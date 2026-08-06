@@ -41,7 +41,7 @@ function toRow(w: Partial<Warranty>) {
 }
 
 export async function fetchWarranties(): Promise<Warranty[]> {
-  const { data, error } = await supabase.from("warranties").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("warranties").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

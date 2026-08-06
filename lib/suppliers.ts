@@ -51,7 +51,7 @@ function toRow(s: Partial<Supplier>) {
 // tarayıcıda (eski localStorage sisteminden kalma) veri varsa, bunu BİR KEZ
 // Supabase'e aktarır ki kimse eski verisini kaybetmesin.
 export async function fetchSuppliers(): Promise<Supplier[]> {
-  const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {

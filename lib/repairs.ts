@@ -64,7 +64,7 @@ function toRow(r: Partial<Repair>) {
 }
 
 export async function fetchRepairs(): Promise<Repair[]> {
-  const { data, error } = await supabase.from("devices").select("*").order("received_date", { ascending: false })
+  const { data, error } = await supabase.from("devices").select("*").order("received_date", { ascending: false }).limit(1000)
   if (error) throw error
 
   if ((!data || data.length === 0) && typeof window !== "undefined") {
