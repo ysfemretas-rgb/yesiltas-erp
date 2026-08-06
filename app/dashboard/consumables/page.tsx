@@ -1,6 +1,7 @@
 "use client"
 
 import { Toast, useToast } from "@/components/toast"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -62,9 +63,7 @@ function priceInTRY(price: number, currency: "TRY" | "USD" | "EUR", rates: Excha
 export default function ConsumablesPage() {
   const { toast, showToast, hideToast } = useToast()
 
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
-
+  const { authorized, checking } = usePageAccess("Sarf Malzemeler")
 
   const [consumables, setConsumables] = useState<Consumable[]>(initialConsumables)
   const [searchTerm, setSearchTerm] = useState("")
@@ -85,27 +84,6 @@ export default function ConsumablesPage() {
   })
 
   // Load from localStorage
-  useEffect(() => {
-    const userData = localStorage.getItem("yt_user")
-    if (!userData) {
-      if (typeof window !== "undefined") window.location.href = "/"
-      setChecking(false)
-      return
-    }
-    try {
-      const user = JSON.parse(userData)
-      if (user.role === "Yönetici" || (user.permissions || []).includes("Sarf Malzemeler")) {
-        setAuthorized(true)
-      } else {
-        if (typeof window !== "undefined") window.location.href = "/dashboard"
-      }
-    } catch {
-      if (typeof window !== "undefined") window.location.href = "/"
-    }
-    setChecking(false)
-  }, [])
-
-
   useEffect(() => {
     if (typeof window === "undefined") return
     try {

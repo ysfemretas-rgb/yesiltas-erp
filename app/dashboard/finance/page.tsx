@@ -1,6 +1,7 @@
 "use client"
 
 import { Toast, useToast } from "@/components/toast"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,8 +50,7 @@ const categories = ["Tamir Geliri", "Satış Geliri", "Parça Maliyeti", "Kira",
 export default function FinancePage() {
   const { toast, showToast, hideToast } = useToast()
 
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
+  const { authorized, checking } = usePageAccess("Finans")
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
   const [filterType, setFilterType] = useState<string>("all")
   const [filterCategory, setFilterCategory] = useState<string>("all")
@@ -69,32 +69,6 @@ export default function FinancePage() {
   })
 
   // Load from localStorage
-
-  // Yetki kontrolü
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const userData = localStorage.getItem("yt_user")
-      if (!userData) {
-        window.location.href = "/"
-        return
-      }
-      try {
-        const user = JSON.parse(userData)
-        if (user.role === "Yönetici" || (user.permissions && user.permissions.includes("Finans"))) {
-          setAuthorized(true)
-        }
-      } catch {
-        window.location.href = "/"
-      }
-      setChecking(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!checking && !authorized) {
-      window.location.href = "/dashboard"
-    }
-  }, [checking, authorized])
   useEffect(() => {
     if (typeof window === "undefined") return
     try {

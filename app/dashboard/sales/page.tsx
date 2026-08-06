@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 interface Product {
   id: number
@@ -75,14 +75,12 @@ const paymentMethods = [
 
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
-  const router = useRouter()
+  const { authorized, checking } = usePageAccess("Satış")
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [cart, setCart] = useState<SaleItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<string>("")
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
 
   const [customerSearch, setCustomerSearch] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("cash")
@@ -102,35 +100,6 @@ export default function SalesPage() {
 
   // Load data from localStorage
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const userStr = localStorage.getItem("yt_user")
-      if (!userStr) {
-        setAuthorized(false)
-        setChecking(false)
-        return
-      }
-      const user = JSON.parse(userStr)
-      if (user.role === "Yönetici") {
-        setAuthorized(true)
-      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Satış")) {
-        setAuthorized(true)
-      } else {
-        setAuthorized(false)
-      }
-    } catch (e) {
-      console.error("Permission guard error:", e)
-      setAuthorized(false)
-    }
-    setChecking(false)
-  }, [])
-
-  useEffect(() => {
-    if (!authorized && !checking) {
-      router.push("/dashboard")
-    }
-  }, [authorized, checking, router])
   useEffect(() => {
     if (typeof window === "undefined") return
 

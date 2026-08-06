@@ -24,7 +24,7 @@ import {
 import { Plus, Shield, AlertTriangle, Search, Calendar, Clock, Pencil, Trash2, Save, MessageCircle } from "lucide-react"
 import { format, differenceInDays, parseISO, addMonths } from "date-fns"
 import { tr } from "date-fns/locale"
-import { useRouter } from "next/navigation"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 interface Warranty {
   id: number
@@ -47,10 +47,8 @@ const initialWarranties: Warranty[] = [
 
 export default function WarrantiesPage() {
   const { toast, showToast, hideToast } = useToast()
-  const router = useRouter()
+  const { authorized, checking } = usePageAccess("Garantiler")
   const [warranties, setWarranties] = useState<Warranty[]>(initialWarranties)
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -66,36 +64,6 @@ export default function WarrantiesPage() {
   })
 
   // Load from localStorage
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const userStr = localStorage.getItem("yt_user")
-      if (!userStr) {
-        setAuthorized(false)
-        setChecking(false)
-        return
-      }
-      const user = JSON.parse(userStr)
-      if (user.role === "Yönetici") {
-        setAuthorized(true)
-      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Garantiler")) {
-        setAuthorized(true)
-      } else {
-        setAuthorized(false)
-      }
-    } catch (e) {
-      console.error("Permission guard error:", e)
-      setAuthorized(false)
-    }
-    setChecking(false)
-  }, [])
-
-  useEffect(() => {
-    if (!authorized && !checking) {
-      router.push("/dashboard")
-    }
-  }, [authorized, checking, router])
   useEffect(() => {
     if (typeof window === "undefined") return
     try {

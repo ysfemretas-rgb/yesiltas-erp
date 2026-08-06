@@ -1,6 +1,7 @@
 "use client"
 
 import { Toast, useToast } from "@/components/toast"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,7 +24,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 
 interface InventoryItem {
@@ -69,39 +69,7 @@ function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "US
 
 export default function InventoryPage() {
   const { toast, showToast, hideToast } = useToast()
-  const router = useRouter()
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const userStr = localStorage.getItem("yt_user")
-      if (!userStr) {
-        setAuthorized(false)
-        setChecking(false)
-        return
-      }
-      const user = JSON.parse(userStr)
-      if (user.role === "Yönetici") {
-        setAuthorized(true)
-      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Envanter")) {
-        setAuthorized(true)
-      } else {
-        setAuthorized(false)
-      }
-    } catch (e) {
-      console.error("Permission guard error:", e)
-      setAuthorized(false)
-    }
-    setChecking(false)
-  }, [])
-
-  useEffect(() => {
-    if (!authorized && !checking) {
-      router.push("/dashboard")
-    }
-  }, [authorized, checking, router])
+  const { authorized, checking } = usePageAccess("Envanter")
 
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
   const [searchTerm, setSearchTerm] = useState("")

@@ -1,6 +1,7 @@
 "use client"
 
 import { Toast, useToast } from "@/components/toast"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -64,28 +65,7 @@ const services = ["Ekran Değişimi", "Batarya Değişimi", "Anakart Tamiri", "Y
 export default function AppointmentsPage() {
   const { toast, showToast, hideToast } = useToast()
 
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
-
-  useEffect(() => {
-    const userData = localStorage.getItem("yt_user")
-    if (!userData) {
-      if (typeof window !== "undefined") window.location.href = "/"
-      setChecking(false)
-      return
-    }
-    try {
-      const user = JSON.parse(userData)
-      if (user.role === "Yönetici" || (user.permissions || []).includes("Randevular")) {
-        setAuthorized(true)
-      } else {
-        if (typeof window !== "undefined") window.location.href = "/dashboard"
-      }
-    } catch {
-      if (typeof window !== "undefined") window.location.href = "/"
-    }
-    setChecking(false)
-  }, [])
+  const { authorized, checking } = usePageAccess("Randevular")
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])

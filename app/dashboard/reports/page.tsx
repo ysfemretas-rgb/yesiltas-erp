@@ -1,6 +1,7 @@
 "use client"
 
 import { Toast, useToast } from "@/components/toast"
+import { usePageAccess } from "@/hooks/usePageAccess"
 import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Download, TrendingUp, TrendingDown, DollarSign, Wrench, ShoppingCart, Users, Calendar, FileText, Filter } from "lucide-react"
 import { format, parseISO, isWithinInterval, isValid, subMonths } from "date-fns"
 import { tr } from "date-fns/locale"
-import { useRouter } from "next/navigation"
 
 interface FinanceRecord {
   id: string
@@ -108,9 +108,7 @@ export default function ReportsPage() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
   }
-  const router = useRouter()
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
+  const { authorized, checking } = usePageAccess("Raporlar")
 
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
@@ -122,36 +120,6 @@ export default function ReportsPage() {
   const [downloadFormat, setDownloadFormat] = useState<"pdf" | "excel">("excel")
   const [showDownloadDialog, setShowDownloadDialog] = useState(false)
 
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const userStr = localStorage.getItem("yt_user")
-      if (!userStr) {
-        setAuthorized(false)
-        setChecking(false)
-        return
-      }
-      const user = JSON.parse(userStr)
-      if (user.role === "Yönetici") {
-        setAuthorized(true)
-      } else if (user.permissions && Array.isArray(user.permissions) && user.permissions.includes("Raporlar")) {
-        setAuthorized(true)
-      } else {
-        setAuthorized(false)
-      }
-    } catch (e) {
-      console.error("Permission guard error:", e)
-      setAuthorized(false)
-    }
-    setChecking(false)
-  }, [])
-
-  useEffect(() => {
-    if (!authorized && !checking) {
-      router.push("/dashboard")
-    }
-  }, [authorized, checking, router])
   useEffect(() => {
     // Varsayılan tarih aralığı: son 6 ay
     const end = new Date()

@@ -1,6 +1,7 @@
 "use client"
 
 import { Toast, useToast } from "@/components/toast"
+import { usePageAccess } from "@/hooks/usePageAccess"
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -108,9 +109,7 @@ function normalizeCustomer(raw: any): Customer {
 export default function CustomersPage() {
   const { toast, showToast, hideToast } = useToast()
 
-  const [authorized, setAuthorized] = useState(false)
-  const [checking, setChecking] = useState(true)
-
+  const { authorized, checking } = usePageAccess("Müşteriler")
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -135,27 +134,6 @@ export default function CustomersPage() {
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
   // Load data from localStorage
-  useEffect(() => {
-    const userData = localStorage.getItem("yt_user")
-    if (!userData) {
-      if (typeof window !== "undefined") window.location.href = "/"
-      setChecking(false)
-      return
-    }
-    try {
-      const user = JSON.parse(userData)
-      if (user.role === "Yönetici" || (user.permissions || []).includes("Müşteriler")) {
-        setAuthorized(true)
-      } else {
-        if (typeof window !== "undefined") window.location.href = "/dashboard"
-      }
-    } catch {
-      if (typeof window !== "undefined") window.location.href = "/"
-    }
-    setChecking(false)
-  }, [])
-
-
   useEffect(() => {
     if (typeof window === "undefined") return
 
