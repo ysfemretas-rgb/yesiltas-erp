@@ -26,6 +26,7 @@ interface CompanySettings {
   taxNumber: string
   iban: string
   accountName: string
+  maxDiscountPercent: number
 }
 
 interface AppUser {
@@ -56,6 +57,7 @@ const getInitialCompany = (): CompanySettings => ({
   taxNumber: "123 456 7890",
   iban: "TR00 1234 5678 9012 3456 7890 12",
   accountName: "Yeşiltaş Teknik Servis",
+  maxDiscountPercent: 20,
 })
 
 const getInitialUsers = (): AppUser[] => [
@@ -107,7 +109,7 @@ export default function SettingsPage() {
   useEffect(() => {
     try {
       const companySaved = localStorage.getItem("yt_company")
-      if (companySaved) setCompany(JSON.parse(companySaved))
+      if (companySaved) setCompany({ ...getInitialCompany(), ...JSON.parse(companySaved) })
 
       const usersSaved = localStorage.getItem("yt_app_users")
       if (usersSaved) {
@@ -401,6 +403,18 @@ export default function SettingsPage() {
                     onChange={(e) => setCompany({ ...company, accountName: e.target.value })}
                     className="bg-slate-700 border-slate-600 text-white"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Maksimum İskonto Oranı (%)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={company.maxDiscountPercent}
+                    onChange={(e) => setCompany({ ...company, maxDiscountPercent: Number(e.target.value) })}
+                    className="bg-slate-700 border-slate-600 text-white"
+                  />
+                  <p className="text-xs text-slate-500">Teknik Servis ve Satışlar'da bu oranı aşan indirim yapılamaz — sizi zarara sokacak indirimleri otomatik engeller.</p>
                 </div>
               </CardContent>
             </Card>

@@ -1,9 +1,10 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Yeşiltaş Teknoloji - Teknik Servis Yönetimi",
   description: "Teknik servis yönetim sistemi",
+  manifest: "/manifest.json",
   icons: {
     icon: [
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
@@ -11,11 +12,25 @@ export const metadata: Metadata = {
     ],
     apple: "/app-icon-180x180.png",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Yeşiltaş ERP",
+  },
   openGraph: {
     title: "Yeşiltaş Teknoloji - Teknik Servis Yönetimi",
     description: "Teknik servis yönetim sistemi",
     images: ["/og-image.png"],
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#059669",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 }
 
 export default function RootLayout({

@@ -71,6 +71,8 @@ export default function RepairsPage() {
   const [issue, setIssue] = useState("")
   const [imei, setImei] = useState("")
   const [cost, setCost] = useState("")
+  const [discount, setDiscount] = useState("")
+  const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [paymentType, setPaymentType] = useState<string>("unpaid")
   const [paidAmount, setPaidAmount] = useState("")
   const [notesInput, setNotesInput] = useState("")
@@ -82,6 +84,16 @@ export default function RepairsPage() {
   const [newCustomerAddress, setNewCustomerAddress] = useState("")
   useEffect(() => {
     let cancelled = false
+
+    try {
+      const companyRaw = typeof window !== "undefined" ? localStorage.getItem("yt_company") : null
+      if (companyRaw) {
+        const parsed = JSON.parse(companyRaw)
+        if (typeof parsed?.maxDiscountPercent === "number") setMaxDiscountPercent(parsed.maxDiscountPercent)
+      }
+    } catch (e) {
+      console.error("Şirket ayarları okunamadı:", e)
+    }
 
     fetchRepairNotes()
       .then((data) => {
@@ -268,8 +280,16 @@ export default function RepairsPage() {
     if (!validateForm()) return
 
     const costNum = parseFloat(cost) || 0
-    const paidNum = paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : costNum)
-    const remainingNum = calculateRemaining(costNum, paidNum)
+    const discountNum = parseFloat(discount) || 0
+    const maxAllowedDiscount = costNum * maxDiscountPercent / 100
+    if (discountNum > maxAllowedDiscount) {
+      showToast(`İskonto izin verilen maksimum %${maxDiscountPercent}'i (${formatCurrency(maxAllowedDiscount)}) aşıyor.`, "error")
+      return
+    }
+    const netCost = Math.max(0, costNum - discountNum)
+    const isGift = paymentType === "gift"
+    const paidNum = isGift ? 0 : (paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : netCost))
+    const remainingNum = isGift ? 0 : calculateRemaining(netCost, paidNum)
     try {
       const newRepair = await createRepair({
         customerName,
@@ -281,7 +301,8 @@ export default function RepairsPage() {
         issue,
         imei: imei.trim() || undefined,
         status: "waiting",
-        cost: costNum,
+        cost: netCost,
+        discount: discountNum,
         paid: paidNum,
         remaining: remainingNum,
         paymentType: paymentType as Repair["paymentType"],
@@ -290,8 +311,24 @@ export default function RepairsPage() {
       })
       setRepairs([newRepair, ...repairs])
 
-      // Add to finance if payment made
-      if (paidNum > 0) {
+      if (isGift && netCost > 0) {
+        // Eşantiyon: müşteriden ücret alınmadı, ama verilen değeri kasaya gider (zarar) olarak yaz.
+        try {
+          await createTransaction({
+            type: "expense",
+            category: "Eşantiyon/Bedelsiz Verilen",
+            amount: netCost,
+            description: `🎁 Eşantiyon: ${newRepair.brand} ${newRepair.model} — ${newRepair.customerName}`,
+            date: new Date().toISOString().split("T")[0],
+            customer: newRepair.customerName,
+            source: "repair",
+            sourceId: newRepair.id,
+          })
+        } catch (e) {
+          console.error("Eşantiyon gider kaydı oluşturulamadı:", e)
+        }
+      } else if (paidNum > 0) {
+        // Add to finance if payment made
         await addFinanceTransaction(newRepair)
       }
 
@@ -319,11 +356,19 @@ export default function RepairsPage() {
       return
     }
 
-    const costNum = parseFloat(cost) || selectedRepair.cost
-    const paidNum = paymentType === "partial" 
-      ? (parseFloat(paidAmount) || selectedRepair.paid) 
-      : (paymentType === "unpaid" ? 0 : costNum)
-    const remainingNum = calculateRemaining(costNum, paidNum)
+    const costNum = parseFloat(cost) || (selectedRepair.cost + (selectedRepair.discount || 0))
+    const discountNum = parseFloat(discount) || 0
+    const maxAllowedDiscount = costNum * maxDiscountPercent / 100
+    if (discountNum > maxAllowedDiscount) {
+      showToast(`İskonto izin verilen maksimum %${maxDiscountPercent}'i (${formatCurrency(maxAllowedDiscount)}) aşıyor.`, "error")
+      return
+    }
+    const netCost = Math.max(0, costNum - discountNum)
+    const isGift = paymentType === "gift"
+    const paidNum = isGift ? 0 : (paymentType === "partial"
+      ? (parseFloat(paidAmount) || selectedRepair.paid)
+      : (paymentType === "unpaid" ? 0 : netCost))
+    const remainingNum = isGift ? 0 : calculateRemaining(netCost, paidNum)
 
     try {
       const updatedRepair = await updateRepair(selectedRepair.id, {
@@ -335,7 +380,8 @@ export default function RepairsPage() {
         model,
         issue,
         imei: imei.trim() || undefined,
-        cost: costNum,
+        cost: netCost,
+        discount: discountNum,
         paid: paidNum,
         remaining: remainingNum,
         paymentType: paymentType as Repair["paymentType"],
@@ -344,8 +390,22 @@ export default function RepairsPage() {
 
       setRepairs(repairs.map((r) => r.id === selectedRepair.id ? updatedRepair : r))
 
-      // Update finance if payment changed
-      if (paidNum > selectedRepair.paid) {
+      if (isGift && netCost > 0 && selectedRepair.paymentType !== "gift") {
+        try {
+          await createTransaction({
+            type: "expense",
+            category: "Eşantiyon/Bedelsiz Verilen",
+            amount: netCost,
+            description: `🎁 Eşantiyon: ${updatedRepair.brand} ${updatedRepair.model} — ${updatedRepair.customerName}`,
+            date: new Date().toISOString().split("T")[0],
+            customer: updatedRepair.customerName,
+            source: "repair",
+            sourceId: updatedRepair.id,
+          })
+        } catch (e) {
+          console.error("Eşantiyon gider kaydı oluşturulamadı:", e)
+        }
+      } else if (!isGift && paidNum > selectedRepair.paid) {
         const diff = paidNum - selectedRepair.paid
         await createTransaction({
           type: "income",
@@ -438,7 +498,8 @@ export default function RepairsPage() {
     setModel(repair.model)
     setIssue(repair.issue)
     setImei(repair.imei || "")
-    setCost(repair.cost.toString())
+    setCost((repair.cost + (repair.discount || 0)).toString())
+    setDiscount(repair.discount ? repair.discount.toString() : "")
     setPaymentType(repair.paymentType)
     setPaidAmount(repair.paid.toString())
     setNotesInput(repair.notes)
@@ -466,6 +527,7 @@ export default function RepairsPage() {
     setIssue("")
     setImei("")
     setCost("")
+    setDiscount("")
     setPaymentType("unpaid")
     setPaidAmount("")
     setNotesInput("")
@@ -633,7 +695,24 @@ export default function RepairsPage() {
                   <Label className="text-slate-300">Ücret (TL)</Label>
                   <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-300">İskonto (TL)</Label>
+                  <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0" />
+                  {cost && (
+                    <p className="text-xs text-slate-500">Maks. {formatCurrency((parseFloat(cost) || 0) * maxDiscountPercent / 100)} (%{maxDiscountPercent})</p>
+                  )}
+                </div>
               </div>
+
+              {discount && parseFloat(discount) > 0 && (
+                <div className={`rounded-lg border p-3 text-sm ${parseFloat(discount) > (parseFloat(cost) || 0) * maxDiscountPercent / 100 ? "border-red-500/30 bg-red-500/10" : "border-blue-500/30 bg-blue-500/10"}`}>
+                  {parseFloat(discount) > (parseFloat(cost) || 0) * maxDiscountPercent / 100 ? (
+                    <span className="text-red-400">⚠️ Bu iskonto izin verilen maksimum %{maxDiscountPercent}'i aşıyor, kaydedilemez.</span>
+                  ) : (
+                    <><span className="text-slate-400">Net Ücret:</span> <span className="text-blue-400 font-bold">{formatCurrency(Math.max(0, (parseFloat(cost) || 0) - (parseFloat(discount) || 0)))}</span></>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label className="text-slate-300">IMEI (opsiyonel)</Label>
@@ -667,6 +746,7 @@ export default function RepairsPage() {
                       <SelectItem value="card">Kredi Karti</SelectItem>
                       <SelectItem value="transfer">Havale/EFT</SelectItem>
                       <SelectItem value="partial">Kismi Ödeme</SelectItem>
+                      <SelectItem value="gift">🎁 Eşantiyon (Bedelsiz)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -677,6 +757,12 @@ export default function RepairsPage() {
                   </div>
                 )}
               </div>
+
+              {paymentType === "gift" && (
+                <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 text-sm text-purple-300">
+                  🎁 Bu tamir bedelsiz (eşantiyon) olarak işaretlenecek. Müşteriden ücret alınmayacak, borç oluşmayacak — ancak ücret tutarı kasaya gider (zarar) olarak kaydedilecek.
+                </div>
+              )}
 
               {paymentType === "partial" && cost && paidAmount && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
@@ -799,6 +885,12 @@ export default function RepairsPage() {
                           <span className="text-amber-400 text-xs font-normal ml-1">(Kalan: {formatCurrency(repair.remaining)})</span>
                         )}
                       </div>
+                      {repair.discount > 0 && (
+                        <div className="text-xs text-blue-400">🏷️ İskonto: {formatCurrency(repair.discount)}</div>
+                      )}
+                      {repair.paymentType === "gift" && (
+                        <div className="text-xs text-purple-400">🎁 Eşantiyon</div>
+                      )}
                       <div className="flex gap-1 justify-end mt-1">
                         {getStatusBadge(repair.status)}
                         {getPaymentBadge(repair.paymentType, repair.remaining)}
@@ -922,7 +1014,24 @@ export default function RepairsPage() {
                 <Label className="text-slate-300">Ücret (TL)</Label>
                 <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
+              <div className="space-y-2">
+                <Label className="text-slate-300">İskonto (TL)</Label>
+                <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0" />
+                {cost && (
+                  <p className="text-xs text-slate-500">Maks. {formatCurrency((parseFloat(cost) || 0) * maxDiscountPercent / 100)} (%{maxDiscountPercent})</p>
+                )}
+              </div>
             </div>
+
+            {discount && parseFloat(discount) > 0 && (
+              <div className={`rounded-lg border p-3 text-sm ${parseFloat(discount) > (parseFloat(cost) || 0) * maxDiscountPercent / 100 ? "border-red-500/30 bg-red-500/10" : "border-blue-500/30 bg-blue-500/10"}`}>
+                {parseFloat(discount) > (parseFloat(cost) || 0) * maxDiscountPercent / 100 ? (
+                  <span className="text-red-400">⚠️ Bu iskonto izin verilen maksimum %{maxDiscountPercent}'i aşıyor, kaydedilemez.</span>
+                ) : (
+                  <><span className="text-slate-400">Net Ücret:</span> <span className="text-blue-400 font-bold">{formatCurrency(Math.max(0, (parseFloat(cost) || 0) - (parseFloat(discount) || 0)))}</span></>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label className="text-slate-300">IMEI (opsiyonel)</Label>
               <Input
@@ -953,6 +1062,7 @@ export default function RepairsPage() {
                     <SelectItem value="card">Kredi Karti</SelectItem>
                     <SelectItem value="transfer">Havale/EFT</SelectItem>
                     <SelectItem value="partial">Kismi Ödeme</SelectItem>
+                    <SelectItem value="gift">🎁 Eşantiyon (Bedelsiz)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -963,6 +1073,12 @@ export default function RepairsPage() {
                 </div>
               )}
             </div>
+
+            {paymentType === "gift" && (
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 text-sm text-purple-300">
+                🎁 Bu tamir bedelsiz (eşantiyon) olarak işaretlenecek. Müşteriden ücret alınmayacak, borç oluşmayacak — ücret tutarı kasaya gider (zarar) olarak kaydedilecek.
+              </div>
+            )}
 
             {paymentType === "partial" && cost && paidAmount && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">

@@ -12,9 +12,10 @@ export interface Repair {
   issue: string
   status: "waiting" | "in_progress" | "completed"
   cost: number
+  discount: number
   paid: number
   remaining: number
-  paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid"
+  paymentType: "cash" | "card" | "transfer" | "partial" | "unpaid" | "gift"
   notes: string
   imei?: string
   createdAt: string
@@ -33,6 +34,7 @@ function fromRow(row: any): Repair {
     issue: row.complaint ?? "",
     status: (row.status as Repair["status"]) ?? "waiting",
     cost: Number(row.cost) || 0,
+    discount: Number(row.discount) || 0,
     paid: Number(row.paid_amount) || 0,
     remaining: Number(row.remaining_amount) || 0,
     paymentType: (row.payment_type as Repair["paymentType"]) ?? "unpaid",
@@ -54,6 +56,7 @@ function toRow(r: Partial<Repair>) {
   if (r.issue !== undefined) row.complaint = r.issue
   if (r.status !== undefined) row.status = r.status
   if (r.cost !== undefined) row.cost = r.cost
+  if (r.discount !== undefined) row.discount = r.discount
   if (r.paid !== undefined) row.paid_amount = r.paid
   if (r.remaining !== undefined) row.remaining_amount = r.remaining
   if (r.paymentType !== undefined) row.payment_type = r.paymentType
