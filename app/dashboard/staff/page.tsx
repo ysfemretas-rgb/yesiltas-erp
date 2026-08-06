@@ -10,22 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Eye, EyeOff, Check, MessageCircle } from "lucide-react"
+import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Check, MessageCircle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
-
-interface StaffMember {
-  id: number
-  name: string
-  email: string
-  phone: string
-  role: string
-  department: string
-  joinDate: string
-  status: "active" | "inactive" | "on_leave"
-  permissions: string[]
-  salary: number
-  password?: string
-}
+import { StaffMember, fetchStaff, createStaffMember, updateStaffMember, deleteStaffMember } from "@/lib/staff"
 
 const ALL_PERMISSIONS = [
   { key: "Tamir", label: "Teknik Servis" },
@@ -50,13 +37,6 @@ const defaultPermissions: Record<string, string[]> = {
   "Satış Temsilcisi": ["Satışlar", "Müşteriler", "Envanter", "Randevular"],
   "Yönetici": ALL_PERMISSIONS.map(p => p.key),
 }
-
-const getInitialStaff = (): StaffMember[] => [
-  { id: 1, name: "Ahmet Yılmaz", email: "ahmet@yesiltas.com", phone: "0555 123 4567", role: "Teknisyen", department: "Tamir", joinDate: "2023-01-15", status: "active", permissions: ["Tamir", "Envanter"], salary: 18500 },
-  { id: 2, name: "Mehmet Kaya", email: "mehmet@yesiltas.com", phone: "0555 234 5678", role: "Teknisyen", department: "Tamir", joinDate: "2023-03-20", status: "active", permissions: ["Tamir"], salary: 18500 },
-  { id: 3, name: "Ayşe Demir", email: "ayse@yesiltas.com", phone: "0555 345 6789", role: "Muhasebeci", department: "Muhasebe", joinDate: "2023-06-01", status: "active", permissions: ["Finans", "Raporlar"], salary: 22000 },
-  { id: 4, name: "Fatma Şahin", email: "fatma@yesiltas.com", phone: "0555 456 7890", role: "Yönetici", department: "Yönetim", joinDate: "2022-01-10", status: "active", permissions: ALL_PERMISSIONS.map(p => p.key), salary: 45000 },
-]
 
 // Özel Checkbox component
 function CustomCheckbox({ 
@@ -103,8 +83,7 @@ export default function StaffPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<StaffMember | null>(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
-  const [showPassword, setShowPassword] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
 
   const [newMember, setNewMember] = useState<Partial<StaffMember>>({
     role: "Teknisyen",
@@ -115,38 +94,22 @@ export default function StaffPage() {
     salary: 18500,
   })
 
-  // localStorage'dan yükle
+  // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("yt_staff")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setStaff(parsed)
-        } else {
-          const initial = getInitialStaff()
-          setStaff(initial)
-          localStorage.setItem("yt_staff", JSON.stringify(initial))
-        }
-      } else {
-        const initial = getInitialStaff()
-        setStaff(initial)
-        localStorage.setItem("yt_staff", JSON.stringify(initial))
-      }
-    } catch {
-      const initial = getInitialStaff()
-      setStaff(initial)
-      localStorage.setItem("yt_staff", JSON.stringify(initial))
-    }
-    setIsLoaded(true)
+    let cancelled = false
+    fetchStaff()
+      .then((data) => {
+        if (!cancelled) setStaff(data)
+      })
+      .catch((e) => {
+        console.error("Load error:", e)
+        if (!cancelled) showToast("Personel yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
-
-  // localStorage'a kaydet
-  useEffect(() => {
-    if (isLoaded && staff.length > 0) {
-      localStorage.setItem("yt_staff", JSON.stringify(staff))
-    }
-  }, [staff, isLoaded])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -183,35 +146,38 @@ export default function StaffPage() {
     }))
   }
 
-  const handleAddMember = () => {
+  const handleAddMember = async () => {
     if (!newMember.name?.trim() || !newMember.email?.trim()) {
       showToast("Lütfen ad soyad ve e-posta alanlarını doldurun!", "error")
       return
     }
-    const member: StaffMember = {
-      id: Date.now(),
-      name: newMember.name.trim(),
-      email: newMember.email.trim(),
-      phone: newMember.phone?.trim() || "",
-      role: newMember.role || "Teknisyen",
-      department: newMember.department || "Tamir",
-      joinDate: newMember.joinDate || new Date().toISOString().split("T")[0],
-      status: "active",
-      permissions: newMember.permissions || defaultPermissions[newMember.role || "Teknisyen"] || [],
-      salary: Number(newMember.salary) || 0,
-      password: newMember.password || "123456",
+    try {
+      const member = await createStaffMember({
+        name: newMember.name.trim(),
+        email: newMember.email.trim(),
+        phone: newMember.phone?.trim() || "",
+        role: newMember.role || "Teknisyen",
+        department: newMember.department || "Tamir",
+        joinDate: newMember.joinDate || new Date().toISOString().split("T")[0],
+        status: "active",
+        permissions: newMember.permissions || defaultPermissions[newMember.role || "Teknisyen"] || [],
+        salary: Number(newMember.salary) || 0,
+      })
+      setStaff([member, ...staff])
+      setNewMember({
+        role: "Teknisyen",
+        department: "Tamir",
+        status: "active",
+        joinDate: new Date().toISOString().split("T")[0],
+        permissions: defaultPermissions["Teknisyen"],
+        salary: 18500,
+      })
+      setIsDialogOpen(false)
+      showToast("Personel eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Personel eklenirken bir sorun oluştu.", "error")
     }
-    setStaff([member, ...staff])
-    setNewMember({
-      role: "Teknisyen",
-      department: "Tamir",
-      status: "active",
-      joinDate: new Date().toISOString().split("T")[0],
-      permissions: defaultPermissions["Teknisyen"],
-      salary: 18500,
-    })
-    setShowPassword(false)
-    setIsDialogOpen(false)
   }
 
   const handleEditMember = (member: StaffMember) => {
@@ -219,20 +185,34 @@ export default function StaffPage() {
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingMember) return
     if (!editingMember.name?.trim() || !editingMember.email?.trim()) {
       showToast("Lütfen ad soyad ve e-posta alanlarını doldurun!", "error")
       return
     }
-    setStaff(prev => prev.map(s => s.id === editingMember.id ? { ...editingMember } : s))
-    setEditingMember(null)
-    setIsEditDialogOpen(false)
+    try {
+      const updated = await updateStaffMember(editingMember.id, editingMember)
+      setStaff(prev => prev.map(s => s.id === updated.id ? updated : s))
+      setEditingMember(null)
+      setIsEditDialogOpen(false)
+      showToast("Personel güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Personel güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteMember = (id: number) => {
-    setStaff(prev => prev.filter(s => s.id !== id))
-    setShowDeleteConfirm(null)
+  const handleDeleteMember = async (id: string) => {
+    try {
+      await deleteStaffMember(id)
+      setStaff(prev => prev.filter(s => s.id !== id))
+      setShowDeleteConfirm(null)
+      showToast("Personel silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Personel silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const togglePermission = (perm: string, isNew: boolean = true) => {
@@ -393,25 +373,6 @@ export default function StaffPage() {
                       onChange={(e) => setNewMember({ ...newMember, joinDate: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-white"
                     />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Şifre</label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      value={newMember.password || ""}
-                      onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
-                      placeholder="Varsayılan: 123456"
-                      className="bg-slate-700 border-slate-600 text-white pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
                   </div>
                 </div>
                 <div className="space-y-2">
