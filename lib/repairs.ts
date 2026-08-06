@@ -67,7 +67,7 @@ export async function fetchRepairs(): Promise<Repair[]> {
   const { data, error } = await supabase.from("devices").select("*").order("received_date", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_repairs")) {
     const legacyRaw = localStorage.getItem("yt_repairs")
     if (legacyRaw) {
       try {
@@ -90,6 +90,7 @@ export async function fetchRepairs(): Promise<Repair[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_repairs", "true")
   return (data || []).map(fromRow)
 }
 
@@ -111,7 +112,10 @@ export async function updateRepair(id: string, input: Partial<Omit<Repair, "id">
 
 export async function deleteRepair(id: string): Promise<void> {
   const { data: existing } = await supabase.from("devices").select("customer_name, brand, model").eq("id", id).single()
-  const { error } = await supabase.from("devices").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("devices").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Teknik Servis", "deleted", `${existing?.customer_name || "Bir kayıt"} — ${existing?.brand || ""} ${existing?.model || ""} silindi`)
 }

@@ -53,7 +53,7 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
   const { data, error } = await supabase.from("inventory").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_inventory")) {
     const legacyRaw = localStorage.getItem("yt_inventory")
     if (legacyRaw) {
       try {
@@ -75,6 +75,7 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_inventory", "true")
   return (data || []).map(fromRow)
 }
 
@@ -96,7 +97,10 @@ export async function updateInventoryItem(id: string, input: Partial<Omit<Invent
 
 export async function deleteInventoryItem(id: string): Promise<void> {
   const { data: existing } = await supabase.from("inventory").select("name").eq("id", id).single()
-  const { error } = await supabase.from("inventory").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("inventory").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Envanter", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }

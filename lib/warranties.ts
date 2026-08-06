@@ -44,7 +44,7 @@ export async function fetchWarranties(): Promise<Warranty[]> {
   const { data, error } = await supabase.from("warranties").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_warranties")) {
     const legacyRaw = localStorage.getItem("yt_warranties")
     if (legacyRaw) {
       try {
@@ -71,6 +71,7 @@ export async function fetchWarranties(): Promise<Warranty[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_warranties", "true")
   return (data || []).map(fromRow)
 }
 
@@ -92,7 +93,10 @@ export async function updateWarranty(id: string, input: Partial<Omit<Warranty, "
 
 export async function deleteWarranty(id: string): Promise<void> {
   const { data: existing } = await supabase.from("warranties").select("item_name, customer_name").eq("id", id).single()
-  const { error } = await supabase.from("warranties").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("warranties").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Garantiler", "deleted", `${existing?.item_name || "Bir kayıt"} (${existing?.customer_name || ""}) silindi`)
 }

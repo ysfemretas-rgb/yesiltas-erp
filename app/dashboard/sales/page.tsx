@@ -425,9 +425,9 @@ Bu işlem geri alınamaz!`)) return
       // Remove sale
       setSales(sales.filter(s => s.id !== saleId))
       showToast("Satış silindi.", "success")
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
-      showToast("Satış silinirken bir sorun oluştu.", "error")
+      showToast(e?.message || "Satış silinirken bir sorun oluştu.", "error")
     }
   }
 

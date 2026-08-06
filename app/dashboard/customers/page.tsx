@@ -351,13 +351,19 @@ export default function CustomersPage() {
   }
 
   const handleDeleteCustomer = async (id: string) => {
+    const customer = customers.find(c => c.id === id)
+    if (customer && customer.totalDebt > 0) {
+      showToast(`Bu müşterinin ${customer.totalDebt.toLocaleString("tr-TR")} TL borcu var. Müşteriyi silmeden önce borcu kapatmanız gerekiyor.`, "error")
+      return
+    }
     try {
       await deleteCustomer(id)
       setCustomers(customers.filter(c => c.id !== id))
       showToast("Müşteri silindi.", "success")
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
-      showToast("Müşteri silinirken bir sorun oluştu.", "error")
+      const detail = e?.message || e?.details
+      showToast(detail ? `Müşteri silinemedi: ${detail}` : "Müşteri silinirken bir sorun oluştu.", "error")
     }
   }
 

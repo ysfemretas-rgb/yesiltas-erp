@@ -50,7 +50,7 @@ export async function fetchTransactions(): Promise<Transaction[]> {
   const { data, error } = await supabase.from("transactions").select("*").order("transaction_date", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_finance")) {
     const legacyRaw = localStorage.getItem("yt_finance")
     if (legacyRaw) {
       try {
@@ -71,6 +71,7 @@ export async function fetchTransactions(): Promise<Transaction[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_finance", "true")
   return (data || []).map(fromRow)
 }
 
@@ -92,7 +93,10 @@ export async function updateTransaction(id: string, input: Partial<Omit<Transact
 
 export async function deleteTransaction(id: string): Promise<void> {
   const { data: existing } = await supabase.from("transactions").select("description").eq("id", id).single()
-  const { error } = await supabase.from("transactions").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("transactions").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Finans", "deleted", `${existing?.description || "Bir kayıt"} silindi`)
 }

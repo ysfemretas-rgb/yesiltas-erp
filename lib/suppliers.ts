@@ -54,7 +54,7 @@ export async function fetchSuppliers(): Promise<Supplier[]> {
   const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_suppliers")) {
     const legacyRaw = localStorage.getItem("yt_suppliers")
     if (legacyRaw) {
       try {
@@ -83,6 +83,7 @@ export async function fetchSuppliers(): Promise<Supplier[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_suppliers", "true")
   return (data || []).map(fromRow)
 }
 
@@ -104,7 +105,10 @@ export async function updateSupplier(id: string, input: Partial<Omit<Supplier, "
 
 export async function deleteSupplier(id: string): Promise<void> {
   const { data: existing } = await supabase.from("suppliers").select("name").eq("id", id).single()
-  const { error } = await supabase.from("suppliers").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("suppliers").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Tedarikçiler", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }

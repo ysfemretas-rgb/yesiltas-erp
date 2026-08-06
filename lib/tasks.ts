@@ -60,7 +60,10 @@ export async function updateTask(id: string, input: Partial<Omit<Task, "id" | "c
 
 export async function deleteTask(id: string): Promise<void> {
   const { data: existing } = await supabase.from("tasks").select("title").eq("id", id).single()
-  const { error } = await supabase.from("tasks").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("tasks").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Görevler", "deleted", `${existing?.title || "Bir görev"} silindi`)
 }

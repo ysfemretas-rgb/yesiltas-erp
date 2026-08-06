@@ -35,7 +35,7 @@ export async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_products")) {
     const legacyRaw = localStorage.getItem("yt_products")
     if (legacyRaw) {
       try {
@@ -53,6 +53,7 @@ export async function fetchProducts(): Promise<Product[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_products", "true")
   return (data || []).map(fromRow)
 }
 
@@ -72,7 +73,10 @@ export async function updateProduct(id: string, input: Partial<Omit<Product, "id
 
 export async function deleteProduct(id: string): Promise<void> {
   const { data: existing } = await supabase.from("products").select("name").eq("id", id).single()
-  const { error } = await supabase.from("products").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("products").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Satışlar", "deleted", `Ürün silindi: ${existing?.name || "Bir ürün"}`)
 }

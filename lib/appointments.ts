@@ -46,7 +46,7 @@ export async function fetchAppointments(): Promise<Appointment[]> {
   const { data, error } = await supabase.from("appointments").select("*").order("appointment_date", { ascending: true }).limit(1000)
   if (error) throw error
 
-  if ((!data || data.length === 0) && typeof window !== "undefined") {
+  if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_appointments")) {
     const legacyRaw = localStorage.getItem("yt_appointments")
     if (legacyRaw) {
       try {
@@ -72,6 +72,7 @@ export async function fetchAppointments(): Promise<Appointment[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_appointments", "true")
   return (data || []).map(fromRow)
 }
 
@@ -93,7 +94,10 @@ export async function updateAppointment(id: string, input: Partial<Omit<Appointm
 
 export async function deleteAppointment(id: string): Promise<void> {
   const { data: existing } = await supabase.from("appointments").select("customer_name").eq("id", id).single()
-  const { error } = await supabase.from("appointments").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("appointments").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Randevular", "deleted", `${existing?.customer_name || "Bir kayıt"} randevusu silindi`)
 }

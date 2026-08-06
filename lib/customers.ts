@@ -95,7 +95,7 @@ export async function fetchCustomers(): Promise<Customer[]> {
   const { data: customerRows, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(1000)
   if (error) throw error
 
-  if ((!customerRows || customerRows.length === 0) && typeof window !== "undefined") {
+  if ((!customerRows || customerRows.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_customers")) {
     const legacyRaw = localStorage.getItem("yt_customers")
     if (legacyRaw) {
       try {
@@ -142,6 +142,7 @@ export async function fetchCustomers(): Promise<Customer[]> {
     }
   }
 
+  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_customers", "true")
   return (customerRows || []).map((row: any) => customerFromRow(row, debtsByCustomer[row.id] || []))
 }
 
@@ -164,8 +165,11 @@ export async function updateCustomer(id: string, input: Partial<Customer>): Prom
 
 export async function deleteCustomer(id: string): Promise<void> {
   const { data: existing } = await supabase.from("customers").select("name").eq("id", id).single()
-  const { error } = await supabase.from("customers").delete().eq("id", id)
+  const { data: deleted, error } = await supabase.from("customers").delete().eq("id", id).select("id")
   if (error) throw error
+  if (!deleted || deleted.length === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
   logActivity("Müşteriler", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }
 
