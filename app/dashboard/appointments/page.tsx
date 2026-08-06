@@ -3,7 +3,7 @@
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { Appointment, fetchAppointments, createAppointment, updateAppointment, deleteAppointment } from "@/lib/appointments"
-import { fetchCustomers } from "@/lib/customers"
+import { fetchCustomers, createCustomer } from "@/lib/customers"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -142,20 +142,25 @@ export default function AppointmentsPage() {
   const pendingAppointments = appointments.filter(a => a.status === "scheduled").length
   const pastAppointments = appointments.filter(a => isPastDate(a.date) && a.status === "scheduled").length
 
-  const handleAddCustomer = () => {
+  const handleAddCustomer = async () => {
     if (!newCustomer.name || !newCustomer.phone) return
-    const customer: Customer = {
-      id: Date.now(),
-      name: newCustomer.name,
-      phone: newCustomer.phone,
-      phone1: newCustomer.phone,
-      phone2: ""
+    try {
+      const customer = await createCustomer({
+        name: newCustomer.name,
+        firstName: newCustomer.name.split(" ")[0] || newCustomer.name,
+        lastName: newCustomer.name.split(" ").slice(1).join(" "),
+        phone: newCustomer.phone,
+        status: "active",
+        lastVisit: new Date().toISOString().split("T")[0],
+      })
+      setCustomers([{ id: customer.id, name: customer.name, phone: customer.phone, phone1: customer.phone, phone2: customer.phone2 }, ...customers])
+      setNewCustomer({ name: "", phone: "" })
+      setIsNewCustomerOpen(false)
+      showToast("Müşteri eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Müşteri eklenirken bir sorun oluştu.", "error")
     }
-    const updated = [customer, ...customers]
-    setCustomers(updated)
-    localStorage.setItem("yt_customers", JSON.stringify(updated))
-    setNewCustomer({ name: "", phone: "" })
-    setIsNewCustomerOpen(false)
   }
 
   const validateAppointment = (appt: Partial<Appointment>) => {
