@@ -353,8 +353,10 @@ export default function CustomersPage() {
   const handleDeleteCustomer = async (id: string) => {
     const customer = customers.find(c => c.id === id)
     if (customer && customer.totalDebt > 0) {
-      showToast(`Bu müşterinin ${customer.totalDebt.toLocaleString("tr-TR")} TL borcu var. Müşteriyi silmeden önce borcu kapatmanız gerekiyor.`, "error")
-      return
+      const confirmed = confirm(
+        `⚠️ Bu müşterinin ${customer.totalDebt.toLocaleString("tr-TR")} TL borcu var.\n\nYine de silmek istediğinize emin misiniz?\n\nNot: Satış/tamir geçmişi kaydı olarak kalmaya devam edecek, sadece müşteri kaydı silinecek.`
+      )
+      if (!confirmed) return
     }
     try {
       await deleteCustomer(id)

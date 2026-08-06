@@ -65,6 +65,9 @@ export default function SalesPage() {
   const [newCustomerName, setNewCustomerName] = useState("")
   const [newCustomerPhone, setNewCustomerPhone] = useState("")
   const [newCustomerPhone2, setNewCustomerPhone2] = useState("")
+  const [newCustomerEmail, setNewCustomerEmail] = useState("")
+  const [newCustomerAddress, setNewCustomerAddress] = useState("")
+  const [showMoreCustomerFields, setShowMoreCustomerFields] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
@@ -251,6 +254,8 @@ export default function SalesPage() {
         lastName: newCustomerName.trim().split(" ").slice(1).join(" "),
         phone: newCustomerPhone.trim(),
         phone2: newCustomerPhone2.trim() || "",
+        email: newCustomerEmail.trim() || "",
+        address: newCustomerAddress.trim() || "",
         status: "active",
         lastVisit: new Date().toISOString().split("T")[0],
       })
@@ -270,6 +275,9 @@ export default function SalesPage() {
       setNewCustomerName("")
       setNewCustomerPhone("")
       setNewCustomerPhone2("")
+      setNewCustomerEmail("")
+      setNewCustomerAddress("")
+      setShowMoreCustomerFields(false)
       setShowNewCustomer(false)
       showToast("Müşteri eklendi.", "success")
     } catch (e) {
@@ -749,6 +757,16 @@ Bu işlem geri alınamaz!`)) return
                   <Input placeholder="Ad Soyad *" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                   <Input placeholder="Telefon 1 *" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                   <Input placeholder="Telefon 2" value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                  {!showMoreCustomerFields ? (
+                    <button type="button" onClick={() => setShowMoreCustomerFields(true)} className="text-xs text-blue-400 hover:text-blue-300">
+                      + Detaylı bilgi ekle (e-posta, adres)
+                    </button>
+                  ) : (
+                    <>
+                      <Input placeholder="E-posta" value={newCustomerEmail} onChange={(e) => setNewCustomerEmail(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                      <Input placeholder="Adres" value={newCustomerAddress} onChange={(e) => setNewCustomerAddress(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                    </>
+                  )}
                   <Button size="sm" onClick={handleAddNewCustomer} className="bg-emerald-600 hover:bg-emerald-700">✅ Ekle</Button>
                 </div>
               )}

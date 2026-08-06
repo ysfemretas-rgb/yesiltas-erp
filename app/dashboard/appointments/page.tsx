@@ -79,6 +79,9 @@ export default function AppointmentsPage() {
     name: "",
     phone: ""
   })
+  const [newCustomerEmail, setNewCustomerEmail] = useState("")
+  const [newCustomerAddress, setNewCustomerAddress] = useState("")
+  const [showMoreCustomerFields, setShowMoreCustomerFields] = useState(false)
   useEffect(() => {
     fetchCustomers()
       .then((data) => setCustomers(data.map(c => ({ id: c.id, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2 }))))
@@ -157,11 +160,16 @@ export default function AppointmentsPage() {
         firstName: newCustomer.name.split(" ")[0] || newCustomer.name,
         lastName: newCustomer.name.split(" ").slice(1).join(" "),
         phone: newCustomer.phone,
+        email: newCustomerEmail.trim() || "",
+        address: newCustomerAddress.trim() || "",
         status: "active",
         lastVisit: new Date().toISOString().split("T")[0],
       })
       setCustomers([{ id: customer.id, name: customer.name, phone: customer.phone, phone1: customer.phone, phone2: customer.phone2 }, ...customers])
       setNewCustomer({ name: "", phone: "" })
+      setNewCustomerEmail("")
+      setNewCustomerAddress("")
+      setShowMoreCustomerFields(false)
       setIsNewCustomerOpen(false)
       showToast("Müşteri eklendi.", "success")
     } catch (e) {
@@ -697,6 +705,32 @@ export default function AppointmentsPage() {
                 placeholder="0555 123 4567"
               />
             </div>
+            {!showMoreCustomerFields ? (
+              <button type="button" onClick={() => setShowMoreCustomerFields(true)} className="text-xs text-blue-400 hover:text-blue-300 text-left">
+                + Detaylı bilgi ekle (e-posta, adres)
+              </button>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">E-posta</label>
+                  <Input
+                    value={newCustomerEmail}
+                    onChange={(e) => setNewCustomerEmail(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    placeholder="ornek@email.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Adres</label>
+                  <Input
+                    value={newCustomerAddress}
+                    onChange={(e) => setNewCustomerAddress(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    placeholder="Mahalle, İlçe, İl"
+                  />
+                </div>
+              </>
+            )}
             <Button onClick={handleAddCustomer} disabled={!newCustomer.name || !newCustomer.phone} className="bg-blue-600 hover:bg-blue-700">
               <Save className="mr-2 h-4 w-4" />
               Müşteri Ekle
