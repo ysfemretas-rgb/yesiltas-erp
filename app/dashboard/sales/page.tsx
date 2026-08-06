@@ -12,6 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
+import { fetchCustomers, createCustomer, addDebt } from "@/lib/customers"
+import { createTransaction } from "@/lib/finance"
 
 interface Product {
   id: number
@@ -22,7 +25,7 @@ interface Product {
 }
 
 interface Customer {
-  id: number
+  id: string
   name: string
   phone: string
   phone1?: string
@@ -31,27 +34,6 @@ interface Customer {
   totalDebt?: number
   debts?: any[]
   status?: string
-}
-
-interface SaleItem {
-  productId: number
-  name: string
-  price: number
-  quantity: number
-}
-
-interface Sale {
-  id: number
-  customerId: number
-  customerName: string
-  customerPhone: string
-  items: SaleItem[]
-  totalAmount: number
-  paid: number
-  remaining: number
-  paymentMethod: string
-  date: string
-  status: "completed" | "cancelled"
 }
 
 const initialProducts: Product[] = [
@@ -100,13 +82,13 @@ export default function SalesPage() {
 
   // Load data from localStorage
 
+  // Ürünler hâlâ tarayıcı hafızasında (ayrı bir proje kapsamı); müşteriler ve
+  // satışlar artık Supabase'den geliyor.
   useEffect(() => {
     if (typeof window === "undefined") return
 
     try {
       const savedProducts = localStorage.getItem("yt_products")
-      const savedCustomers = localStorage.getItem("yt_customers")
-      const savedSales = localStorage.getItem("yt_sales")
 
       if (savedProducts) {
         const parsed = JSON.parse(savedProducts)
@@ -118,24 +100,21 @@ export default function SalesPage() {
       } else {
         localStorage.setItem("yt_products", JSON.stringify(initialProducts))
       }
-
-      if (savedCustomers) {
-        const parsed = JSON.parse(savedCustomers)
-        if (Array.isArray(parsed)) {
-          setCustomers(parsed)
-        }
-      }
-
-      if (savedSales) {
-        const parsed = JSON.parse(savedSales)
-        if (Array.isArray(parsed)) {
-          setSales(parsed)
-        }
-      }
     } catch (e) {
       console.error("Load error:", e)
     }
-    setIsLoaded(true)
+
+    fetchCustomers()
+      .then((data) => setCustomers(data.map(c => ({ id: c.id, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2, balance: 0, totalDebt: c.totalDebt, debts: c.debts }))))
+      .catch((e) => console.error("Müşteriler yüklenemedi:", e))
+
+    fetchSales()
+      .then((data) => setSales(data))
+      .catch((e) => {
+        console.error("Satışlar yüklenemedi:", e)
+        showToast("Satışlar yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => setIsLoaded(true))
   }, [])
 
   // Save to localStorage when data changes
@@ -144,15 +123,6 @@ export default function SalesPage() {
     localStorage.setItem("yt_products", JSON.stringify(products))
   }, [products, isLoaded])
 
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_customers", JSON.stringify(customers))
-  }, [customers, isLoaded])
-
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_sales", JSON.stringify(sales))
-  }, [sales, isLoaded])
 
   const filteredCustomers = useMemo(() => {
     if (!customerSearch || customerSearch.length < 1) return []
@@ -247,58 +217,67 @@ export default function SalesPage() {
     ))
   }
 
-  const handleAddNewCustomer = () => {
+  const handleAddNewCustomer = async () => {
     if (!newCustomerName.trim() || !newCustomerPhone.trim()) return
-    const newCustomer: Customer = {
-      id: Date.now(),
-      name: newCustomerName.trim(),
-      phone: newCustomerPhone.trim(),
-      phone1: newCustomerPhone.trim(),
-      phone2: newCustomerPhone2.trim() || undefined,
-      balance: 0,
-      totalDebt: 0,
-      debts: [],
-      status: "active",
-    }
-    const updated = [...customers, newCustomer]
-    setCustomers(updated)
-    setSelectedCustomer(String(newCustomer.id))
-    setNewCustomerName("")
-    setNewCustomerPhone("")
-    setNewCustomerPhone2("")
-    setShowNewCustomer(false)
-  }
-
-  // Update customer debt in localStorage
-  const updateCustomerDebt = (customerId: number, amount: number, operation: "add" | "subtract") => {
-    const savedCustomers = localStorage.getItem("yt_customers")
-    if (!savedCustomers) return
-
     try {
-      const allCustomers = JSON.parse(savedCustomers)
-      if (!Array.isArray(allCustomers)) return
-
-      const updated = allCustomers.map((c: any) => {
-        if (c.id === customerId) {
-          const currentDebt = c.totalDebt || c.balance || 0
-          const newDebt = operation === "add" 
-            ? currentDebt + amount 
-            : Math.max(0, currentDebt - amount)
-          return { ...c, totalDebt: newDebt, balance: newDebt }
-        }
-        return c
+      const created = await createCustomer({
+        name: newCustomerName.trim(),
+        firstName: newCustomerName.trim().split(" ")[0] || newCustomerName.trim(),
+        lastName: newCustomerName.trim().split(" ").slice(1).join(" "),
+        phone: newCustomerPhone.trim(),
+        phone2: newCustomerPhone2.trim() || "",
+        status: "active",
+        lastVisit: new Date().toISOString().split("T")[0],
       })
-
-      localStorage.setItem("yt_customers", JSON.stringify(updated))
-      setCustomers(updated)
+      const newCustomer: Customer = {
+        id: created.id,
+        name: created.name,
+        phone: created.phone,
+        phone1: created.phone,
+        phone2: created.phone2 || undefined,
+        balance: 0,
+        totalDebt: 0,
+        debts: [],
+        status: "active",
+      }
+      setCustomers([...customers, newCustomer])
+      setSelectedCustomer(String(newCustomer.id))
+      setNewCustomerName("")
+      setNewCustomerPhone("")
+      setNewCustomerPhone2("")
+      setShowNewCustomer(false)
+      showToast("Müşteri eklendi.", "success")
     } catch (e) {
-      console.error("Debt update error:", e)
+      console.error(e)
+      showToast("Müşteri eklenirken bir sorun oluştu.", "error")
     }
   }
 
-  const handleCompleteSale = () => {
+  // Not: Borç artık Müşteriler sayfasındaki gerçek borç kayıtları (debts
+  // tablosu) üzerinden hesaplanıyor. Satış tamamlanırken kalan bakiye varsa
+  // gerçek bir borç kaydı oluşturuyoruz. Satış silinirken/düzenlenirken borcu
+  // otomatik geri almak, hangi borcun hangi satıştan geldiğini izlemeyi
+  // gerektirir (henüz yok) — bu durumlarda sadece ekrandaki görünümü optimistik
+  // olarak güncelliyoruz; gerekirse borcu Müşteriler sayfasından elle düzelt.
+  const updateCustomerDebt = async (customerId: string, amount: number, operation: "add" | "subtract", description?: string) => {
+    if (operation === "add" && amount > 0) {
+      try {
+        await addDebt(customerId, { amount, description: description || "Satış bakiyesi" })
+      } catch (e) {
+        console.error("Borç kaydı oluşturulamadı:", e)
+      }
+    }
+    setCustomers(customers.map((c: any) => {
+      if (c.id !== customerId) return c
+      const currentDebt = c.totalDebt || c.balance || 0
+      const newDebt = operation === "add" ? currentDebt + amount : Math.max(0, currentDebt - amount)
+      return { ...c, totalDebt: newDebt, balance: newDebt }
+    }))
+  }
+
+  const handleCompleteSale = async () => {
     if (!selectedCustomer || cart.length === 0) return
-    const customer = customers.find(c => c.id === Number(selectedCustomer))
+    const customer = customers.find(c => c.id === selectedCustomer)
     if (!customer) return
 
     // Telefon numarası kontrolü
@@ -308,73 +287,67 @@ export default function SalesPage() {
       return
     }
 
-    const saleId = Date.now()
-    const sale: Sale = {
-      id: saleId,
-      customerId: customer.id,
-      customerName: customer.name,
-      customerPhone: phone,
-      items: [...cart],
-      totalAmount: cartTotal,
-      paid: paid,
-      remaining: remaining > 0 ? remaining : 0,
-      paymentMethod,
-      date: new Date().toISOString().split("T")[0],
-      status: "completed",
-    }
-
-    // Update customer debt
-    if (remaining > 0) {
-      updateCustomerDebt(customer.id, remaining, "add")
-    }
-
-    // Update product stock
-    const updatedProducts = products.map(p => {
-      const cartItem = cart.find(item => item.productId === p.id)
-      if (cartItem) {
-        return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) }
-      }
-      return p
-    })
-    setProducts(updatedProducts)
-
-    // Save sale
-    const updatedSales = [sale, ...sales]
-    setSales(updatedSales)
-
-    // Add to finance
     try {
-      const financeRecord = {
-        id: Date.now() + 1,
-        type: "income" as const,
-        category: "Satış",
-        amount: paid,
-        description: `🛒 Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
+      const sale = await createSale({
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: phone,
+        items: [...cart],
+        totalAmount: cartTotal,
+        paid: paid,
+        remaining: remaining > 0 ? remaining : 0,
+        paymentMethod,
         date: new Date().toISOString().split("T")[0],
-        source: "sales" as const,
-        sourceId: saleId,
-      }
-      const savedFinance = localStorage.getItem("yt_finance")
-      const financeData = savedFinance ? JSON.parse(savedFinance) : []
-      if (Array.isArray(financeData)) {
-        financeData.push(financeRecord)
-        localStorage.setItem("yt_finance", JSON.stringify(financeData))
-      } else {
-        localStorage.setItem("yt_finance", JSON.stringify([financeRecord]))
-      }
-    } catch (e) {
-      console.error("Finance save error:", e)
-    }
+        status: "completed",
+      })
 
-    // Reset
-    setCart([])
-    setSelectedCustomer("")
-    setPaymentMethod("cash")
-    setPaidAmount("")
-    setShowNewSale(false)
+      // Update customer debt
+      if (remaining > 0) {
+        await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`)
+      }
+
+      // Update product stock
+      const updatedProducts = products.map(p => {
+        const cartItem = cart.find(item => item.productId === p.id)
+        if (cartItem) {
+          return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) }
+        }
+        return p
+      })
+      setProducts(updatedProducts)
+
+      // Save sale
+      setSales([sale, ...sales])
+
+      // Add to finance
+      try {
+        await createTransaction({
+          type: "income",
+          category: "Satış",
+          amount: paid,
+          description: `🛒 Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
+          date: new Date().toISOString().split("T")[0],
+          customer: customer.name,
+          source: "sale",
+        })
+      } catch (e) {
+        console.error("Finance save error:", e)
+      }
+
+      // Reset
+      setCart([])
+      setSelectedCustomer("")
+      setPaymentMethod("cash")
+      setPaidAmount("")
+      setShowNewSale(false)
+      showToast("Satış tamamlandı.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Satış kaydedilirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteSale = (saleId: number) => {
+  const handleDeleteSale = async (saleId: string) => {
     const sale = sales.find(s => s.id === saleId)
     if (!sale) return
 
@@ -382,40 +355,35 @@ export default function SalesPage() {
 
 ⚠️ Bu işlem:
 • Stokları geri ekleyecek
-• Müşteri borcunu güncelleyecek
-• Finans kaydını silecektir.`)) return
+• Müşteri borcu görünümünü güncelleyecek
 
-    // Return stock
-    const updatedProducts = products.map(p => {
-      const saleItem = sale.items.find(item => item.productId === p.id)
-      if (saleItem) {
-        return { ...p, stock: p.stock + saleItem.quantity }
-      }
-      return p
-    })
-    setProducts(updatedProducts)
+Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasından elle sil.`)) return
 
-    // Subtract customer debt if there was remaining
-    if (sale.remaining > 0) {
-      updateCustomerDebt(sale.customerId, sale.remaining, "subtract")
-    }
-
-    // Remove from finance
     try {
-      const savedFinance = localStorage.getItem("yt_finance")
-      if (savedFinance) {
-        const financeData = JSON.parse(savedFinance)
-        if (Array.isArray(financeData)) {
-          const filtered = financeData.filter((f: any) => !(f.source === "sales" && f.sourceId === saleId))
-          localStorage.setItem("yt_finance", JSON.stringify(filtered))
-        }
-      }
-    } catch (e) {
-      console.error("Finance delete error:", e)
-    }
+      await deleteSale(saleId)
 
-    // Remove sale
-    setSales(sales.filter(s => s.id !== saleId))
+      // Return stock
+      const updatedProducts = products.map(p => {
+        const saleItem = sale.items.find(item => item.productId === p.id)
+        if (saleItem) {
+          return { ...p, stock: p.stock + saleItem.quantity }
+        }
+        return p
+      })
+      setProducts(updatedProducts)
+
+      // Subtract customer debt if there was remaining
+      if (sale.remaining > 0) {
+        await updateCustomerDebt(sale.customerId, sale.remaining, "subtract")
+      }
+
+      // Remove sale
+      setSales(sales.filter(s => s.id !== saleId))
+      showToast("Satış silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Satış silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openEditSale = (sale: Sale) => {
@@ -426,45 +394,50 @@ export default function SalesPage() {
     setShowEditSale(true)
   }
 
-  const handleUpdateSale = () => {
+  const handleUpdateSale = async () => {
     if (!editingSale || editCart.length === 0) return
 
     const oldSale = editingSale
     const oldRemaining = oldSale.remaining
     const newRemaining = editRemaining > 0 ? editRemaining : 0
 
-    // Calculate stock differences
-    const updatedProducts = products.map(p => {
-      const oldItem = oldSale.items.find(item => item.productId === p.id)
-      const newItem = editCart.find(item => item.productId === p.id)
-      const oldQty = oldItem ? oldItem.quantity : 0
-      const newQty = newItem ? newItem.quantity : 0
-      const diff = oldQty - newQty
-      return { ...p, stock: p.stock + diff }
-    })
-    setProducts(updatedProducts)
+    try {
+      const updatedSale = await updateSale(editingSale.id, {
+        items: [...editCart],
+        totalAmount: editCartTotal,
+        paid: editPaid,
+        remaining: newRemaining,
+        paymentMethod: editPaymentMethod,
+      })
 
-    // Update customer debt difference
-    const debtDiff = newRemaining - oldRemaining
-    if (debtDiff !== 0) {
-      updateCustomerDebt(oldSale.customerId, Math.abs(debtDiff), debtDiff > 0 ? "add" : "subtract")
+      // Calculate stock differences
+      const updatedProducts = products.map(p => {
+        const oldItem = oldSale.items.find(item => item.productId === p.id)
+        const newItem = editCart.find(item => item.productId === p.id)
+        const oldQty = oldItem ? oldItem.quantity : 0
+        const newQty = newItem ? newItem.quantity : 0
+        const diff = oldQty - newQty
+        return { ...p, stock: p.stock + diff }
+      })
+      setProducts(updatedProducts)
+
+      // Update customer debt difference
+      const debtDiff = newRemaining - oldRemaining
+      if (debtDiff !== 0) {
+        await updateCustomerDebt(oldSale.customerId, Math.abs(debtDiff), debtDiff > 0 ? "add" : "subtract")
+      }
+
+      setSales(sales.map(s => s.id === editingSale.id ? updatedSale : s))
+      setShowEditSale(false)
+      setEditingSale(null)
+      setEditCart([])
+      setEditPaymentMethod("cash")
+      setEditPaidAmount("")
+      showToast("Satış güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Satış güncellenirken bir sorun oluştu.", "error")
     }
-
-    const updatedSale: Sale = {
-      ...editingSale,
-      items: [...editCart],
-      totalAmount: editCartTotal,
-      paid: editPaid,
-      remaining: newRemaining,
-      paymentMethod: editPaymentMethod,
-    }
-
-    setSales(sales.map(s => s.id === editingSale.id ? updatedSale : s))
-    setShowEditSale(false)
-    setEditingSale(null)
-    setEditCart([])
-    setEditPaymentMethod("cash")
-    setEditPaidAmount("")
   }
 
   const sendWhatsApp = (sale: Sale) => {
@@ -625,7 +598,7 @@ export default function SalesPage() {
               {selectedCustomer && (
                 <div className="flex items-center gap-2 text-sm text-emerald-400">
                   <Badge className="bg-emerald-600/20 text-emerald-400">
-                    ✅ {customers.find(c => c.id === Number(selectedCustomer))?.name || "Müşteri"}
+                    ✅ {customers.find(c => c.id === selectedCustomer)?.name || "Müşteri"}
                   </Badge>
                   <button onClick={() => setSelectedCustomer("")} className="text-slate-500 hover:text-red-400">
                     <X className="w-3 h-3" />
