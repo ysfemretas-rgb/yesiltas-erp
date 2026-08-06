@@ -10,6 +10,7 @@ export interface Transaction {
   date: string
   customer?: string
   source: "repair" | "sale" | "manual"
+  sourceId?: string
 }
 
 function fromRow(row: any): Transaction {
@@ -22,6 +23,7 @@ function fromRow(row: any): Transaction {
     date: row.transaction_date ?? (row.created_at ? String(row.created_at).slice(0, 10) : ""),
     customer: row.customer ?? "",
     source: (row.related_table as Transaction["source"]) ?? "manual",
+    sourceId: row.related_id ?? undefined,
   }
 }
 
@@ -34,7 +36,14 @@ function toRow(t: Partial<Transaction>) {
   if (t.date !== undefined) row.transaction_date = t.date || null
   if (t.customer !== undefined) row.customer = t.customer
   if (t.source !== undefined) row.related_table = t.source
+  if (t.sourceId !== undefined) row.related_id = t.sourceId || null
   return row
+}
+
+// Bir satış/tamir silinirken, ondan otomatik oluşturulmuş gelir kaydını da temizler.
+export async function deleteTransactionsBySource(source: "repair" | "sale", sourceId: string): Promise<void> {
+  const { error } = await supabase.from("transactions").delete().eq("related_table", source).eq("related_id", sourceId)
+  if (error) console.error("Bağlı finans kaydı silinemedi:", error)
 }
 
 export async function fetchTransactions(): Promise<Transaction[]> {

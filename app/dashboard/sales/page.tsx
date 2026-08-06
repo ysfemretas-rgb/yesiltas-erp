@@ -10,13 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle } from "lucide-react"
+import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
-import { fetchCustomers, createCustomer, addDebt } from "@/lib/customers"
-import { createTransaction } from "@/lib/finance"
-import { Product, fetchProducts, updateProduct } from "@/lib/products"
+import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/lib/customers"
+import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
+import { Product, fetchProducts, createProduct, updateProduct, deleteProduct } from "@/lib/products"
 
 interface Customer {
   id: string
@@ -52,6 +52,8 @@ export default function SalesPage() {
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const [paidAmount, setPaidAmount] = useState("")
   const [showNewSale, setShowNewSale] = useState(false)
+  const [showCatalog, setShowCatalog] = useState(false)
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({})
   const [showEditSale, setShowEditSale] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
   const [editCart, setEditCart] = useState<SaleItem[]>([])
@@ -177,6 +179,39 @@ export default function SalesPage() {
     ))
   }
 
+  const handleAddProduct = async () => {
+    if (!newProduct.name?.trim()) {
+      showToast("Lütfen ürün adı girin!", "error")
+      return
+    }
+    try {
+      const product = await createProduct({
+        name: newProduct.name.trim(),
+        category: newProduct.category || "",
+        price: Number(newProduct.price) || 0,
+        stock: Number(newProduct.stock) || 0,
+      })
+      setProducts([product, ...products])
+      setNewProduct({})
+      showToast("Ürün eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Ürün eklenirken bir sorun oluştu.", "error")
+    }
+  }
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm("Bu ürünü kataloğdan silmek istediğinize emin misiniz?")) return
+    try {
+      await deleteProduct(id)
+      setProducts(products.filter((p) => p.id !== id))
+      showToast("Ürün silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Ürün silinirken bir sorun oluştu.", "error")
+    }
+  }
+
   const handleAddNewCustomer = async () => {
     if (!newCustomerName.trim() || !newCustomerPhone.trim()) return
     try {
@@ -219,10 +254,10 @@ export default function SalesPage() {
   // otomatik geri almak, hangi borcun hangi satıştan geldiğini izlemeyi
   // gerektirir (henüz yok) — bu durumlarda sadece ekrandaki görünümü optimistik
   // olarak güncelliyoruz; gerekirse borcu Müşteriler sayfasından elle düzelt.
-  const updateCustomerDebt = async (customerId: string, amount: number, operation: "add" | "subtract", description?: string) => {
+  const updateCustomerDebt = async (customerId: string, amount: number, operation: "add" | "subtract", description?: string, saleId?: string) => {
     if (operation === "add" && amount > 0) {
       try {
-        await addDebt(customerId, { amount, description: description || "Satış bakiyesi" })
+        await addDebt(customerId, { amount, description: description || "Satış bakiyesi", sourceType: "sale", sourceId: saleId })
       } catch (e) {
         console.error("Borç kaydı oluşturulamadı:", e)
       }
@@ -263,7 +298,7 @@ export default function SalesPage() {
 
       // Update customer debt
       if (remaining > 0) {
-        await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`)
+        await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`, sale.id)
       }
 
       // Update product stock
@@ -295,6 +330,7 @@ export default function SalesPage() {
           date: new Date().toISOString().split("T")[0],
           customer: customer.name,
           source: "sale",
+          sourceId: sale.id,
         })
       } catch (e) {
         console.error("Finance save error:", e)
@@ -321,12 +357,14 @@ export default function SalesPage() {
 
 ⚠️ Bu işlem:
 • Stokları geri ekleyecek
-• Müşteri borcu görünümünü güncelleyecek
+• Bu satıştan oluşan borç ve finans kaydını silecek
 
-Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasından elle sil.`)) return
+Bu işlem geri alınamaz!`)) return
 
     try {
       await deleteSale(saleId)
+      await deleteDebtsBySource("sale", saleId)
+      await deleteTransactionsBySource("sale", saleId)
 
       // Return stock
       const updatedProducts = products.map(p => {
@@ -344,9 +382,14 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
         }
       })
 
-      // Subtract customer debt if there was remaining
+      // Subtract customer debt if there was remaining (görünümü hemen güncelle)
       if (sale.remaining > 0) {
-        await updateCustomerDebt(sale.customerId, sale.remaining, "subtract")
+        setCustomers(customers.map((c: any) => {
+          if (c.id !== sale.customerId) return c
+          const currentDebt = c.totalDebt || c.balance || 0
+          const newDebt = Math.max(0, currentDebt - sale.remaining)
+          return { ...c, totalDebt: newDebt, balance: newDebt }
+        }))
       }
 
       // Remove sale
@@ -398,10 +441,23 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
         }
       })
 
-      // Update customer debt difference
-      const debtDiff = newRemaining - oldRemaining
-      if (debtDiff !== 0) {
-        await updateCustomerDebt(oldSale.customerId, Math.abs(debtDiff), debtDiff > 0 ? "add" : "subtract")
+      // Update customer debt: eski bağlı borcu temizle, yeni bakiye varsa yeniden oluştur
+      if (oldRemaining > 0 || newRemaining > 0) {
+        await deleteDebtsBySource("sale", editingSale.id)
+        if (newRemaining > 0) {
+          await addDebt(oldSale.customerId, {
+            amount: newRemaining,
+            description: `🛒 Satış bakiyesi (düzenlendi): ${editCart.map(i => i.name).join(", ")}`,
+            sourceType: "sale",
+            sourceId: editingSale.id,
+          })
+        }
+        setCustomers(customers.map((c: any) => {
+          if (c.id !== oldSale.customerId) return c
+          const currentDebt = c.totalDebt || c.balance || 0
+          const newDebt = Math.max(0, currentDebt - oldRemaining + newRemaining)
+          return { ...c, totalDebt: newDebt, balance: newDebt }
+        }))
       }
 
       setSales(sales.map(s => s.id === editingSale.id ? updatedSale : s))
@@ -509,12 +565,54 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🛒 Satışlar</h1>
-        <Button onClick={() => setShowNewSale(true)} className="bg-emerald-600 hover:bg-emerald-700">
-          <ShoppingCart className="w-4 h-4 mr-2" />Yeni Satış
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowCatalog(true)} variant="outline" className="border-slate-600 text-slate-300">
+            <Package className="w-4 h-4 mr-2" />Ürün Kataloğu
+          </Button>
+          <Button onClick={() => setShowNewSale(true)} className="bg-emerald-600 hover:bg-emerald-700">
+            <ShoppingCart className="w-4 h-4 mr-2" />Yeni Satış
+          </Button>
+        </div>
       </div>
+
+      {/* Ürün Kataloğu Yönetimi */}
+      <Dialog open={showCatalog} onOpenChange={setShowCatalog}>
+        <DialogContent className="max-w-2xl bg-slate-900 border-slate-700 text-white max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-xl">📦 Ürün Kataloğu</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
+              <Input placeholder="Ürün adı *" value={newProduct.name || ""} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} className="bg-slate-900 border-slate-600 text-white col-span-2" />
+              <Input placeholder="Kategori" value={newProduct.category || ""} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} className="bg-slate-900 border-slate-600 text-white" />
+              <Input type="number" placeholder="Fiyat" value={newProduct.price || ""} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
+              <Input type="number" placeholder="Stok" value={newProduct.stock || ""} onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white col-span-2" />
+              <Button onClick={handleAddProduct} className="bg-emerald-600 hover:bg-emerald-700 col-span-2">
+                <Plus className="w-4 h-4 mr-2" />Ürünü Ekle
+              </Button>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {products.length === 0 ? (
+                <p className="text-slate-500 text-sm text-center py-4">Henüz ürün eklenmemiş.</p>
+              ) : (
+                products.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg border border-slate-700">
+                    <div>
+                      <div className="text-sm font-medium text-white">{p.name}</div>
+                      <div className="text-xs text-slate-400">{p.category} · {formatCurrency(p.price)} · Stok: {p.stock}</div>
+                    </div>
+                    {isManager && (
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

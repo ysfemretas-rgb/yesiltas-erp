@@ -6,7 +6,7 @@ import { useIsManager } from "@/hooks/useIsManager"
 import { Repair, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
-import { createTransaction } from "@/lib/finance"
+import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { QrDialog } from "@/components/repairs/QrDialog"
 import { NoteDialog } from "@/components/repairs/NoteDialog"
 import { getRepairStatusBadge as getStatusBadge, getRepairPaymentBadge as getPaymentBadge, formatCurrency } from "@/components/repairs/RepairBadges"
@@ -236,6 +236,7 @@ export default function RepairsPage() {
         date: new Date().toISOString().split("T")[0],
         customer: repair.customerName,
         source: "repair",
+        sourceId: repair.id,
       })
     } catch (e) {
       console.error("Finans kaydı oluşturulamadı:", e)
@@ -349,6 +350,7 @@ export default function RepairsPage() {
           date: new Date().toISOString().split("T")[0],
           customer: updatedRepair.customerName,
           source: "repair",
+          sourceId: updatedRepair.id,
         })
       }
 
@@ -385,6 +387,7 @@ export default function RepairsPage() {
           date: new Date().toISOString().split("T")[0],
           customer: repair.customerName,
           source: "repair",
+          sourceId: repair.id,
         })
       }
     } catch (e) {
@@ -394,9 +397,10 @@ export default function RepairsPage() {
   }
 
   const handleDeleteRepair = async (id: string) => {
-    if (confirm("Bu tamir kaydini silmek istediginize emin misiniz?")) {
+    if (confirm("Bu tamir kaydını silmek istediğinize emin misiniz?\n\n⚠️ Bu tamirden oluşan finans geliri kaydı da silinecek. Bu işlem geri alınamaz!")) {
       try {
         await deleteRepair(id)
+        await deleteTransactionsBySource("repair", id)
         setRepairs(repairs.filter((r) => r.id !== id))
         setNotes(notes.filter((n) => n.repairId !== id))
         showToast("Tamir kaydı silindi.", "success")
@@ -574,6 +578,23 @@ export default function RepairsPage() {
                   </div>
                 </div>
               )}
+
+              {phone1.trim().length >= 6 && (() => {
+                const pastRepairs = repairs.filter(r => r.phone1 && r.phone1.replace(/\D/g, "") === phone1.replace(/\D/g, ""))
+                if (pastRepairs.length === 0) return null
+                return (
+                  <div className="rounded-lg border border-indigo-700/50 bg-indigo-900/10 p-3">
+                    <div className="text-sm font-medium text-indigo-300 mb-2">🕘 Bu müşteri daha önce {pastRepairs.length} kez geldi</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {pastRepairs.slice(0, 5).map(r => (
+                        <div key={r.id} className="text-xs text-slate-400">
+                          {r.createdAt} — {r.brand} {r.model} ({r.issue || "arıza belirtilmemiş"}) — {getStatusBadge(r.status)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

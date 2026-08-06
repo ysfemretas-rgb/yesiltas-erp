@@ -169,7 +169,10 @@ export async function deleteCustomer(id: string): Promise<void> {
   logActivity("Müşteriler", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }
 
-export async function addDebt(customerId: string, input: { amount: number; description: string }): Promise<Debt> {
+export async function addDebt(
+  customerId: string,
+  input: { amount: number; description: string; sourceType?: "device" | "sale"; sourceId?: string }
+): Promise<Debt> {
   const { data, error } = await supabase.from("debts").insert({
     customer_id: customerId,
     description: input.description,
@@ -177,11 +180,18 @@ export async function addDebt(customerId: string, input: { amount: number; descr
     paid_amount: 0,
     remaining_amount: input.amount,
     status: "Beklemede",
-    source_type: null,
+    source_type: input.sourceType || null,
+    source_id: input.sourceId || null,
   }).select("*").single()
   if (error) throw error
   logActivity("Müşteriler", "created", `${input.description} — ${input.amount.toLocaleString("tr-TR")} TL borç eklendi`)
   return debtFromRow(data)
+}
+
+// Bir satış/tamir kaydı silinirken, ona bağlı (henüz ödenmemiş) borç kaydını da temizler.
+export async function deleteDebtsBySource(sourceType: "device" | "sale", sourceId: string): Promise<void> {
+  const { error } = await supabase.from("debts").delete().eq("source_type", sourceType).eq("source_id", sourceId)
+  if (error) console.error("Bağlı borç kaydı silinemedi:", error)
 }
 
 export async function payDebt(debtId: string): Promise<void> {

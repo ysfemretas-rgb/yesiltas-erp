@@ -2,6 +2,10 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { fetchTransactions } from "@/lib/finance"
+import { fetchRepairs } from "@/lib/repairs"
+import { fetchSales } from "@/lib/sales"
+import { fetchCustomers } from "@/lib/customers"
 import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -129,28 +133,70 @@ export default function ReportsPage() {
       end: format(end, "yyyy-MM-dd")
     })
 
-    // localStorage'dan verileri çek
-    try {
-      const finance = JSON.parse(localStorage.getItem("yt_finance") || "[]")
-      const repairs = JSON.parse(localStorage.getItem("yt_repairs") || "[]")
-      const sales = JSON.parse(localStorage.getItem("yt_sales") || "[]")
-      const customers = JSON.parse(localStorage.getItem("yt_customers") || "[]")
+    // Supabase'den verileri çek
+    Promise.all([fetchTransactions(), fetchRepairs(), fetchSales(), fetchCustomers()])
+      .then(([finance, repairs, sales, customers]) => {
+        const validFinance: FinanceRecord[] = finance
+          .filter(f => f.date)
+          .map(f => ({
+            id: f.id,
+            type: f.type,
+            amount: f.amount,
+            category: f.category,
+            description: f.description,
+            date: f.date,
+            source: f.source,
+          }))
 
-      // Veri doğrulama - date alanı olmayanları filtrele
-      const validFinance = (Array.isArray(finance) ? finance : []).filter((f: any) => f && f.date && typeof f.date === "string")
-      const validRepairs = (Array.isArray(repairs) ? repairs : []).filter((r: any) => r && r.date && typeof r.date === "string")
-      const validSales = (Array.isArray(sales) ? sales : []).filter((s: any) => s && s.date && typeof s.date === "string")
-      const validCustomers = (Array.isArray(customers) ? customers : []).filter((c: any) => c && c.id)
+        const validRepairs: RepairRecord[] = repairs
+          .filter(r => r.createdAt)
+          .map(r => ({
+            id: r.id,
+            customerName: r.customerName,
+            deviceModel: `${r.brand} ${r.model}`.trim(),
+            serviceType: r.issue || "Tamir",
+            status: r.status,
+            cost: r.cost,
+            price: r.cost,
+            date: r.createdAt,
+          }))
 
-      setFinanceData(validFinance)
-      setRepairsData(validRepairs)
-      setSalesData(validSales)
-      setCustomersData(validCustomers)
-    } catch (e) {
-      console.error("Veri yükleme hatası:", e)
-    }
+        const validSales: SaleRecord[] = sales
+          .filter(s => s.date)
+          .map(s => ({
+            id: s.id,
+            customerName: s.customerName,
+            productName: s.items.map(i => i.name).join(", ") || "—",
+            quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
+            totalPrice: s.totalAmount,
+            profit: 0,
+            date: s.date,
+          }))
 
-    setIsLoaded(true)
+        const validCustomers: CustomerRecord[] = customers
+          .filter(c => c.id)
+          .map(c => {
+            const custSales = validSales.filter(s => s.customerName === c.name)
+            const custRepairs = validRepairs.filter(r => r.customerName === c.name)
+            return {
+              id: c.id,
+              name: c.name,
+              phone: c.phone || c.phone1 || "",
+              totalSpent: custSales.reduce((sum, s) => sum + s.totalPrice, 0) + custRepairs.reduce((sum, r) => sum + r.cost, 0),
+              visitCount: custSales.length + custRepairs.length,
+              lastVisit: c.lastVisit || "",
+            }
+          })
+
+        setFinanceData(validFinance)
+        setRepairsData(validRepairs)
+        setSalesData(validSales)
+        setCustomersData(validCustomers)
+      })
+      .catch((e) => {
+        console.error("Veri yükleme hatası:", e)
+      })
+      .finally(() => setIsLoaded(true))
   }, [])
 
   // Tarih filtresi

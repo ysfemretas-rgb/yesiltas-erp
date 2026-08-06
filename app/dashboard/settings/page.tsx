@@ -2,7 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { supabase } from "@/lib/supabase"
 import { SupabaseHealthCheck } from "@/components/SupabaseHealthCheck"
@@ -15,8 +15,8 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Save, Building, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Upload } from "lucide-react"
-import { exportBackup, readBackupFile, restoreBackup } from "@/lib/backup"
+import { Save, Building, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Loader2 } from "lucide-react"
+import { exportBackup } from "@/lib/backup"
 
 interface CompanySettings {
   name: string
@@ -77,7 +77,7 @@ export default function SettingsPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Ayarlar")
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [backupLoading, setBackupLoading] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
   const [users, setUsers] = useState<AppUser[]>([])
@@ -87,9 +87,7 @@ export default function SettingsPage() {
   const [isNewUserOpen, setIsNewUserOpen] = useState(false)
   const [isEditUserOpen, setIsEditUserOpen] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
-  const [isEditPasswordOpen, setIsEditPasswordOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
   const [editingUser, setEditingUser] = useState<AppUser | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
 
@@ -101,12 +99,6 @@ export default function SettingsPage() {
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
-    newPassword: "",
-    confirmPassword: ""
-  })
-
-  const [editPasswordData, setEditPasswordData] = useState({
-    userId: 0,
     newPassword: "",
     confirmPassword: ""
   })
@@ -227,26 +219,6 @@ export default function SettingsPage() {
       console.error(e)
       showToast("Şifre değiştirilirken bir sorun oluştu.", "error")
     }
-  }
-
-  const handleEditUserPassword = () => {
-    if (editPasswordData.newPassword.length < 6) {
-      showToast("Şifre en az 6 karakter olmalı!", "error")
-      return
-    }
-    if (editPasswordData.newPassword !== editPasswordData.confirmPassword) {
-      showToast("Şifreler eşleşmiyor!", "error")
-      return
-    }
-    setUsers(prev => prev.map(u => u.id === editPasswordData.userId ? { ...u, password: editPasswordData.newPassword } : u))
-    showToast("Kullanıcı şifresi başarıyla değiştirildi!", "success")
-    setEditPasswordData({ userId: 0, newPassword: "", confirmPassword: "" })
-    setIsEditPasswordOpen(false)
-  }
-
-  const openEditPassword = (userId: number) => {
-    setEditPasswordData({ userId, newPassword: "", confirmPassword: "" })
-    setIsEditPasswordOpen(true)
   }
 
   const togglePermission = (perm: string, isNew: boolean = true) => {
@@ -510,6 +482,9 @@ export default function SettingsPage() {
                 </Dialog>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 p-3 rounded-lg border border-amber-700/50 bg-amber-900/10 text-sm text-amber-300">
+                  💡 Bir kullanıcının şifresini sıfırlamak için: Supabase Dashboard → Authentication → Users → ilgili kullanıcı → "Reset Password". Güvenlik nedeniyle bu işlem tarayıcıdan yapılamaz.
+                </div>
                 <div className="space-y-3">
                   {users.map((user) => (
                     <div key={user.id} className="flex items-center justify-between p-4 rounded-lg border border-slate-600 bg-slate-700/50">
@@ -531,9 +506,6 @@ export default function SettingsPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => openEditPassword(user.id)}>
-                          <KeyRound className="h-4 w-4" />
-                        </Button>
                         <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => handleEditUser(user)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -642,48 +614,30 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-slate-400">
-                  Tüm iş verinizi (müşteriler, tamirler, satışlar, envanter, garantiler, finans, tedarikçiler, personel, randevular) tek bir dosyaya indirin. Düzenli aralıklarla yedek almanızı öneririz.
+                  Tüm verinizi (müşteriler, tamirler, satışlar, envanter, garantiler, finans, tedarikçiler, personel, randevular, görevler) tek bir dosyaya indirin — kayıt/referans amaçlıdır.
                 </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => {
-                      exportBackup()
-                      showToast("Yedek indirildi.", "success")
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Yedeği İndir
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-slate-600 text-slate-300 hover:text-white"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Yedekten Geri Yükle
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/json"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      e.target.value = ""
-                      if (!file) return
-                      if (!window.confirm("Bu, mevcut tüm verilerin üzerine yazacak. Devam etmek istiyor musunuz?")) return
-                      try {
-                        const backup = await readBackupFile(file)
-                        restoreBackup(backup)
-                        showToast("Yedek geri yüklendi. Sayfa yenileniyor...", "success")
-                        setTimeout(() => window.location.reload(), 1200)
-                      } catch (err) {
-                        showToast(err instanceof Error ? err.message : "Geri yükleme başarısız.", "error")
-                      }
-                    }}
-                  />
+                <div className="p-3 rounded-lg border border-amber-700/50 bg-amber-900/10 text-sm text-amber-300">
+                  💡 Bu dosyadan geri yükleme yapılamaz. Verileriniz artık Supabase'de bulut üzerinde güvende — gerçek bir felaket kurtarma gerekirse Supabase Dashboard → Database → Backups'ı kullanın.
                 </div>
+                <Button
+                  onClick={async () => {
+                    setBackupLoading(true)
+                    try {
+                      await exportBackup()
+                      showToast("Yedek indirildi.", "success")
+                    } catch (err) {
+                      console.error(err)
+                      showToast("Yedek indirilirken bir sorun oluştu.", "error")
+                    } finally {
+                      setBackupLoading(false)
+                    }
+                  }}
+                  disabled={backupLoading}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {backupLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                  {backupLoading ? "Hazırlanıyor..." : "Yedeği İndir"}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -841,52 +795,6 @@ export default function SettingsPage() {
         </Dialog>
 
         {/* Kullanıcı Şifre Değiştir Dialog */}
-        <Dialog open={isEditPasswordOpen} onOpenChange={setIsEditPasswordOpen}>
-          <DialogContent className="sm:max-w-[400px] bg-slate-800 border-slate-700 text-white">
-            <DialogHeader>
-              <DialogTitle className="text-white text-xl">Kullanıcı Şifresini Değiştir</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="text-sm text-slate-400 mb-2">
-                Kullanıcı: <strong className="text-white">{users.find(u => u.id === editPasswordData.userId)?.name}</strong>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Yeni Şifre</label>
-                <div className="relative">
-                  <Input
-                    type={showNewPassword ? "text" : "password"}
-                    value={editPasswordData.newPassword}
-                    onChange={(e) => setEditPasswordData({...editPasswordData, newPassword: e.target.value})}
-                    className="pr-10 bg-slate-700 border-slate-600 text-white"
-                    placeholder="En az 6 karakter"
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                  >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Şifre Tekrar</label>
-                <Input
-                  type="password"
-                  value={editPasswordData.confirmPassword}
-                  onChange={(e) => setEditPasswordData({...editPasswordData, confirmPassword: e.target.value})}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  placeholder="Yeni şifreyi tekrar girin"
-                />
-              </div>
-              <Button onClick={handleEditUserPassword} disabled={!editPasswordData.newPassword || !editPasswordData.confirmPassword} className="bg-blue-600 hover:bg-blue-700">
-                <KeyRound className="mr-2 h-4 w-4" />
-                Şifreyi Değiştir
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         {/* Silme Onay Dialog */}
         {showDeleteConfirm && (
           <Dialog open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>
