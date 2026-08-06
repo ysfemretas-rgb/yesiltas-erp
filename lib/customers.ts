@@ -1,0 +1,188 @@
+import { supabase } from "@/lib/supabase"
+
+export interface Debt {
+  id: string
+  amount: number
+  description: string
+  date: string
+  status: "paid" | "unpaid"
+  source?: "repair" | "sale" | "manual"
+}
+
+export interface Customer {
+  id: string
+  customerId: string
+  firstName: string
+  lastName: string
+  name: string
+  phone: string
+  phone1?: string
+  phone2: string
+  email: string
+  address: string
+  city: string
+  debts: Debt[]
+  totalDebt: number
+  totalRepairs: number
+  lastVisit: string
+  status: "active" | "inactive"
+  notes: string
+}
+
+function debtFromRow(row: any): Debt {
+  const statusMap: Record<string, "paid" | "unpaid"> = {
+    "Tamamlandı": "paid",
+    "Beklemede": "unpaid",
+    "Kısmi Ödendi": "unpaid",
+    "Gecikti": "unpaid",
+  }
+  const sourceMap: Record<string, "repair" | "sale" | "manual"> = {
+    device: "repair",
+    sale: "sale",
+  }
+  return {
+    id: row.id,
+    amount: Number(row.total_amount) || 0,
+    description: row.description ?? "",
+    date: row.created_at ? String(row.created_at).slice(0, 10) : "",
+    status: statusMap[row.status] ?? "unpaid",
+    source: row.source_type ? sourceMap[row.source_type] : "manual",
+  }
+}
+
+function customerFromRow(row: any, debts: Debt[]): Customer {
+  const totalDebt = debts.filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
+  return {
+    id: row.id,
+    customerId: row.id,
+    firstName: row.first_name ?? "",
+    lastName: row.last_name ?? "",
+    name: row.name ?? "",
+    phone: row.phone ?? "",
+    phone1: row.phone ?? "",
+    phone2: row.phone2 ?? "",
+    email: row.email ?? "",
+    address: row.address ?? "",
+    city: row.city ?? "",
+    debts,
+    totalDebt,
+    totalRepairs: row.total_repairs ?? 0,
+    lastVisit: row.last_visit ?? "",
+    status: (row.status as "active" | "inactive") ?? "active",
+    notes: row.notes ?? "",
+  }
+}
+
+function customerToRow(c: Partial<Customer>) {
+  const row: Record<string, unknown> = {}
+  if (c.firstName !== undefined) row.first_name = c.firstName
+  if (c.lastName !== undefined) row.last_name = c.lastName
+  if (c.name !== undefined) row.name = c.name
+  if (c.phone !== undefined) row.phone = c.phone
+  if (c.phone2 !== undefined) row.phone2 = c.phone2
+  if (c.email !== undefined) row.email = c.email
+  if (c.address !== undefined) row.address = c.address
+  if (c.city !== undefined) row.city = c.city
+  if (c.totalRepairs !== undefined) row.total_repairs = c.totalRepairs
+  if (c.lastVisit !== undefined) row.last_visit = c.lastVisit || null
+  if (c.status !== undefined) row.status = c.status
+  if (c.notes !== undefined) row.notes = c.notes
+  return row
+}
+
+export async function fetchCustomers(): Promise<Customer[]> {
+  const { data: customerRows, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false })
+  if (error) throw error
+
+  if ((!customerRows || customerRows.length === 0) && typeof window !== "undefined") {
+    const legacyRaw = localStorage.getItem("yt_customers")
+    if (legacyRaw) {
+      try {
+        const legacy = JSON.parse(legacyRaw)
+        if (Array.isArray(legacy) && legacy.length > 0) {
+          const rows = legacy.map((c: any) => customerToRow({
+            firstName: c.firstName, lastName: c.lastName, name: c.name, phone: c.phone,
+            phone2: c.phone2, email: c.email, address: c.address, city: c.city,
+            totalRepairs: c.totalRepairs, lastVisit: c.lastVisit, status: c.status, notes: c.notes,
+          }))
+          const { data: inserted, error: insertError } = await supabase.from("customers").insert(rows).select("*")
+          if (!insertError && inserted) {
+            // Eski borçları da aktar
+            for (let i = 0; i < inserted.length; i++) {
+              const legacyDebts = legacy[i]?.debts
+              if (Array.isArray(legacyDebts) && legacyDebts.length > 0) {
+                const debtRows = legacyDebts.map((d: any) => ({
+                  customer_id: inserted[i].id,
+                  description: d.description || "",
+                  total_amount: d.amount || 0,
+                  paid_amount: d.status === "paid" ? (d.amount || 0) : 0,
+                  remaining_amount: d.status === "paid" ? 0 : (d.amount || 0),
+                  status: d.status === "paid" ? "Tamamlandı" : "Beklemede",
+                }))
+                await supabase.from("debts").insert(debtRows)
+              }
+            }
+            return fetchCustomers()
+          }
+        }
+      } catch {
+        // eski veri okunamadıysa sessizce geç
+      }
+    }
+  }
+
+  const ids = (customerRows || []).map((r: any) => r.id)
+  let debtsByCustomer: Record<string, Debt[]> = {}
+  if (ids.length > 0) {
+    const { data: debtRows } = await supabase.from("debts").select("*").in("customer_id", ids)
+    for (const row of debtRows || []) {
+      const list = debtsByCustomer[row.customer_id] || (debtsByCustomer[row.customer_id] = [])
+      list.push(debtFromRow(row))
+    }
+  }
+
+  return (customerRows || []).map((row: any) => customerFromRow(row, debtsByCustomer[row.id] || []))
+}
+
+export async function createCustomer(input: Partial<Customer>): Promise<Customer> {
+  const { data, error } = await supabase.from("customers").insert(customerToRow(input)).select("*").single()
+  if (error) throw error
+  return customerFromRow(data, [])
+}
+
+export async function updateCustomer(id: string, input: Partial<Customer>): Promise<Customer> {
+  const { data, error } = await supabase.from("customers").update(customerToRow(input)).eq("id", id).select("*").single()
+  if (error) throw error
+  const { data: debtRows } = await supabase.from("debts").select("*").eq("customer_id", id)
+  return customerFromRow(data, (debtRows || []).map(debtFromRow))
+}
+
+export async function deleteCustomer(id: string): Promise<void> {
+  const { error } = await supabase.from("customers").delete().eq("id", id)
+  if (error) throw error
+}
+
+export async function addDebt(customerId: string, input: { amount: number; description: string }): Promise<Debt> {
+  const { data, error } = await supabase.from("debts").insert({
+    customer_id: customerId,
+    description: input.description,
+    total_amount: input.amount,
+    paid_amount: 0,
+    remaining_amount: input.amount,
+    status: "Beklemede",
+    source_type: null,
+  }).select("*").single()
+  if (error) throw error
+  return debtFromRow(data)
+}
+
+export async function payDebt(debtId: string): Promise<void> {
+  const { data: existing, error: fetchError } = await supabase.from("debts").select("total_amount").eq("id", debtId).single()
+  if (fetchError) throw fetchError
+  const { error } = await supabase.from("debts").update({
+    status: "Tamamlandı",
+    paid_amount: existing?.total_amount ?? 0,
+    remaining_amount: 0,
+  }).eq("id", debtId)
+  if (error) throw error
+}

@@ -3,6 +3,7 @@
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { Appointment, fetchAppointments, createAppointment, updateAppointment, deleteAppointment } from "@/lib/appointments"
+import { fetchCustomers } from "@/lib/customers"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -42,7 +43,7 @@ import {
 } from "lucide-react"
 
 interface Customer {
-  id: number
+  id: string
   name: string
   phone: string
   phone1?: string
@@ -76,16 +77,12 @@ export default function AppointmentsPage() {
     phone: ""
   })
   useEffect(() => {
-    const savedCustomers = localStorage.getItem("yt_customers")
-
-    if (savedCustomers) {
-      try {
-        const parsed = JSON.parse(savedCustomers)
-        setCustomers(Array.isArray(parsed) ? parsed : [])
-      } catch {
+    fetchCustomers()
+      .then((data) => setCustomers(data.map(c => ({ id: c.id, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2 }))))
+      .catch((e) => {
+        console.error("Müşteriler yüklenemedi:", e)
         setCustomers([])
-      }
-    }
+      })
 
     fetchAppointments()
       .then((data) => setAppointments(data))
@@ -176,7 +173,7 @@ export default function AppointmentsPage() {
   const handleAddAppointment = async () => {
     if (!validateAppointment(newAppointment)) return
 
-    const customer = customers.find(c => c.id === Number(newAppointment.customerId))
+    const customer = customers.find(c => c.id === newAppointment.customerId)
     if (!customer) {
       showToast("Müşteri bulunamadı!", "error")
       return
@@ -352,7 +349,7 @@ export default function AppointmentsPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Müşteri <span className="text-red-400">*</span></label>
                 <div className="flex gap-2">
-                  <Select value={String(newAppointment.customerId || "")} onValueChange={(v) => setNewAppointment({...newAppointment, customerId: Number(v)})}>
+                  <Select value={String(newAppointment.customerId || "")} onValueChange={(v) => setNewAppointment({...newAppointment, customerId: v})}>
                     <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-white">
                       <SelectValue placeholder="Müşteri seçin" />
                     </SelectTrigger>
@@ -575,7 +572,7 @@ export default function AppointmentsPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Müşteri</label>
                 <Select value={String(editingAppointment.customerId)} onValueChange={(v) => {
-                  const customer = customers.find(c => c.id === Number(v))
+                  const customer = customers.find(c => c.id === v)
                   if (customer) {
                     setEditingAppointment({...editingAppointment, customerId: customer.id, customerName: customer.name, customerPhone: customer.phone || customer.phone1 || ""})
                   }

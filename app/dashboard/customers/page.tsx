@@ -2,6 +2,9 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt } from "@/lib/customers"
+import { CustomerWhatsAppDialog } from "@/components/customers/CustomerWhatsAppDialog"
+import { CustomerDebtDialog } from "@/components/customers/CustomerDebtDialog"
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -25,35 +28,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle } from "lucide-react"
-
-interface Debt {
-  id: number
-  amount: number
-  description: string
-  date: string
-  status: "paid" | "unpaid"
-  source?: "repair" | "sale" | "manual"
-}
-
-interface Customer {
-  id: number
-  customerId: string
-  firstName: string
-  lastName: string
-  name: string
-  phone: string
-  phone1?: string
-  phone2: string
-  email: string
-  address: string
-  city: string
-  debts: Debt[]
-  totalDebt: number
-  totalRepairs: number
-  lastVisit: string
-  status: "active" | "inactive"
-  notes: string
-}
 
 interface Repair {
   id: number
@@ -82,30 +56,6 @@ interface Sale {
 }
 
 // Normalize customer data to ensure phone1 field exists
-function normalizeCustomer(raw: any): Customer {
-  const phone = raw.phone || raw.phone1 || raw.telefon || raw.tel1 || raw.phoneNumber || ""
-  const phone2 = raw.phone2 || raw.phoneSecondary || raw.tel2 || ""
-  return {
-    id: raw.id || 0,
-    customerId: raw.customerId || `MUS-${String(raw.id || 0).padStart(3, "0")}`,
-    firstName: raw.firstName || raw.name?.split(" ")[0] || "",
-    lastName: raw.lastName || raw.name?.split(" ").slice(1).join(" ") || "",
-    name: raw.name || `${raw.firstName || ""} ${raw.lastName || ""}`.trim() || "İsimsiz",
-    phone: phone,
-    phone1: phone,
-    phone2: phone2,
-    email: raw.email || "",
-    address: raw.address || "",
-    city: raw.city || "İstanbul",
-    debts: raw.debts || [],
-    totalDebt: raw.totalDebt || 0,
-    totalRepairs: raw.totalRepairs || 0,
-    lastVisit: raw.lastVisit || new Date().toISOString().split("T")[0],
-    status: raw.status || "active",
-    notes: raw.notes || "",
-  }
-}
-
 export default function CustomersPage() {
   const { toast, showToast, hideToast } = useToast()
 
@@ -133,26 +83,17 @@ export default function CustomersPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
-  // Load data from localStorage
+  // Müşterileri Supabase'den yükle, tamir/satış verisini (henüz Supabase'e
+  // taşınmadığı için) localStorage'dan okuyup borç senkronizasyonunu uygula
   useEffect(() => {
     if (typeof window === "undefined") return
 
+    const savedRepairs = localStorage.getItem("yt_repairs")
+    const savedSales = localStorage.getItem("yt_sales")
+    let loadedRepairs: Repair[] = []
+    let loadedSales: Sale[] = []
+
     try {
-      const savedCustomers = localStorage.getItem("yt_customers")
-      const savedRepairs = localStorage.getItem("yt_repairs")
-      const savedSales = localStorage.getItem("yt_sales")
-
-      let loadedCustomers: Customer[] = []
-      let loadedRepairs: Repair[] = []
-      let loadedSales: Sale[] = []
-
-      if (savedCustomers) {
-        const parsed = JSON.parse(savedCustomers)
-        if (Array.isArray(parsed)) {
-          loadedCustomers = parsed.map(normalizeCustomer)
-        }
-      }
-
       if (savedRepairs) {
         const parsed = JSON.parse(savedRepairs)
         if (Array.isArray(parsed)) {
@@ -160,7 +101,6 @@ export default function CustomersPage() {
           setRepairs(parsed)
         }
       }
-
       if (savedSales) {
         const parsed = JSON.parse(savedSales)
         if (Array.isArray(parsed)) {
@@ -168,44 +108,47 @@ export default function CustomersPage() {
           setSales(parsed)
         }
       }
-
-      // Sync customer totalDebt from repairs and sales
-      const syncedCustomers = loadedCustomers.map(customer => {
-        const customerRepairs = loadedRepairs.filter(r => 
-          r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
-        )
-        const customerSales = loadedSales.filter(s => 
-          s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
-        )
-
-        const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
-        const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
-        const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
-
-        const totalDebt = repairDebt + saleDebt + manualDebt
-        const totalRepairs = customerRepairs.length
-
-        // Auto-update status based on debt
-        const status = totalDebt > 0 ? "active" : customer.status
-
-        return {
-          ...customer,
-          totalDebt,
-          totalRepairs,
-          status,
-          phone: customer.phone || customer.phone1 || "",
-          phone1: customer.phone1 || customer.phone || "",
-        }
-      })
-
-      setCustomers(syncedCustomers)
     } catch (e) {
-      console.error("Load error:", e)
+      console.error("Tamir/satış verisi okunamadı:", e)
     }
-    setIsLoaded(true)
+
+    fetchCustomers()
+      .then((loadedCustomers) => {
+        // Tamir ve satışlardan gelen borcu, müşterinin manuel borçlarıyla birleştir
+        const syncedCustomers = loadedCustomers.map(customer => {
+          const customerRepairs = loadedRepairs.filter(r =>
+            r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
+          )
+          const customerSales = loadedSales.filter(s =>
+            s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
+          )
+
+          const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
+          const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
+          const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
+
+          return {
+            ...customer,
+            totalDebt: repairDebt + saleDebt + manualDebt,
+            totalRepairs: customerRepairs.length,
+            status: (repairDebt + saleDebt + manualDebt) > 0 ? "active" as const : customer.status,
+            phone: customer.phone || customer.phone1 || "",
+            phone1: customer.phone1 || customer.phone || "",
+          }
+        })
+        setCustomers(syncedCustomers)
+      })
+      .catch((e) => {
+        console.error("Müşteriler yüklenemedi:", e)
+        showToast("Müşteriler yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => setIsLoaded(true))
   }, [])
 
-  // Save customers to localStorage
+  // Teknik Servis ve Satış sayfaları henüz Supabase'e taşınmadığı için hâlâ
+  // localStorage'daki müşteri listesini okuyor. Onlar taşınana kadar, o
+  // sayfaların güncel müşteri görebilmesi için burada bir ayna (mirror) tutuyoruz —
+  // asıl kaynak Supabase, bu sadece uyumluluk içindir.
   useEffect(() => {
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_customers", JSON.stringify(customers))
@@ -235,13 +178,13 @@ export default function CustomersPage() {
     return lastVisit >= thirtyDaysAgo
   }
 
-  const toggleStatus = (id: number) => {
+  const toggleStatus = (id: string) => {
     setCustomers(customers.map(c =>
       c.id === id ? { ...c, status: c.status === "active" ? "inactive" : "active" } : c
     ))
   }
 
-  const getCustomerTransactions = (customerId: number) => {
+  const getCustomerTransactions = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
     if (!customer) return []
 
@@ -305,7 +248,7 @@ export default function CustomersPage() {
 
   // Recalculate totals from real-time data
   const customerDebts = useMemo(() => {
-    const map = new Map<number, number>()
+    const map = new Map<string, number>()
     customers.forEach(c => {
       map.set(c.id, getCustomerDebt(c))
     })
@@ -321,7 +264,7 @@ export default function CustomersPage() {
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
   }
 
-  const handleAddCustomer = () => {
+  const handleAddCustomer = async () => {
     const firstName = newCustomer.firstName || ""
     const lastName = newCustomer.lastName || ""
     const fullName = `${firstName} ${lastName}`.trim()
@@ -329,28 +272,29 @@ export default function CustomersPage() {
 
     if (!firstName || !lastName || !phone) return
 
-    const customer: Customer = {
-      id: Date.now(),
-      customerId: `MUS-${String(customers.length + 1).padStart(3, "0")}`,
-      firstName,
-      lastName,
-      name: fullName,
-      phone: phone,
-      phone1: phone,
-      phone2: newCustomer.phone2 || "",
-      email: newCustomer.email || "",
-      address: newCustomer.address || "",
-      city: newCustomer.city || "İstanbul",
-      debts: [],
-      totalDebt: 0,
-      totalRepairs: 0,
-      lastVisit: new Date().toISOString().split("T")[0],
-      status: "active",
-      notes: newCustomer.notes || "",
+    try {
+      const customer = await createCustomer({
+        firstName,
+        lastName,
+        name: fullName,
+        phone,
+        phone2: newCustomer.phone2 || "",
+        email: newCustomer.email || "",
+        address: newCustomer.address || "",
+        city: newCustomer.city || "İstanbul",
+        totalRepairs: 0,
+        lastVisit: new Date().toISOString().split("T")[0],
+        status: "active",
+        notes: newCustomer.notes || "",
+      })
+      setCustomers([customer, ...customers])
+      setNewCustomer({ status: "active", city: "İstanbul", debts: [], totalDebt: 0, totalRepairs: 0 })
+      setIsDialogOpen(false)
+      showToast("Müşteri eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Müşteri eklenirken bir sorun oluştu.", "error")
     }
-    setCustomers([customer, ...customers])
-    setNewCustomer({ status: "active", city: "İstanbul", debts: [], totalDebt: 0, totalRepairs: 0 })
-    setIsDialogOpen(false)
   }
 
   const openEdit = (customer: Customer) => {
@@ -370,36 +314,44 @@ export default function CustomersPage() {
     setIsEditOpen(true)
   }
 
-  const handleEditCustomer = () => {
+  const handleEditCustomer = async () => {
     if (!selectedCustomer) return
     const firstName = newCustomer.firstName || selectedCustomer.firstName
     const lastName = newCustomer.lastName || selectedCustomer.lastName
     const fullName = `${firstName} ${lastName}`.trim()
     const phone = newCustomer.phone || newCustomer.phone1 || selectedCustomer.phone || selectedCustomer.phone1 || ""
 
-    setCustomers(customers.map(c => 
-      c.id === selectedCustomer.id 
-        ? { 
-            ...c, 
-            firstName,
-            lastName,
-            name: fullName,
-            phone: phone,
-            phone1: phone,
-            phone2: newCustomer.phone2 || "", 
-            email: newCustomer.email || "", 
-            address: newCustomer.address || "", 
-            city: newCustomer.city || c.city, 
-            notes: newCustomer.notes || "" 
-          }
-        : c
-    ))
-    setIsEditOpen(false)
-    setSelectedCustomer(null)
+    try {
+      const updated = await updateCustomer(selectedCustomer.id, {
+        firstName,
+        lastName,
+        name: fullName,
+        phone,
+        phone2: newCustomer.phone2 || "",
+        email: newCustomer.email || "",
+        address: newCustomer.address || "",
+        city: newCustomer.city || selectedCustomer.city,
+        notes: newCustomer.notes || "",
+      })
+      setCustomers(customers.map(c => c.id === updated.id ? { ...updated, totalDebt: c.totalDebt, totalRepairs: c.totalRepairs } : c))
+      setIsEditOpen(false)
+      setSelectedCustomer(null)
+      showToast("Müşteri güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Müşteri güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteCustomer = (id: number) => {
-    setCustomers(customers.filter(c => c.id !== id))
+  const handleDeleteCustomer = async (id: string) => {
+    try {
+      await deleteCustomer(id)
+      setCustomers(customers.filter(c => c.id !== id))
+      showToast("Müşteri silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Müşteri silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openDebtDialog = (customer: Customer) => {
@@ -470,32 +422,42 @@ export default function CustomersPage() {
     setIsWhatsAppOpen(false)
   }
 
-  const handleAddDebt = () => {
+  const handleAddDebt = async () => {
     if (!selectedCustomer || !newDebt.amount || !newDebt.description) return
-    const debt: Debt = {
-      id: Date.now(),
-      amount: Number(newDebt.amount),
-      description: newDebt.description,
-      date: new Date().toISOString().split("T")[0],
-      status: "unpaid",
-      source: "manual",
+    try {
+      const debt = await addDebt(selectedCustomer.id, {
+        amount: Number(newDebt.amount),
+        description: newDebt.description,
+      })
+      setCustomers(customers.map(c =>
+        c.id === selectedCustomer.id
+          ? { ...c, debts: [...(c.debts || []), debt], totalDebt: (c.totalDebt || 0) + debt.amount, status: "active" as const }
+          : c
+      ))
+      setNewDebt({ amount: 0, description: "" })
+      setIsDebtOpen(false)
+      showToast("Borç eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Borç eklenirken bir sorun oluştu.", "error")
     }
-    setCustomers(customers.map(c =>
-      c.id === selectedCustomer.id
-        ? { ...c, debts: [...(c.debts || []), debt], totalDebt: (c.totalDebt || 0) + debt.amount, status: "active" as const }
-        : c
-    ))
-    setNewDebt({ amount: 0, description: "" })
-    setIsDebtOpen(false)
   }
 
-  const handlePayDebt = (customerId: number, debtId: number) => {
-    setCustomers(customers.map(c => {
-      if (c.id !== customerId) return c
-      const updatedDebts = (c.debts || []).map(d => d.id === debtId ? { ...d, status: "paid" as const } : d)
-      const paidAmount = (c.debts || []).find(d => d.id === debtId)?.amount || 0
-      return { ...c, debts: updatedDebts, totalDebt: Math.max(0, (c.totalDebt || 0) - paidAmount) }
-    }))
+  const handlePayDebt = async (customerId: string, debtId: string) => {
+    const customer = customers.find(c => c.id === customerId)
+    const paidAmount = customer?.debts?.find(d => d.id === debtId)?.amount || 0
+    try {
+      await payDebt(debtId)
+      setCustomers(customers.map(c => {
+        if (c.id !== customerId) return c
+        const updatedDebts = (c.debts || []).map(d => d.id === debtId ? { ...d, status: "paid" as const } : d)
+        return { ...c, debts: updatedDebts, totalDebt: Math.max(0, (c.totalDebt || 0) - paidAmount) }
+      }))
+      showToast("Borç ödendi olarak işaretlendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Borç güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
   const formatCurrency = (amount: number) => {
@@ -906,36 +868,12 @@ export default function CustomersPage() {
       </Dialog>
 
       {/* WhatsApp Dialog */}
-      <Dialog open={isWhatsAppOpen} onOpenChange={setIsWhatsAppOpen}>
-        <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">WhatsApp Mesajı - {selectedCustomer?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-slate-400">Göndermek istediğiniz mesaj tipini seçin:</p>
-            <div className="space-y-2">
-              <Button 
-                onClick={() => sendWhatsApp("simple")}
-                className="w-full justify-start bg-slate-800 hover:bg-slate-700 text-white"
-              >
-                <div className="text-left">
-                  <div className="text-sm">Sadece Borç Özeti</div>
-                  <div className="text-xs text-slate-400">Toplam borç tutarı gönderilir</div>
-                </div>
-              </Button>
-              <Button 
-                onClick={() => sendWhatsApp("detailed")}
-                className="w-full justify-start bg-slate-800 hover:bg-slate-700 text-white"
-              >
-                <div className="text-left">
-                  <div className="text-sm">Detaylı Borç Listesi</div>
-                  <div className="text-xs text-slate-400">Tüm işlemler ve kalan borçlar gönderilir</div>
-                </div>
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CustomerWhatsAppDialog
+        open={isWhatsAppOpen}
+        onOpenChange={setIsWhatsAppOpen}
+        customerName={selectedCustomer?.name}
+        onSend={sendWhatsApp}
+      />
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -976,60 +914,17 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Debt Dialog */}
-      <Dialog open={isDebtOpen} onOpenChange={setIsDebtOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Borç Yönetimi - {selectedCustomer?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Mevcut Borçlar</label>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {(selectedCustomer?.debts || []).map((debt) => (
-                  <div key={debt.id} className="flex items-center justify-between p-2 rounded bg-slate-800 border border-slate-700">
-                    <div>
-                      <div className="text-sm text-white">{debt.description}</div>
-                      <div className="text-xs text-slate-400">{debt.date} • {formatCurrency(debt.amount)}</div>
-                    </div>
-                    {debt.status === "unpaid" ? (
-                      <Button size="sm" onClick={() => handlePayDebt(selectedCustomer!.id, debt.id)} className="bg-emerald-600 hover:bg-emerald-700">
-                        Öde
-                      </Button>
-                    ) : (
-                      <Badge className="bg-emerald-900/50 text-emerald-300 border-emerald-700">Ödenmiş</Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="border-t border-slate-700 pt-4">
-              <label className="text-sm font-medium text-slate-300">Yeni Borç Ekle</label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  pattern="[0-9]*"
-                  placeholder="Tutar"
-                  value={newDebt.amount || ""}
-                  onChange={(e) => setNewDebt({...newDebt, amount: Number(e.target.value)})}
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
-                <Input
-                  placeholder="Açıklama"
-                  value={newDebt.description}
-                  onChange={(e) => setNewDebt({...newDebt, description: e.target.value})}
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
-              </div>
-              <Button onClick={handleAddDebt} className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700" disabled={!newDebt.amount || !newDebt.description}>
-                <Plus className="mr-2 h-4 w-4" />
-                Borç Ekle
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CustomerDebtDialog
+        open={isDebtOpen}
+        onOpenChange={setIsDebtOpen}
+        customerName={selectedCustomer?.name}
+        debts={selectedCustomer?.debts || []}
+        onPayDebt={(debtId) => handlePayDebt(selectedCustomer!.id, debtId)}
+        newDebt={newDebt}
+        onNewDebtChange={setNewDebt}
+        onAddDebt={handleAddDebt}
+        formatCurrency={formatCurrency}
+      />
     </div>
   )
 }

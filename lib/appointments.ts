@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase"
 
 export interface Appointment {
   id: string
-  customerId: number
+  customerId: string
   customerName: string
   customerPhone: string
   date: string
