@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Repair {
   id: string
@@ -95,16 +96,22 @@ export async function fetchRepairs(): Promise<Repair[]> {
 export async function createRepair(input: Omit<Repair, "id">): Promise<Repair> {
   const { data, error } = await supabase.from("devices").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Teknik Servis", "created", `${created.customerName} — ${created.brand} ${created.model} kaydı eklendi`)
+  return created
 }
 
 export async function updateRepair(id: string, input: Partial<Omit<Repair, "id">>): Promise<Repair> {
   const { data, error } = await supabase.from("devices").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Teknik Servis", "updated", `${updated.customerName} — ${updated.brand} ${updated.model} güncellendi`)
+  return updated
 }
 
 export async function deleteRepair(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("devices").select("customer_name, brand, model").eq("id", id).single()
   const { error } = await supabase.from("devices").delete().eq("id", id)
   if (error) throw error
+  logActivity("Teknik Servis", "deleted", `${existing?.customer_name || "Bir kayıt"} — ${existing?.brand || ""} ${existing?.model || ""} silindi`)
 }

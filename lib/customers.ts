@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Debt {
   id: string
@@ -147,19 +148,25 @@ export async function fetchCustomers(): Promise<Customer[]> {
 export async function createCustomer(input: Partial<Customer>): Promise<Customer> {
   const { data, error } = await supabase.from("customers").insert(customerToRow(input)).select("*").single()
   if (error) throw error
-  return customerFromRow(data, [])
+  const created = customerFromRow(data, [])
+  logActivity("Müşteriler", "created", `${created.name} eklendi`)
+  return created
 }
 
 export async function updateCustomer(id: string, input: Partial<Customer>): Promise<Customer> {
   const { data, error } = await supabase.from("customers").update(customerToRow(input)).eq("id", id).select("*").single()
   if (error) throw error
   const { data: debtRows } = await supabase.from("debts").select("*").eq("customer_id", id)
-  return customerFromRow(data, (debtRows || []).map(debtFromRow))
+  const updated = customerFromRow(data, (debtRows || []).map(debtFromRow))
+  logActivity("Müşteriler", "updated", `${updated.name} güncellendi`)
+  return updated
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("customers").select("name").eq("id", id).single()
   const { error } = await supabase.from("customers").delete().eq("id", id)
   if (error) throw error
+  logActivity("Müşteriler", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }
 
 export async function addDebt(customerId: string, input: { amount: number; description: string }): Promise<Debt> {
@@ -173,6 +180,7 @@ export async function addDebt(customerId: string, input: { amount: number; descr
     source_type: null,
   }).select("*").single()
   if (error) throw error
+  logActivity("Müşteriler", "created", `${input.description} — ${input.amount.toLocaleString("tr-TR")} TL borç eklendi`)
   return debtFromRow(data)
 }
 
@@ -185,4 +193,5 @@ export async function payDebt(debtId: string): Promise<void> {
     remaining_amount: 0,
   }).eq("id", debtId)
   if (error) throw error
+  logActivity("Müşteriler", "updated", `${(existing?.total_amount ?? 0).toLocaleString("tr-TR")} TL borç ödendi olarak işaretlendi`)
 }

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Appointment {
   id: string
@@ -77,16 +78,22 @@ export async function fetchAppointments(): Promise<Appointment[]> {
 export async function createAppointment(input: Omit<Appointment, "id">): Promise<Appointment> {
   const { data, error } = await supabase.from("appointments").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Randevular", "created", `${created.customerName} — ${created.date} randevusu eklendi`)
+  return created
 }
 
 export async function updateAppointment(id: string, input: Partial<Omit<Appointment, "id">>): Promise<Appointment> {
   const { data, error } = await supabase.from("appointments").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Randevular", "updated", `${updated.customerName} — ${updated.date} randevusu güncellendi`)
+  return updated
 }
 
 export async function deleteAppointment(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("appointments").select("customer_name").eq("id", id).single()
   const { error } = await supabase.from("appointments").delete().eq("id", id)
   if (error) throw error
+  logActivity("Randevular", "deleted", `${existing?.customer_name || "Bir kayıt"} randevusu silindi`)
 }

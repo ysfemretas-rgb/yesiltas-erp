@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Transaction {
   id: string
@@ -67,16 +68,22 @@ export async function fetchTransactions(): Promise<Transaction[]> {
 export async function createTransaction(input: Omit<Transaction, "id">): Promise<Transaction> {
   const { data, error } = await supabase.from("transactions").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Finans", "created", `${created.description} — ${created.amount.toLocaleString("tr-TR")} TL (${created.type === "income" ? "gelir" : "gider"})`)
+  return created
 }
 
 export async function updateTransaction(id: string, input: Partial<Omit<Transaction, "id">>): Promise<Transaction> {
   const { data, error } = await supabase.from("transactions").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Finans", "updated", `${updated.description} güncellendi`)
+  return updated
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("transactions").select("description").eq("id", id).single()
   const { error } = await supabase.from("transactions").delete().eq("id", id)
   if (error) throw error
+  logActivity("Finans", "deleted", `${existing?.description || "Bir kayıt"} silindi`)
 }

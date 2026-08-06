@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Consumable {
   id: string
@@ -74,16 +75,22 @@ export async function fetchConsumables(): Promise<Consumable[]> {
 export async function createConsumable(input: Omit<Consumable, "id">): Promise<Consumable> {
   const { data, error } = await supabase.from("consumables").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Sarf Malzeme", "created", `${created.name} eklendi`)
+  return created
 }
 
 export async function updateConsumable(id: string, input: Partial<Omit<Consumable, "id">>): Promise<Consumable> {
   const { data, error } = await supabase.from("consumables").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Sarf Malzeme", "updated", `${updated.name} güncellendi`)
+  return updated
 }
 
 export async function deleteConsumable(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("consumables").select("name").eq("id", id).single()
   const { error } = await supabase.from("consumables").delete().eq("id", id)
   if (error) throw error
+  logActivity("Sarf Malzeme", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }

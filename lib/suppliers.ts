@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Supplier {
   id: string
@@ -88,16 +89,22 @@ export async function fetchSuppliers(): Promise<Supplier[]> {
 export async function createSupplier(input: Omit<Supplier, "id">): Promise<Supplier> {
   const { data, error } = await supabase.from("suppliers").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Tedarikçiler", "created", `${created.name} eklendi`)
+  return created
 }
 
 export async function updateSupplier(id: string, input: Partial<Omit<Supplier, "id">>): Promise<Supplier> {
   const { data, error } = await supabase.from("suppliers").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Tedarikçiler", "updated", `${updated.name} güncellendi`)
+  return updated
 }
 
 export async function deleteSupplier(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("suppliers").select("name").eq("id", id).single()
   const { error } = await supabase.from("suppliers").delete().eq("id", id)
   if (error) throw error
+  logActivity("Tedarikçiler", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }

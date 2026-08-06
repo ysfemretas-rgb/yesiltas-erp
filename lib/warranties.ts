@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface Warranty {
   id: string
@@ -76,16 +77,22 @@ export async function fetchWarranties(): Promise<Warranty[]> {
 export async function createWarranty(input: Omit<Warranty, "id">): Promise<Warranty> {
   const { data, error } = await supabase.from("warranties").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Garantiler", "created", `${created.deviceName} (${created.customerName}) eklendi`)
+  return created
 }
 
 export async function updateWarranty(id: string, input: Partial<Omit<Warranty, "id">>): Promise<Warranty> {
   const { data, error } = await supabase.from("warranties").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Garantiler", "updated", `${updated.deviceName} (${updated.customerName}) güncellendi`)
+  return updated
 }
 
 export async function deleteWarranty(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("warranties").select("item_name, customer_name").eq("id", id).single()
   const { error } = await supabase.from("warranties").delete().eq("id", id)
   if (error) throw error
+  logActivity("Garantiler", "deleted", `${existing?.item_name || "Bir kayıt"} (${existing?.customer_name || ""}) silindi`)
 }

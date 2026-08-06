@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface InventoryItem {
   id: string
@@ -80,16 +81,22 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
 export async function createInventoryItem(input: Omit<InventoryItem, "id">): Promise<InventoryItem> {
   const { data, error } = await supabase.from("inventory").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Envanter", "created", `${created.name} eklendi`)
+  return created
 }
 
 export async function updateInventoryItem(id: string, input: Partial<Omit<InventoryItem, "id">>): Promise<InventoryItem> {
   const { data, error } = await supabase.from("inventory").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Envanter", "updated", `${updated.name} güncellendi`)
+  return updated
 }
 
 export async function deleteInventoryItem(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("inventory").select("name").eq("id", id).single()
   const { error } = await supabase.from("inventory").delete().eq("id", id)
   if (error) throw error
+  logActivity("Envanter", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }

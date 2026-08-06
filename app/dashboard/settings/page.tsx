@@ -5,6 +5,7 @@ import { Toast, useToast } from "@/components/toast"
 import { useState, useEffect, useRef } from "react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { SupabaseHealthCheck } from "@/components/SupabaseHealthCheck"
+import { ActivityLogViewer } from "@/components/ActivityLogViewer"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -338,6 +339,7 @@ export default function SettingsPage() {
             <TabsTrigger value="logins" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Giriş/Çıkış</TabsTrigger>
             <TabsTrigger value="system" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Sistem</TabsTrigger>
             <TabsTrigger value="status" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">🔌 Bağlantı Durumu</TabsTrigger>
+            <TabsTrigger value="activity" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">📋 Aktivite Logu</TabsTrigger>
           </TabsList>
 
           {/* Şirket Bilgileri */}
@@ -717,6 +719,19 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent>
                 <SupabaseHealthCheck />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-4">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  📋 Aktivite Logu
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ActivityLogViewer />
               </CardContent>
             </Card>
           </TabsContent>

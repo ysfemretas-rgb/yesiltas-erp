@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { logActivity } from "@/lib/activityLog"
 
 export interface SaleItem {
   productId: number
@@ -87,16 +88,22 @@ export async function fetchSales(): Promise<Sale[]> {
 export async function createSale(input: Omit<Sale, "id">): Promise<Sale> {
   const { data, error } = await supabase.from("sales").insert(toRow(input)).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const created = fromRow(data)
+  logActivity("Satışlar", "created", `${created.customerName} — ${created.totalAmount.toLocaleString("tr-TR")} TL satış eklendi`)
+  return created
 }
 
 export async function updateSale(id: string, input: Partial<Omit<Sale, "id">>): Promise<Sale> {
   const { data, error } = await supabase.from("sales").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
-  return fromRow(data)
+  const updated = fromRow(data)
+  logActivity("Satışlar", "updated", `${updated.customerName} satışı güncellendi`)
+  return updated
 }
 
 export async function deleteSale(id: string): Promise<void> {
+  const { data: existing } = await supabase.from("sales").select("customer_name").eq("id", id).single()
   const { error } = await supabase.from("sales").delete().eq("id", id)
   if (error) throw error
+  logActivity("Satışlar", "deleted", `${existing?.customer_name || "Bir kayıt"} satışı silindi`)
 }
