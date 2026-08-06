@@ -23,27 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar } from "lucide-react"
-
-interface Transaction {
-  id: number
-  description: string
-  amount: number
-  type: "income" | "expense"
-  category: string
-  date: string
-  customer?: string
-  source: "repair" | "sale" | "manual"
-  sourceId?: number
-}
-
-const initialTransactions: Transaction[] = [
-  { id: 1, description: "iPhone 14 Pro Ekran Değişimi", amount: 4500, type: "income", category: "Tamir Geliri", date: "2026-07-29", customer: "Ahmet Yılmaz", source: "repair", sourceId: 1 },
-  { id: 2, description: "Ekran Tedarik", amount: 1200, type: "expense", category: "Parça Maliyeti", date: "2026-07-28", customer: "Tedarikçi A", source: "manual" },
-  { id: 3, description: "Satış - iPhone 14 Pro Kılıf + Ekran Koruyucu", amount: 550, type: "income", category: "Satış Geliri", date: "2026-08-01", customer: "Ahmet Yılmaz", source: "sale", sourceId: 1 },
-  { id: 4, description: "Kira Ödemesi", amount: 5000, type: "expense", category: "Kira", date: "2026-08-01", source: "manual" },
-  { id: 5, description: "Samsung S23 Batarya Değişimi", amount: 800, type: "income", category: "Tamir Geliri", date: "2026-07-30", customer: "Mehmet Kaya", source: "repair", sourceId: 2 },
-  { id: 6, description: "Elektrik Faturası", amount: 850, type: "expense", category: "Fatura", date: "2026-08-01", source: "manual" },
-]
+import { Transaction, fetchTransactions, createTransaction, updateTransaction, deleteTransaction } from "@/lib/finance"
 
 const categories = ["Tamir Geliri", "Satış Geliri", "Parça Maliyeti", "Kira", "Fatura", "Maaş", "Diğer"]
 
@@ -51,7 +31,7 @@ export default function FinancePage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Finans")
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [filterType, setFilterType] = useState<string>("all")
   const [filterCategory, setFilterCategory] = useState<string>("all")
   const [filterSource, setFilterSource] = useState<string>("all")
@@ -68,24 +48,27 @@ export default function FinancePage() {
     source: "manual",
   })
 
-  // Load from localStorage
+  // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
   useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const savedFinance = localStorage.getItem("yt_finance")
-      if (savedFinance) {
-        const parsed = JSON.parse(savedFinance)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setTransactions(parsed)
-        }
-      }
-    } catch (e) {
-      console.error("Load error:", e)
-    }
-    setIsLoaded(true)
+    let cancelled = false
+    fetchTransactions()
+      .then((data) => {
+        if (!cancelled) setTransactions(data)
+      })
+      .catch((e) => {
+        console.error("Load error:", e)
+        if (!cancelled) showToast("İşlemler yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
 
-  // Save to localStorage
+  // Teknik Servis ve Satış sayfaları henüz Supabase'e taşınmadığı için hâlâ
+  // localStorage'daki finans listesini okuyor/yazıyor (tamamlanan işlemde
+  // otomatik gelir kaydı oluşturuyorlar). Onlar taşınana kadar, o sayfaların
+  // ve Raporlar'ın güncel veriyi görebilmesi için burada bir ayna tutuyoruz.
   useEffect(() => {
     if (!isLoaded || typeof window === "undefined") return
     localStorage.setItem("yt_finance", JSON.stringify(transactions))
@@ -121,49 +104,66 @@ export default function FinancePage() {
       return acc
     }, {} as Record<string, number>)
 
-  const handleAddTransaction = () => {
+  const handleAddTransaction = async () => {
     if (!newTransaction.description || !newTransaction.amount) {
       showToast("Lütfen açıklama ve tutar girin!", "error")
       return
     }
-    const transaction: Transaction = {
-      id: Date.now(),
-      description: newTransaction.description,
-      amount: Number(newTransaction.amount),
-      type: newTransaction.type as "income" | "expense",
-      category: newTransaction.category || "Diğer",
-      date: newTransaction.date || new Date().toISOString().split("T")[0],
-      customer: newTransaction.customer,
-      source: "manual",
+    try {
+      const transaction = await createTransaction({
+        description: newTransaction.description,
+        amount: Number(newTransaction.amount),
+        type: newTransaction.type as "income" | "expense",
+        category: newTransaction.category || "Diğer",
+        date: newTransaction.date || new Date().toISOString().split("T")[0],
+        customer: newTransaction.customer,
+        source: "manual",
+      })
+      setTransactions([transaction, ...transactions])
+      setNewTransaction({
+        type: "income",
+        category: "Tamir Geliri",
+        date: new Date().toISOString().split("T")[0],
+        source: "manual",
+      })
+      setIsDialogOpen(false)
+      showToast("İşlem eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("İşlem eklenirken bir sorun oluştu.", "error")
     }
-    setTransactions([transaction, ...transactions])
-    setNewTransaction({
-      type: "income",
-      category: "Tamir Geliri",
-      date: new Date().toISOString().split("T")[0],
-      source: "manual",
-    })
-    setIsDialogOpen(false)
   }
 
-  const handleUpdateTransaction = () => {
+  const handleUpdateTransaction = async () => {
     if (!editingTransaction) return
     if (!editingTransaction.description || !editingTransaction.amount) {
       showToast("Lütfen açıklama ve tutar girin!", "error")
       return
     }
-    setTransactions(transactions.map(t =>
-      t.id === editingTransaction.id ? editingTransaction : t
-    ))
-    setIsEditOpen(false)
-    setEditingTransaction(null)
+    try {
+      const updated = await updateTransaction(editingTransaction.id, editingTransaction)
+      setTransactions(transactions.map(t => t.id === updated.id ? updated : t))
+      setIsEditOpen(false)
+      setEditingTransaction(null)
+      showToast("İşlem güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("İşlem güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteTransaction = (id: number) => {
+  const handleDeleteTransaction = async (id: string) => {
     const t = transactions.find(tx => tx.id === id)
     if (!t) return
     if (!confirm(`\u{26A0} *${t.description}* işlemini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setTransactions(transactions.filter(t => t.id !== id))
+    try {
+      await deleteTransaction(id)
+      setTransactions(transactions.filter(t => t.id !== id))
+      showToast("İşlem silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("İşlem silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openEditDialog = (transaction: Transaction) => {
