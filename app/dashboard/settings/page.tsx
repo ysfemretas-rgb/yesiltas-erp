@@ -2,7 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Save, Building, User, Bell, Shield, Palette, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Moon, Sun, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut } from "lucide-react"
+import { Save, Building, User, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Upload } from "lucide-react"
+import { exportBackup, readBackupFile, restoreBackup } from "@/lib/backup"
 
 interface CompanySettings {
   name: string
@@ -73,12 +74,12 @@ export default function SettingsPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Ayarlar")
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
   const [users, setUsers] = useState<AppUser[]>([])
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([])
   const [saved, setSaved] = useState(false)
-  const [darkMode, setDarkMode] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isNewUserOpen, setIsNewUserOpen] = useState(false)
   const [isEditUserOpen, setIsEditUserOpen] = useState(false)
@@ -630,31 +631,9 @@ export default function SettingsPage() {
                     <Bell className="h-5 w-5 text-blue-400" />
                     <div>
                       <div className="font-medium text-white">Bildirimler</div>
-                      <div className="text-sm text-slate-400">E-posta ve uygulama bildirimlerini al</div>
+                      <div className="text-sm text-slate-400">Stok, garanti ve borç uyarıları — sağ üstteki zil ikonundan takip edilir</div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:text-white">
-                    Açık
-                  </Button>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-600 bg-slate-700/50">
-                  <div className="flex items-center gap-3">
-                    <Palette className="h-5 w-5 text-purple-400" />
-                    <div>
-                      <div className="font-medium text-white">Karanlık Mod</div>
-                      <div className="text-sm text-slate-400">Koyu tema kullan</div>
-                    </div>
-                  </div>
-                  <Button
-                    variant={darkMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDarkMode(!darkMode)}
-                    className={darkMode ? "bg-blue-600" : "border-slate-600 text-slate-300 hover:text-white"}
-                  >
-                    {darkMode ? <Moon className="h-4 w-4 mr-1" /> : <Sun className="h-4 w-4 mr-1" />}
-                    {darkMode ? "Açık" : "Kapalı"}
-                  </Button>
                 </div>
 
                 <Separator className="bg-slate-600" />
@@ -669,6 +648,59 @@ export default function SettingsPage() {
                     <div className="text-slate-500">Lisans:</div>
                     <div className="text-slate-300">Yeşiltaş ERP Pro</div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  💾 Yedekleme
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-400">
+                  Tüm iş verinizi (müşteriler, tamirler, satışlar, envanter, garantiler, finans, tedarikçiler, personel, randevular) tek bir dosyaya indirin. Düzenli aralıklarla yedek almanızı öneririz.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    onClick={() => {
+                      exportBackup()
+                      showToast("Yedek indirildi.", "success")
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Yedeği İndir
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-slate-600 text-slate-300 hover:text-white"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Yedekten Geri Yükle
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/json"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ""
+                      if (!file) return
+                      if (!window.confirm("Bu, mevcut tüm verilerin üzerine yazacak. Devam etmek istiyor musunuz?")) return
+                      try {
+                        const backup = await readBackupFile(file)
+                        restoreBackup(backup)
+                        showToast("Yedek geri yüklendi. Sayfa yenileniyor...", "success")
+                        setTimeout(() => window.location.reload(), 1200)
+                      } catch (err) {
+                        showToast(err instanceof Error ? err.message : "Geri yükleme başarısız.", "error")
+                      }
+                    }}
+                  />
                 </div>
               </CardContent>
             </Card>
