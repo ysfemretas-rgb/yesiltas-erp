@@ -1,0 +1,91 @@
+import { supabase } from "@/lib/supabase"
+
+export interface Warranty {
+  id: string
+  deviceName: string
+  customerName: string
+  customerPhone: string
+  warrantyType: string
+  startDate: string
+  endDate: string
+  status: "active" | "expired" | "expiring"
+  notes: string
+}
+
+function fromRow(row: any): Warranty {
+  return {
+    id: row.id,
+    deviceName: row.item_name ?? "",
+    customerName: row.customer_name ?? "",
+    customerPhone: row.customer_phone ?? "",
+    warrantyType: row.warranty_type ?? "",
+    startDate: row.warranty_start ?? "",
+    endDate: row.warranty_end_date ?? "",
+    status: (row.status as Warranty["status"]) ?? "active",
+    notes: row.notes ?? "",
+  }
+}
+
+function toRow(w: Partial<Warranty>) {
+  const row: Record<string, unknown> = {}
+  if (w.deviceName !== undefined) row.item_name = w.deviceName
+  if (w.customerName !== undefined) row.customer_name = w.customerName
+  if (w.customerPhone !== undefined) row.customer_phone = w.customerPhone
+  if (w.warrantyType !== undefined) row.warranty_type = w.warrantyType
+  if (w.startDate !== undefined) row.warranty_start = w.startDate || null
+  if (w.endDate !== undefined) row.warranty_end_date = w.endDate || null
+  if (w.status !== undefined) row.status = w.status
+  if (w.notes !== undefined) row.notes = w.notes
+  return row
+}
+
+export async function fetchWarranties(): Promise<Warranty[]> {
+  const { data, error } = await supabase.from("warranties").select("*").order("created_at", { ascending: false })
+  if (error) throw error
+
+  if ((!data || data.length === 0) && typeof window !== "undefined") {
+    const legacyRaw = localStorage.getItem("yt_warranties")
+    if (legacyRaw) {
+      try {
+        const legacy = JSON.parse(legacyRaw)
+        if (Array.isArray(legacy) && legacy.length > 0) {
+          const rows = legacy.map((w: any) => toRow({
+            deviceName: w.deviceName,
+            customerName: w.customerName,
+            customerPhone: w.customerPhone,
+            warrantyType: w.warrantyType,
+            startDate: w.startDate,
+            endDate: w.endDate,
+            status: w.status,
+            notes: w.notes,
+          }))
+          const { data: inserted, error: insertError } = await supabase.from("warranties").insert(rows).select("*")
+          if (!insertError && inserted) {
+            return inserted.map(fromRow)
+          }
+        }
+      } catch {
+        // eski veri okunamadıysa sessizce geç
+      }
+    }
+  }
+
+  return (data || []).map(fromRow)
+}
+
+export async function createWarranty(input: Omit<Warranty, "id">): Promise<Warranty> {
+  const { data, error } = await supabase.from("warranties").insert(toRow(input)).select("*").single()
+  if (error) throw error
+  return fromRow(data)
+}
+
+export async function updateWarranty(id: string, input: Partial<Omit<Warranty, "id">>): Promise<Warranty> {
+  const { data, error } = await supabase.from("warranties").update(toRow(input)).eq("id", id).select("*").single()
+  if (error) throw error
+  return fromRow(data)
+}
+
+export async function deleteWarranty(id: string): Promise<void> {
+  const { error } = await supabase.from("warranties").delete().eq("id", id)
+  if (error) throw error
+}

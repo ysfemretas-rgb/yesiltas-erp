@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { Appointment, fetchAppointments, createAppointment, updateAppointment, deleteAppointment } from "@/lib/appointments"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -48,18 +49,6 @@ interface Customer {
   phone2?: string
 }
 
-interface Appointment {
-  id: number
-  customerId: number
-  customerName: string
-  customerPhone: string
-  date: string
-  time: string
-  service: string
-  status: "scheduled" | "completed" | "cancelled"
-  notes: string
-}
-
 const services = ["Ekran Değişimi", "Batarya Değişimi", "Anakart Tamiri", "Yazılım Güncelleme", "Genel Bakım"]
 
 export default function AppointmentsPage() {
@@ -88,7 +77,6 @@ export default function AppointmentsPage() {
   })
   useEffect(() => {
     const savedCustomers = localStorage.getItem("yt_customers")
-    const savedAppointments = localStorage.getItem("yt_appointments")
 
     if (savedCustomers) {
       try {
@@ -99,18 +87,13 @@ export default function AppointmentsPage() {
       }
     }
 
-    if (savedAppointments) {
-      try {
-        const parsed = JSON.parse(savedAppointments)
-        setAppointments(Array.isArray(parsed) ? parsed : [])
-      } catch {
-        setAppointments([])
-      }
-    }
+    fetchAppointments()
+      .then((data) => setAppointments(data))
+      .catch((e) => {
+        console.error("Randevular yüklenemedi:", e)
+        showToast("Randevular yüklenirken bir sorun oluştu.", "error")
+      })
   }, [])
-  useEffect(() => {
-    localStorage.setItem("yt_appointments", JSON.stringify(appointments))
-  }, [appointments])
 
   if (checking) {
     return (
@@ -190,7 +173,7 @@ export default function AppointmentsPage() {
     return true
   }
 
-  const handleAddAppointment = () => {
+  const handleAddAppointment = async () => {
     if (!validateAppointment(newAppointment)) return
 
     const customer = customers.find(c => c.id === Number(newAppointment.customerId))
@@ -199,44 +182,71 @@ export default function AppointmentsPage() {
       return
     }
 
-    const appointment: Appointment = {
-      id: Date.now(),
-      customerId: customer.id,
-      customerName: customer.name,
-      customerPhone: customer.phone || customer.phone1 || "",
-      date: newAppointment.date || new Date().toISOString().split("T")[0],
-      time: newAppointment.time || "09:00",
-      service: newAppointment.service || services[0],
-      status: "scheduled",
-      notes: newAppointment.notes || ""
-    }
+    try {
+      const appointment = await createAppointment({
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone || customer.phone1 || "",
+        date: newAppointment.date || new Date().toISOString().split("T")[0],
+        time: newAppointment.time || "09:00",
+        service: newAppointment.service || services[0],
+        status: "scheduled",
+        notes: newAppointment.notes || "",
+      })
 
-    setAppointments([appointment, ...appointments])
-    setNewAppointment({
-      date: new Date().toISOString().split("T")[0],
-      time: "09:00",
-      status: "scheduled",
-      service: services[0]
-    })
-    setIsNewAppointmentOpen(false)
+      setAppointments([appointment, ...appointments])
+      setNewAppointment({
+        date: new Date().toISOString().split("T")[0],
+        time: "09:00",
+        status: "scheduled",
+        service: services[0]
+      })
+      setIsNewAppointmentOpen(false)
+      showToast("Randevu eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Randevu eklenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleUpdateAppointment = () => {
+  const handleUpdateAppointment = async () => {
     if (!editingAppointment) return
     if (!validateAppointment(editingAppointment)) return
 
-    setAppointments(appointments.map(a => a.id === editingAppointment.id ? editingAppointment : a))
-    setIsEditOpen(false)
-    setEditingAppointment(null)
+    try {
+      const updated = await updateAppointment(editingAppointment.id, editingAppointment)
+      setAppointments(appointments.map(a => a.id === updated.id ? updated : a))
+      setIsEditOpen(false)
+      setEditingAppointment(null)
+      showToast("Randevu güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Randevu güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteAppointment = (id: number) => {
+  const handleDeleteAppointment = async (id: string) => {
     if (!confirm(`Bu randevu kaydını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setAppointments(appointments.filter(a => a.id !== id))
+    try {
+      await deleteAppointment(id)
+      setAppointments(appointments.filter(a => a.id !== id))
+      showToast("Randevu silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Randevu silinirken bir sorun oluştu.", "error")
+    }
   }
 
-  const updateStatus = (id: number, status: Appointment["status"]) => {
+  const updateStatus = async (id: string, status: Appointment["status"]) => {
+    const prev = appointments
     setAppointments(appointments.map(a => a.id === id ? { ...a, status } : a))
+    try {
+      await updateAppointment(id, { status })
+    } catch (e) {
+      console.error(e)
+      setAppointments(prev)
+      showToast("Durum güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
   const handleEditClick = (appointment: Appointment) => {

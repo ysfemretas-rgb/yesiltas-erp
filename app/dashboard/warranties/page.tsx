@@ -25,30 +25,12 @@ import { Plus, Shield, AlertTriangle, Search, Calendar, Clock, Pencil, Trash2, S
 import { format, differenceInDays, parseISO, addMonths } from "date-fns"
 import { tr } from "date-fns/locale"
 import { usePageAccess } from "@/hooks/usePageAccess"
-
-interface Warranty {
-  id: number
-  deviceName: string
-  customerName: string
-  customerPhone: string
-  warrantyType: string
-  startDate: string
-  endDate: string
-  status: "active" | "expired" | "expiring"
-  notes: string
-}
-
-const initialWarranties: Warranty[] = [
-  { id: 1, deviceName: "iPhone 14 Pro", customerName: "Ahmet Yılmaz", customerPhone: "0555 123 4567", warrantyType: "Ekran Değişimi", startDate: "2024-01-15", endDate: "2024-07-15", status: "active", notes: "Orijinal parça kullanıldı" },
-  { id: 2, deviceName: "Samsung S23", customerName: "Mehmet Kaya", customerPhone: "0555 234 5678", warrantyType: "Batarya Değişimi", startDate: "2023-08-01", endDate: "2024-02-01", status: "expired", notes: "" },
-  { id: 3, deviceName: "iPad Air 5", customerName: "Ayşe Demir", customerPhone: "0555 345 6789", warrantyType: "Ekran Değişimi", startDate: "2024-06-20", endDate: "2024-12-20", status: "active", notes: "" },
-  { id: 4, deviceName: "MacBook Air M2", customerName: "Fatma Şahin", customerPhone: "0555 456 7890", warrantyType: "Anakart Tamiri", startDate: "2024-01-10", endDate: "2024-07-10", status: "expiring", notes: "Anakart değişimi yapıldı" },
-]
+import { Warranty, fetchWarranties, createWarranty, updateWarranty, deleteWarranty } from "@/lib/warranties"
 
 export default function WarrantiesPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Garantiler")
-  const [warranties, setWarranties] = useState<Warranty[]>(initialWarranties)
+  const [warranties, setWarranties] = useState<Warranty[]>([])
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -63,28 +45,22 @@ export default function WarrantiesPage() {
     startDate: new Date().toISOString().split("T")[0],
   })
 
-  // Load from localStorage
+  // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
   useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const saved = localStorage.getItem("yt_warranties")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setWarranties(parsed)
-        }
-      }
-    } catch (e) {
-      console.error("Load error:", e)
-    }
-    setIsLoaded(true)
+    let cancelled = false
+    fetchWarranties()
+      .then((data) => {
+        if (!cancelled) setWarranties(data)
+      })
+      .catch((e) => {
+        console.error("Load error:", e)
+        if (!cancelled) showToast("Garantiler yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
-
-  // Save to localStorage
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_warranties", JSON.stringify(warranties))
-  }, [warranties, isLoaded])
 
   const getDaysRemaining = (endDate: string) => {
     const days = differenceInDays(parseISO(endDate), new Date())
@@ -111,45 +87,62 @@ export default function WarrantiesPage() {
   const expiringCount = warranties.filter(w => w.status === "expiring").length
   const expiredCount = warranties.filter(w => w.status === "expired").length
 
-  const handleAddWarranty = () => {
+  const handleAddWarranty = async () => {
     if (!newWarranty.deviceName || !newWarranty.customerName) {
       showToast("Lütfen cihaz adı ve müşteri adı girin!", "error")
       return
     }
-    const warranty: Warranty = {
-      id: Date.now(),
-      deviceName: newWarranty.deviceName,
-      customerName: newWarranty.customerName,
-      customerPhone: newWarranty.customerPhone || "",
-      warrantyType: newWarranty.warrantyType || "Genel",
-      startDate: newWarranty.startDate || new Date().toISOString().split("T")[0],
-      endDate: newWarranty.endDate || new Date().toISOString().split("T")[0],
-      status: "active",
-      notes: newWarranty.notes || "",
+    try {
+      const warranty = await createWarranty({
+        deviceName: newWarranty.deviceName,
+        customerName: newWarranty.customerName,
+        customerPhone: newWarranty.customerPhone || "",
+        warrantyType: newWarranty.warrantyType || "Genel",
+        startDate: newWarranty.startDate || new Date().toISOString().split("T")[0],
+        endDate: newWarranty.endDate || new Date().toISOString().split("T")[0],
+        status: "active",
+        notes: newWarranty.notes || "",
+      })
+      setWarranties([warranty, ...warranties])
+      setNewWarranty({ warrantyType: "Ekran Değişimi", status: "active", startDate: new Date().toISOString().split("T")[0] })
+      setIsDialogOpen(false)
+      showToast("Garanti kaydı eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Garanti eklenirken bir sorun oluştu.", "error")
     }
-    setWarranties([warranty, ...warranties])
-    setNewWarranty({ warrantyType: "Ekran Değişimi", status: "active", startDate: new Date().toISOString().split("T")[0] })
-    setIsDialogOpen(false)
   }
 
-  const handleUpdateWarranty = () => {
+  const handleUpdateWarranty = async () => {
     if (!editingWarranty) return
     if (!editingWarranty.deviceName || !editingWarranty.customerName) {
       showToast("Lütfen cihaz adı ve müşteri adı girin!", "error")
       return
     }
-    setWarranties(warranties.map(w =>
-      w.id === editingWarranty.id ? editingWarranty : w
-    ))
-    setIsEditOpen(false)
-    setEditingWarranty(null)
+    try {
+      const updated = await updateWarranty(editingWarranty.id, editingWarranty)
+      setWarranties(warranties.map(w => w.id === updated.id ? updated : w))
+      setIsEditOpen(false)
+      setEditingWarranty(null)
+      showToast("Garanti kaydı güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Garanti güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteWarranty = (id: number) => {
+  const handleDeleteWarranty = async (id: string) => {
     const w = warranties.find(item => item.id === id)
     if (!w) return
     if (!confirm(`\u{26A0} *${w.deviceName}* garanti kaydını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setWarranties(warranties.filter(item => item.id !== id))
+    try {
+      await deleteWarranty(id)
+      setWarranties(warranties.filter(item => item.id !== id))
+      showToast("Garanti kaydı silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Garanti silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openEditDialog = (warranty: Warranty) => {
@@ -162,20 +155,20 @@ export default function WarrantiesPage() {
     const days = getDaysRemaining(warranty.endDate)
     const dateStr = format(parseISO(warranty.endDate), "dd.MM.yyyy", { locale: tr })
 
-    let message = `\u{1F44B} Merhaba *${warranty.customerName}*,%0A%0A`
-    message += `\u{2705} *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.%0A%0A`
+    let message = `\u{1F44B} Merhaba *${warranty.customerName}*,\n\n`
+    message += `\u{2705} *Yeşiltaş Teknoloji*'den garanti bilgilendirmesidir.\n\n`
     message += `\u{1F4C5} *${warranty.deviceName}* cihazınızın *${warranty.warrantyType}* garantisi *${dateStr}* tarihinde `
     if (days < 0) {
-      message += `*sona ermiştir*.%0A%0A`
-      message += `\u{26A0} Garanti kapsamında bir sorun yaşıyorsanız lütfen bizimle iletişime geçiniz.%0A`
+      message += `*sona ermiştir*.\n\n`
+      message += `\u{26A0} Garanti kapsamında bir sorun yaşıyorsanız lütfen bizimle iletişime geçiniz.\n`
     } else if (days <= 30) {
-      message += `*sona erecektir*.%0A%0A`
-      message += `\u{23F0} Garanti süreniz dolmadan herhangi bir sorun varsa lütfen başvurunuz.%0A`
+      message += `*sona erecektir*.\n\n`
+      message += `\u{23F0} Garanti süreniz dolmadan herhangi bir sorun varsa lütfen başvurunuz.\n`
     } else {
-      message += `*sona erecektir*.%0A%0A`
-      message += `\u{2705} Garantiniz aktif durumdadır. Herhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.%0A`
+      message += `*sona erecektir*.\n\n`
+      message += `\u{2705} Garantiniz aktif durumdadır. Herhangi bir sorun yaşarsanız bizimle iletişime geçebilirsiniz.\n`
     }
-    message += `%0A\u{1F3EA} *Yeşiltaş Teknoloji*%0A`
+    message += `\n\u{1F3EA} *Yeşiltaş Teknoloji*\n`
     message += `\u{1F4DE} Bizi tercih ettiğiniz için teşekkür ederiz! \u{1F64F}`
 
     window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
