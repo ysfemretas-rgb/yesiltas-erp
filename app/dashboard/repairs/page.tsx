@@ -4,6 +4,7 @@ import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Repair, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
+import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
 import { createTransaction } from "@/lib/finance"
 import { QrDialog } from "@/components/repairs/QrDialog"
@@ -41,13 +42,6 @@ interface Customer {
   address: string
 }
 
-interface Note {
-  id: number
-  repairId: string
-  text: string
-  createdAt: string
-  author: string
-}
 
 export default function RepairsPage() {
   const { toast, showToast, hideToast } = useToast()
@@ -88,14 +82,11 @@ export default function RepairsPage() {
   useEffect(() => {
     let cancelled = false
 
-    if (typeof window !== "undefined") {
-      try {
-        const savedNotes = localStorage.getItem("yt_repair_notes")
-        if (savedNotes) setNotes(JSON.parse(savedNotes))
-      } catch (e) {
-        console.error("Not verisi yüklenemedi:", e)
-      }
-    }
+    fetchRepairNotes()
+      .then((data) => {
+        if (!cancelled) setNotes(data)
+      })
+      .catch((e) => console.error("Not verisi yüklenemedi:", e))
 
     fetchCustomers()
       .then((data) => {
@@ -117,9 +108,8 @@ export default function RepairsPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("yt_repairs", JSON.stringify(repairs))
-      localStorage.setItem("yt_repair_notes", JSON.stringify(notes))
     }
-  }, [repairs, notes])
+  }, [repairs])
   const filteredRepairs = useMemo(() => {
     return repairs.filter((r) => {
       const matchesSearch =
@@ -417,17 +407,16 @@ export default function RepairsPage() {
     }
   }
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!noteText.trim() || !selectedRepair) return
-    const newNote: Note = {
-      id: Math.max(...notes.map((n) => n.id), 0) + 1,
-      repairId: selectedRepair.id,
-      text: noteText,
-      createdAt: new Date().toLocaleString("tr-TR"),
-      author: "Teknisyen",
+    try {
+      const newNote = await createRepairNote(selectedRepair.id, noteText)
+      setNotes([newNote, ...notes])
+      setNoteText("")
+    } catch (e) {
+      console.error(e)
+      showToast("Not eklenirken bir sorun oluştu.", "error")
     }
-    setNotes([...notes, newNote])
-    setNoteText("")
   }
 
   const openEditDialog = (repair: Repair) => {

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus } from "lucide-react"
 
 interface Note {
-  id: number
+  id: string
   repairId: string
   text: string
   createdAt: string

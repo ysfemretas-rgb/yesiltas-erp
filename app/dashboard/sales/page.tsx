@@ -16,14 +16,7 @@ import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
 import { fetchCustomers, createCustomer, addDebt } from "@/lib/customers"
 import { createTransaction } from "@/lib/finance"
-
-interface Product {
-  id: number
-  name: string
-  price: number
-  stock: number
-  category: string
-}
+import { Product, fetchProducts, updateProduct } from "@/lib/products"
 
 interface Customer {
   id: string
@@ -37,17 +30,6 @@ interface Customer {
   status?: string
 }
 
-const initialProducts: Product[] = [
-  { id: 1, name: "iPhone 15 Pro Max Kılıf", price: 450, stock: 25, category: "Kılıf" },
-  { id: 2, name: "Samsung S24 Ultra Ekran Koruyucu", price: 350, stock: 18, category: "Ekran Koruyucu" },
-  { id: 3, name: "USB-C Şarj Kablosu (1m)", price: 120, stock: 50, category: "Kablo" },
-  { id: 4, name: "20W Hızlı Şarj Adaptörü", price: 280, stock: 30, category: "Şarj" },
-  { id: 5, name: "AirPods Pro 2. Nesil", price: 8500, stock: 8, category: "Kulaklık" },
-  { id: 6, name: "Bluetooth Hoparlör JBL", price: 1200, stock: 12, category: "Hoparlör" },
-  { id: 7, name: "Powerbank 20000mAh", price: 650, stock: 20, category: "Powerbank" },
-  { id: 8, name: "Araç Telefon Tutucu", price: 180, stock: 35, category: "Aksesuar" },
-]
-
 const paymentMethods = [
   { value: "cash", label: "💵 Nakit" },
   { value: "card", label: "💳 Kredi Kartı" },
@@ -60,7 +42,7 @@ export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Satış")
   const isManager = useIsManager()
-  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [cart, setCart] = useState<SaleItem[]>([])
@@ -82,29 +64,11 @@ export default function SalesPage() {
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load data from localStorage
-
-  // Ürünler hâlâ tarayıcı hafızasında (ayrı bir proje kapsamı); müşteriler ve
-  // satışlar artık Supabase'den geliyor.
+  // Ürünler, müşteriler ve satışlar artık Supabase'den geliyor.
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    try {
-      const savedProducts = localStorage.getItem("yt_products")
-
-      if (savedProducts) {
-        const parsed = JSON.parse(savedProducts)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setProducts(parsed)
-        } else {
-          localStorage.setItem("yt_products", JSON.stringify(initialProducts))
-        }
-      } else {
-        localStorage.setItem("yt_products", JSON.stringify(initialProducts))
-      }
-    } catch (e) {
-      console.error("Load error:", e)
-    }
+    fetchProducts()
+      .then((data) => setProducts(data))
+      .catch((e) => console.error("Ürünler yüklenemedi:", e))
 
     fetchCustomers()
       .then((data) => setCustomers(data.map(c => ({ id: c.id, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2, balance: 0, totalDebt: c.totalDebt, debts: c.debts }))))
@@ -118,12 +82,6 @@ export default function SalesPage() {
       })
       .finally(() => setIsLoaded(true))
   }, [])
-
-  // Save to localStorage when data changes
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_products", JSON.stringify(products))
-  }, [products, isLoaded])
 
 
   const filteredCustomers = useMemo(() => {
@@ -187,15 +145,15 @@ export default function SalesPage() {
     }
   }
 
-  const removeFromCart = (productId: number) => {
+  const removeFromCart = (productId: string) => {
     setCart(cart.filter(item => item.productId !== productId))
   }
 
-  const removeFromEditCart = (productId: number) => {
+  const removeFromEditCart = (productId: string) => {
     setEditCart(editCart.filter(item => item.productId !== productId))
   }
 
-  const updateQuantity = (productId: number, quantity: number) => {
+  const updateQuantity = (productId: string, quantity: number) => {
     if (quantity < 1) {
       removeFromCart(productId)
       return
@@ -207,7 +165,7 @@ export default function SalesPage() {
     ))
   }
 
-  const updateEditQuantity = (productId: number, quantity: number) => {
+  const updateEditQuantity = (productId: string, quantity: number) => {
     if (quantity < 1) {
       removeFromEditCart(productId)
       return
@@ -317,6 +275,12 @@ export default function SalesPage() {
         return p
       })
       setProducts(updatedProducts)
+      cart.forEach((item) => {
+        const p = products.find((prod) => prod.id === item.productId)
+        if (p) {
+          updateProduct(p.id, { stock: Math.max(0, p.stock - item.quantity) }).catch((e) => console.error("Stok güncellenemedi:", e))
+        }
+      })
 
       // Save sale
       setSales([sale, ...sales])
@@ -373,6 +337,12 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
         return p
       })
       setProducts(updatedProducts)
+      sale.items.forEach((item) => {
+        const p = products.find((prod) => prod.id === item.productId)
+        if (p) {
+          updateProduct(p.id, { stock: p.stock + item.quantity }).catch((e) => console.error("Stok güncellenemedi:", e))
+        }
+      })
 
       // Subtract customer debt if there was remaining
       if (sale.remaining > 0) {
@@ -422,6 +392,11 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
         return { ...p, stock: p.stock + diff }
       })
       setProducts(updatedProducts)
+      updatedProducts.forEach((p, i) => {
+        if (p.stock !== products[i]?.stock) {
+          updateProduct(p.id, { stock: p.stock }).catch((e) => console.error("Stok güncellenemedi:", e))
+        }
+      })
 
       // Update customer debt difference
       const debtDiff = newRemaining - oldRemaining

@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface SaleItem {
-  productId: number
+  productId: string
   name: string
   price: number
   quantity: number
