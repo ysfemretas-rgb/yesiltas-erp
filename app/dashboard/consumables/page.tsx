@@ -26,33 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign } from "lucide-react"
-
-interface Consumable {
-  id: number
-  name: string
-  category: string
-  currentStock: number
-  minStock: number
-  unit: string
-  purchasePrice: number
-  purchaseCurrency: "TRY" | "USD" | "EUR"
-  supplier: string
-  lastRestocked: string
-}
+import { Consumable, fetchConsumables, createConsumable, updateConsumable, deleteConsumable } from "@/lib/consumables"
 
 interface ExchangeRates {
   USD: number
   EUR: number
   lastUpdated: string
 }
-
-const initialConsumables: Consumable[] = [
-  { id: 1, name: "Ekran Temizleyici", category: "Temizlik", currentStock: 45, minStock: 20, unit: "Adet", purchasePrice: 0.8, purchaseCurrency: "USD", supplier: "TemizlikTedarik", lastRestocked: "2024-01-10" },
-  { id: 2, name: "Tornavida Seti", category: "Alet", currentStock: 8, minStock: 10, unit: "Set", purchasePrice: 4.5, purchaseCurrency: "USD", supplier: "AletTedarik", lastRestocked: "2024-01-05" },
-  { id: 3, name: "Isıtıcı Tabanca", category: "Alet", currentStock: 3, minStock: 5, unit: "Adet", purchasePrice: 12, purchaseCurrency: "USD", supplier: "AletTedarik", lastRestocked: "2023-12-20" },
-  { id: 4, name: "Ekran Yapıştırıcı", category: "Yapıştırıcı", currentStock: 12, minStock: 15, unit: "Tüp", purchasePrice: 2.5, purchaseCurrency: "USD", supplier: "KimyaTedarik", lastRestocked: "2024-01-08" },
-  { id: 5, name: "Mikrofiber Bez", category: "Temizlik", currentStock: 100, minStock: 50, unit: "Adet", purchasePrice: 0.15, purchaseCurrency: "USD", supplier: "TemizlikTedarik", lastRestocked: "2024-01-12" },
-]
 
 function priceInTRY(price: number, currency: "TRY" | "USD" | "EUR", rates: ExchangeRates): number {
   if (currency === "USD") return price * rates.USD
@@ -65,7 +45,7 @@ export default function ConsumablesPage() {
 
   const { authorized, checking } = usePageAccess("Sarf Malzemeler")
 
-  const [consumables, setConsumables] = useState<Consumable[]>(initialConsumables)
+  const [consumables, setConsumables] = useState<Consumable[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -83,29 +63,22 @@ export default function ConsumablesPage() {
     purchaseCurrency: "TRY",
   })
 
-  // Load from localStorage
+  // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
   useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const saved = localStorage.getItem("yt_consumables")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setConsumables(parsed)
-        }
-      }
-      // Kur bilgisi artık useExchangeRates() hook'u tarafından okunuyor/önbelleğe alınıyor.
-    } catch (e) {
-      console.error("Load error:", e)
-    }
-    setIsLoaded(true)
+    let cancelled = false
+    fetchConsumables()
+      .then((data) => {
+        if (!cancelled) setConsumables(data)
+      })
+      .catch((e) => {
+        console.error("Load error:", e)
+        if (!cancelled) showToast("Sarf malzemeler yüklenirken bir sorun oluştu.", "error")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
-
-  // Save to localStorage
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_consumables", JSON.stringify(consumables))
-  }, [consumables, isLoaded])
 
   // Kur bilgisi artık merkezi useExchangeRates() hook'undan geliyor (yukarıda).
 
@@ -124,52 +97,77 @@ export default function ConsumablesPage() {
     return sum + (priceInTRY(item.purchasePrice, item.purchaseCurrency, rates) * item.currentStock)
   }, 0)
 
-  const updateStock = (id: number, delta: number) => {
-    setConsumables(consumables.map(item =>
-      item.id === id ? { ...item, currentStock: Math.max(0, item.currentStock + delta) } : item
-    ))
+  const updateStock = async (id: string, delta: number) => {
+    const item = consumables.find(c => c.id === id)
+    if (!item) return
+    const newStock = Math.max(0, item.currentStock + delta)
+    setConsumables(consumables.map(c => c.id === id ? { ...c, currentStock: newStock } : c))
+    try {
+      await updateConsumable(id, { currentStock: newStock })
+    } catch (e) {
+      console.error(e)
+      setConsumables(consumables)
+      showToast("Stok güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.name) {
       showToast("Lütfen malzeme adı girin!", "error")
       return
     }
-    const item: Consumable = {
-      id: Date.now(),
-      name: newItem.name,
-      category: newItem.category || "Diğer",
-      currentStock: Number(newItem.currentStock) || 0,
-      minStock: Number(newItem.minStock) || 10,
-      unit: newItem.unit || "Adet",
-      purchasePrice: Number(newItem.purchasePrice) || 0,
-      purchaseCurrency: newItem.purchaseCurrency || "TRY",
-      supplier: newItem.supplier || "",
-      lastRestocked: new Date().toISOString().split("T")[0],
+    try {
+      const item = await createConsumable({
+        name: newItem.name,
+        category: newItem.category || "Diğer",
+        currentStock: Number(newItem.currentStock) || 0,
+        minStock: Number(newItem.minStock) || 10,
+        unit: newItem.unit || "Adet",
+        purchasePrice: Number(newItem.purchasePrice) || 0,
+        purchaseCurrency: newItem.purchaseCurrency || "TRY",
+        supplier: newItem.supplier || "",
+        lastRestocked: new Date().toISOString().split("T")[0],
+      })
+      setConsumables([item, ...consumables])
+      setNewItem({ category: "Temizlik", unit: "Adet", currentStock: 0, minStock: 10, purchasePrice: 0, purchaseCurrency: "TRY" })
+      setIsDialogOpen(false)
+      showToast("Malzeme eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Malzeme eklenirken bir sorun oluştu.", "error")
     }
-    setConsumables([item, ...consumables])
-    setNewItem({ category: "Temizlik", unit: "Adet", currentStock: 0, minStock: 10, purchasePrice: 0, purchaseCurrency: "TRY" })
-    setIsDialogOpen(false)
   }
 
-  const handleUpdateItem = () => {
+  const handleUpdateItem = async () => {
     if (!editingItem) return
     if (!editingItem.name) {
       showToast("Lütfen malzeme adı girin!", "error")
       return
     }
-    setConsumables(consumables.map(item =>
-      item.id === editingItem.id ? editingItem : item
-    ))
-    setIsEditOpen(false)
-    setEditingItem(null)
+    try {
+      const updated = await updateConsumable(editingItem.id, editingItem)
+      setConsumables(consumables.map(item => item.id === updated.id ? updated : item))
+      setIsEditOpen(false)
+      setEditingItem(null)
+      showToast("Malzeme güncellendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Malzeme güncellenirken bir sorun oluştu.", "error")
+    }
   }
 
-  const handleDeleteItem = (id: number) => {
+  const handleDeleteItem = async (id: string) => {
     const item = consumables.find(c => c.id === id)
     if (!item) return
     if (!confirm(`\u{26A0} *${item.name}* malzemesini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
-    setConsumables(consumables.filter(item => item.id !== id))
+    try {
+      await deleteConsumable(id)
+      setConsumables(consumables.filter(item => item.id !== id))
+      showToast("Malzeme silindi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Malzeme silinirken bir sorun oluştu.", "error")
+    }
   }
 
   const openEditDialog = (item: Consumable) => {
