@@ -12,14 +12,13 @@ export interface Appointment {
   notes: string
 }
 
-// Not: customerId, Müşteriler sayfası henüz Supabase'e taşınmadığı için
-// (o sayfa hâlâ localStorage tabanlı sayısal id kullanıyor) veritabanında
-// saklanmıyor; sadece seçim anında kullanılan geçici bir alan. Asıl
-// gösterilecek bilgi (customerName, customerPhone) ayrıca saklanıyor.
+// Not: customerId, veritabanında saklanmıyor; sadece seçim anında kullanılan
+// geçici bir alandır. Asıl gösterilecek bilgi (customerName, customerPhone)
+// ayrıca saklanıyor, bu yüzden randevu geçmişi customerId olmadan da eksiksiz görünür.
 function fromRow(row: any): Appointment {
   return {
     id: row.id,
-    customerId: 0,
+    customerId: "",
     customerName: row.customer_name ?? "",
     customerPhone: row.customer_phone ?? "",
     date: row.appointment_date ?? "",
