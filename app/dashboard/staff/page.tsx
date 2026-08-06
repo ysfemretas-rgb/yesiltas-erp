@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Users, Search, Phone, Mail, Shield, Pencil, Trash2, Save, X, Check, MessageCircle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { StaffMember, fetchStaff, createStaffMember, updateStaffMember, deleteStaffMember } from "@/lib/staff"
 
 const ALL_PERMISSIONS = [
@@ -75,6 +76,7 @@ function CustomCheckbox({
 export default function StaffPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Personel")
+  const isManager = useIsManager()
 
   const [isLoaded, setIsLoaded] = useState(false)
   const [staff, setStaff] = useState<StaffMember[]>([])
@@ -557,6 +559,7 @@ export default function StaffPage() {
                       >
                         <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
                       </Button>
+                      {isManager && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -565,6 +568,7 @@ export default function StaffPage() {
                       >
                         <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
                       </Button>
+                      )}
                     </div>
                   </div>
                 ))

@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,6 +32,7 @@ export default function FinancePage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Finans")
+  const isManager = useIsManager()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [filterType, setFilterType] = useState<string>("all")
   const [filterCategory, setFilterCategory] = useState<string>("all")
@@ -505,6 +507,7 @@ export default function FinancePage() {
                   >
                     <Pencil className="h-3 w-3" />
                   </Button>
+                  {isManager && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -513,6 +516,7 @@ export default function FinancePage() {
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
+                  )}
                 </div>
               </div>
             ))}

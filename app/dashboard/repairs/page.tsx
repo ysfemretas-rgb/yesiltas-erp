@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { Repair, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
 import { createTransaction } from "@/lib/finance"
@@ -51,6 +52,7 @@ interface Note {
 export default function RepairsPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Tamir")
+  const isManager = useIsManager()
 
   const [repairs, setRepairs] = useState<Repair[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -836,6 +838,7 @@ export default function RepairsPage() {
                     >
                       <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
                     </Button>
+                    {isManager && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -844,6 +847,7 @@ export default function RepairsPage() {
                     >
                       <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
                     </Button>
+                    )}
                   </div>
                 </div>
               ))}

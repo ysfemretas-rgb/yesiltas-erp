@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { InventoryItem, fetchInventory, createInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory"
 
 import { useState, useEffect } from "react"
@@ -47,6 +48,7 @@ function calculateSalePrice(purchasePrice: number, purchaseCurrency: "TRY" | "US
 export default function InventoryPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Envanter")
+  const isManager = useIsManager()
 
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -627,6 +629,7 @@ export default function InventoryPage() {
                       >
                         <Pencil className="h-4 w-4 mr-1" />✏️ Düzenle
                       </Button>
+                      {isManager && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -635,6 +638,7 @@ export default function InventoryPage() {
                       >
                         <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                       </Button>
+                      )}
                     </div>
                   </div>
                 </div>

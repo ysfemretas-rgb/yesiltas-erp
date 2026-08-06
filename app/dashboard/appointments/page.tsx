@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { Appointment, fetchAppointments, createAppointment, updateAppointment, deleteAppointment } from "@/lib/appointments"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
 
@@ -56,6 +57,7 @@ export default function AppointmentsPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Randevular")
+  const isManager = useIsManager()
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -554,9 +556,11 @@ export default function AppointmentsPage() {
                           </Button>
                         </>
                       )}
+                      {isManager && (
                       <Button size="sm" variant="destructive" onClick={() => handleDeleteAppointment(appointment.id)} className="bg-red-900/50 hover:bg-red-800 border-red-800">
                         <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                       </Button>
+                      )}
                     </div>
                   </div>
                 </div>

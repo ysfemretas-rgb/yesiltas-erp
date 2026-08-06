@@ -25,11 +25,13 @@ import { Plus, Shield, AlertTriangle, Search, Calendar, Clock, Pencil, Trash2, S
 import { format, differenceInDays, parseISO, addMonths } from "date-fns"
 import { tr } from "date-fns/locale"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { Warranty, fetchWarranties, createWarranty, updateWarranty, deleteWarranty } from "@/lib/warranties"
 
 export default function WarrantiesPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Garantiler")
+  const isManager = useIsManager()
   const [warranties, setWarranties] = useState<Warranty[]>([])
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -442,6 +444,7 @@ export default function WarrantiesPage() {
                     >
                       <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
                     </Button>
+                    {isManager && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -450,6 +453,7 @@ export default function WarrantiesPage() {
                     >
                       <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
                     </Button>
+                    )}
                   </div>
                 </div>
               </div>

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
 import { fetchCustomers, createCustomer, addDebt } from "@/lib/customers"
 import { createTransaction } from "@/lib/finance"
@@ -58,6 +59,7 @@ const paymentMethods = [
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Satış")
+  const isManager = useIsManager()
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
@@ -914,6 +916,7 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
                     >
                       <Pencil className="w-3 h-3 mr-1" />✏️ Düzenle
                     </Button>
+                    {isManager && (
                     <Button 
                       size="sm" 
                       variant="ghost" 
@@ -922,6 +925,7 @@ Not: İlgili finans geliri kaydı otomatik silinmez, gerekirse Finans sayfasınd
                     >
                       <Trash2 className="w-3 h-3 mr-1" />🗑️ Sil
                     </Button>
+                    )}
                   </div>
                 </div>
               ))}

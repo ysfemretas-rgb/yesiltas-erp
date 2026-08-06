@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, Trash2, Edit3, X, ExternalLink, MessageCircle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 
 import { Supplier, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/suppliers"
 
@@ -19,6 +20,7 @@ const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Di
 export default function SuppliersPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Tedarikçiler")
+  const isManager = useIsManager()
 
   const [isLoaded, setIsLoaded] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -454,9 +456,11 @@ export default function SuppliersPage() {
                       <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => openEdit(supplier)}>
                         <Edit3 className="h-3 w-3 mr-1" />✏️ Düzenle
                       </Button>
+                      {isManager && (
                       <Button size="sm" variant="outline" className="border-red-600 text-red-400 hover:bg-red-900/30" onClick={() => setShowDeleteConfirm(supplier.id)}>
                         <Trash2 className="h-3 w-3 mr-1" />🗑️ Sil
                       </Button>
+                      )}
                     </div>
                   </div>
                 ))

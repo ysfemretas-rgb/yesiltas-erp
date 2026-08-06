@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2, ListChecks, User } from "lucide-react"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { Task, fetchTasks, createTask, updateTask, deleteTask } from "@/lib/tasks"
 import { fetchStaff, StaffMember } from "@/lib/staff"
 
@@ -30,6 +31,7 @@ const STATUS_META: Record<Task["status"], { label: string; className: string }> 
 export default function TasksPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Görevler")
+  const isManager = useIsManager()
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [staff, setStaff] = useState<StaffMember[]>([])
@@ -271,9 +273,11 @@ export default function TasksPage() {
                         {task.dueDate && <span className="text-xs text-slate-500">📅 {task.dueDate}</span>}
                       </div>
                     </div>
+                    {isManager && (
                     <Button size="sm" variant="ghost" onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    )}
                   </div>
                   <div className="mt-2">
                     <Select value={task.status} onValueChange={(v) => handleStatusChange(task.id, v as Task["status"])}>

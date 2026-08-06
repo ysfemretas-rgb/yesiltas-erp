@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt } from "@/lib/customers"
 import { CustomerWhatsAppDialog } from "@/components/customers/CustomerWhatsAppDialog"
 import { CustomerDebtDialog } from "@/components/customers/CustomerDebtDialog"
@@ -60,6 +61,7 @@ export default function CustomersPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Müşteriler")
+  const isManager = useIsManager()
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -760,9 +762,11 @@ export default function CustomersPage() {
                     <Button size="sm" variant="outline" onClick={() => openEdit(customer)} className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
                       <Edit3 className="h-4 w-4 mr-1" />✏️ Düzenle
                     </Button>
+                    {isManager && (
                     <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
                       <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                     </Button>
+                    )}
                   </div>
                 </div>
               )

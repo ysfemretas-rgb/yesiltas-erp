@@ -2,6 +2,7 @@
 
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
+import { useIsManager } from "@/hooks/useIsManager"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -44,6 +45,7 @@ export default function ConsumablesPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const { authorized, checking } = usePageAccess("Sarf Malzemeler")
+  const isManager = useIsManager()
 
   const [consumables, setConsumables] = useState<Consumable[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -551,6 +553,7 @@ export default function ConsumablesPage() {
                       >
                         <Pencil className="h-4 w-4 mr-1" />✏️ Düzenle
                       </Button>
+                      {isManager && (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -559,6 +562,7 @@ export default function ConsumablesPage() {
                       >
                         <Trash2 className="h-4 w-4 mr-1" />🗑️ Sil
                       </Button>
+                      )}
                     </div>
                   </div>
                 </div>
