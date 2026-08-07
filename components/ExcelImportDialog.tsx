@@ -41,6 +41,28 @@ function guessColumn(fieldLabel: string, headers: string[]): string {
   return partial || ""
 }
 
+// Türkçe/uluslararası sayı formatlarını (1.234,56 / 1,234.56 / 1234,56 / ₺250 / 250 TL vb.) ayrıştırır.
+function parseFlexibleNumber(raw: any): number {
+  if (typeof raw === "number") return raw
+  if (raw === null || raw === undefined) return 0
+  let s = String(raw).trim()
+  if (s === "") return 0
+  s = s.replace(/[₺$€]/g, "").replace(/TL|TRY|USD|EUR/gi, "").trim()
+  const hasComma = s.includes(",")
+  const hasDot = s.includes(".")
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", ".")
+    } else {
+      s = s.replace(/,/g, "")
+    }
+  } else if (hasComma) {
+    s = s.replace(",", ".")
+  }
+  const n = parseFloat(s.replace(/[^0-9.\-]/g, ""))
+  return isNaN(n) ? 0 : n
+}
+
 export function ExcelImportDialog({ open, onOpenChange, title, fields, onImport, templateHint }: ExcelImportDialogProps) {
   const [step, setStep] = useState<"upload" | "map" | "done">("upload")
   const [headers, setHeaders] = useState<string[]>([])
@@ -102,7 +124,7 @@ export function ExcelImportDialog({ open, onOpenChange, title, fields, onImport,
           const colIndex = headers.indexOf(mapping[f.key])
           let value: any = colIndex >= 0 ? row[colIndex] : undefined
           if (value === undefined || value === "") value = f.defaultValue
-          if (f.type === "number") value = Number(value) || 0
+          if (f.type === "number") value = parseFlexibleNumber(value)
           if (f.type === "date" && value instanceof Date) value = value.toISOString().split("T")[0]
           obj[f.key] = value ?? (f.type === "number" ? 0 : "")
         })
@@ -186,22 +208,36 @@ export function ExcelImportDialog({ open, onOpenChange, title, fields, onImport,
               ))}
             </div>
 
-            <div className="rounded-lg border border-slate-700 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-800">
-                    {headers.map(h => <th key={h} className="p-2 text-left text-slate-400 whitespace-nowrap">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, 3).map((row, i) => (
-                    <tr key={i} className="border-t border-slate-800">
-                      {row.map((cell: any, j: number) => <td key={j} className="p-2 text-slate-300 whitespace-nowrap">{String(cell)}</td>)}
+            <div>
+              <p className="text-xs text-slate-500 mb-1">Aşağıda, seçtiğiniz eşleştirmeyle gerçekte içe aktarılacak değerler gösteriliyor — özellikle sayısal alanların doğru geldiğini kontrol edin.</p>
+              <div className="rounded-lg border border-slate-700 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-800">
+                      {fields.map(f => <th key={f.key} className="p-2 text-left text-slate-400 whitespace-nowrap">{f.label}</th>)}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rows.length > 3 && <div className="p-2 text-xs text-slate-500 text-center">...ve {rows.length - 3} satır daha</div>}
+                  </thead>
+                  <tbody>
+                    {rows.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="border-t border-slate-800">
+                        {fields.map(f => {
+                          const colIndex = headers.indexOf(mapping[f.key])
+                          let value: any = colIndex >= 0 ? row[colIndex] : undefined
+                          if (value === undefined || value === "") value = f.defaultValue
+                          if (f.type === "number") value = parseFlexibleNumber(value)
+                          const isEmpty = value === undefined || value === ""
+                          return (
+                            <td key={f.key} className={`p-2 whitespace-nowrap ${isEmpty && f.required ? "text-red-400" : "text-slate-300"}`}>
+                              {isEmpty ? (f.required ? "⚠️ boş" : "—") : String(value)}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rows.length > 5 && <div className="p-2 text-xs text-slate-500 text-center">...ve {rows.length - 5} satır daha</div>}
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-400">{error}</p>}

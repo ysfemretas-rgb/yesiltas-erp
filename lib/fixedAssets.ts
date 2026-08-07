@@ -81,3 +81,14 @@ export async function deleteFixedAsset(id: string): Promise<void> {
   }
   logActivity("Demirbaşlar", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }
+
+export async function deleteFixedAssetsBulk(ids: string[]): Promise<number> {
+  const { data: deleted, error } = await supabase.from("fixed_assets").delete().in("id", ids).select("id")
+  if (error) throw error
+  const count = deleted?.length || 0
+  if (count === 0) {
+    throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
+  }
+  logActivity("Demirbaşlar", "deleted", `${count} demirbaş toplu silindi`)
+  return count
+}

@@ -12,7 +12,7 @@ import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
-import { FixedAsset, fetchFixedAssets, createFixedAsset, createFixedAssetsBulk, updateFixedAsset, deleteFixedAsset } from "@/lib/fixedAssets"
+import { FixedAsset, fetchFixedAssets, createFixedAsset, createFixedAssetsBulk, updateFixedAsset, deleteFixedAsset, deleteFixedAssetsBulk } from "@/lib/fixedAssets"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 
 function formatCurrency(amount: number) {
@@ -50,6 +50,7 @@ export default function FixedAssetsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<FixedAsset | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [newAsset, setNewAsset] = useState<Partial<FixedAsset>>({
     category: "Alet/Ekipman",
     quantity: 1,
@@ -118,6 +119,28 @@ export default function FixedAssetsPage() {
     } catch (e: any) {
       console.error(e)
       showToast(e?.message || "Demirbaş silinirken bir sorun oluştu.", "error")
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => prev.length === assets.length ? [] : assets.map(a => a.id))
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    if (!confirm(`${selectedIds.length} demirbaşı silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
+    try {
+      const count = await deleteFixedAssetsBulk(selectedIds)
+      setAssets(assets.filter(a => !selectedIds.includes(a.id)))
+      setSelectedIds([])
+      showToast(`${count} demirbaş silindi.`, "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Demirbaşlar silinirken bir sorun oluştu.", "error")
     }
   }
 
@@ -190,7 +213,24 @@ export default function FixedAssetsPage() {
       </div>
 
       <Card className="bg-slate-900 border-slate-700">
-        <CardHeader><CardTitle className="text-white">Demirbaş Listesi</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-white">Demirbaş Listesi</CardTitle>
+            {assets.length > 0 && (
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+                  <input type="checkbox" checked={selectedIds.length === assets.length} onChange={toggleSelectAll} className="rounded" />
+                  Tümünü Seç
+                </label>
+                {selectedIds.length > 0 && isManager && (
+                  <Button size="sm" variant="destructive" onClick={handleBulkDelete}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />{selectedIds.length} Seçileni Sil
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </CardHeader>
         <CardContent>
           {!isLoaded ? (
             <p className="text-slate-500 text-center py-8">Yükleniyor...</p>
@@ -199,14 +239,22 @@ export default function FixedAssetsPage() {
           ) : (
             <div className="space-y-2">
               {assets.map((a) => (
-                <div key={a.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
+                <div key={a.id} className={`p-3 bg-slate-800 rounded-lg border ${selectedIds.includes(a.id) ? "border-emerald-500" : "border-slate-700"}`}>
                   <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <div className="text-sm font-medium text-white">{a.name} {a.quantity > 1 && <span className="text-slate-500">x{a.quantity}</span>}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">
-                        {a.category} {a.location && `· 📍 ${a.location}`} {a.purchaseDate && `· 📅 ${a.purchaseDate}`}
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(a.id)}
+                        onChange={() => toggleSelect(a.id)}
+                        className="mt-1 rounded"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-white">{a.name} {a.quantity > 1 && <span className="text-slate-500">x{a.quantity}</span>}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {a.category} {a.location && `· 📍 ${a.location}`} {a.purchaseDate && `· 📅 ${a.purchaseDate}`}
+                        </div>
+                        {a.notes && <div className="text-xs text-slate-500 mt-0.5">{a.notes}</div>}
                       </div>
-                      {a.notes && <div className="text-xs text-slate-500 mt-0.5">{a.notes}</div>}
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">
