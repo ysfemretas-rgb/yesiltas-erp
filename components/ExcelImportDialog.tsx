@@ -63,6 +63,80 @@ function parseFlexibleNumber(raw: any): number {
   return isNaN(n) ? 0 : n
 }
 
+// Türk aylarını sayıya çevirir (metin olarak yazılmış tarihler için).
+const TR_MONTHS: Record<string, number> = {
+  "ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5,
+  "haziran": 6, "temmuz": 7, "ağustos": 8, "agustos": 8, "eylül": 9, "eylul": 9,
+  "ekim": 10, "kasım": 11, "kasim": 11, "aralık": 12, "aralik": 12,
+}
+
+// Satıcılar tarihi çok farklı biçimlerde yazabiliyor (18.05.2026, 18/05/2026,
+// 2026-05-18, 18-05-26, 18 Mayıs 2026, Excel'in kendi tarih hücresi, Excel'in
+// "seri numarası" dediği ham sayı vb.) — hepsini "YYYY-MM-DD" biçimine çevirir.
+function parseFlexibleDate(raw: any): string {
+  if (raw === null || raw === undefined || raw === "") return ""
+
+  // Gerçek JS Date nesnesi (Excel'in kendi tarih hücresi, cellDates:true ile geldiğinde)
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    return raw.toISOString().split("T")[0]
+  }
+
+  // Excel'in "seri numarası" olarak sakladığı tarih (örn. 45747) — 1899-12-30 baz alınır.
+  if (typeof raw === "number") {
+    const epoch = new Date(Date.UTC(1899, 11, 30))
+    const d = new Date(epoch.getTime() + raw * 86400000)
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1950 && d.getFullYear() < 2100) {
+      return d.toISOString().split("T")[0]
+    }
+    return ""
+  }
+
+  let s = String(raw).trim()
+  if (s === "") return ""
+
+  // Zaten ISO biçiminde mi (2026-05-18, saatli de olabilir)?
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
+  }
+
+  // "18 Mayıs 2026" gibi Türkçe ay adıyla yazılmış tarih
+  const trMatch = s.toLowerCase().match(/^(\d{1,2})\s+([a-zçğıöşü]+)\s+(\d{4})/i)
+  if (trMatch) {
+    const [, d, monthName, y] = trMatch
+    const m = TR_MONTHS[monthName]
+    if (m) return `${y}-${String(m).padStart(2, "0")}-${d.padStart(2, "0")}`
+  }
+
+  // 18.05.2026 / 18/05/2026 / 18-05-2026 / 18.05.26 gibi gün.ay.yıl biçimleri
+  const dmyMatch = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})/)
+  if (dmyMatch) {
+    let [, part1, part2, year] = dmyMatch
+    if (year.length === 2) year = (Number(year) > 50 ? "19" : "20") + year
+    let day = Number(part1)
+    let month = Number(part2)
+    // Gün 12'den büyükse kesin gün/ay sırasıyla yazılmış demektir (DD.MM.YYYY).
+    // Değilse de (belirsizse) yine gün.ay olarak kabul ediyoruz — satıcı dosyaları
+    // çoğunlukla Türkçe (gün.ay.yıl) formatında geliyor.
+    if (month > 12 && day <= 12) {
+      // Ay alanı 12'den büyükse aslında ay/gün ters yazılmış demektir (MM/DD/YYYY)
+      const tmp = day; day = month; month = tmp
+    }
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    }
+  }
+
+  // Son çare: JS'in kendi ayrıştırıcısına bırak.
+  const fallback = new Date(s)
+  if (!isNaN(fallback.getTime()) && fallback.getFullYear() > 1950 && fallback.getFullYear() < 2100) {
+    return fallback.toISOString().split("T")[0]
+  }
+
+  return ""
+}
+
 export function ExcelImportDialog({ open, onOpenChange, title, fields, onImport, templateHint }: ExcelImportDialogProps) {
   const [step, setStep] = useState<"upload" | "map" | "done">("upload")
   const [headers, setHeaders] = useState<string[]>([])
@@ -125,7 +199,7 @@ export function ExcelImportDialog({ open, onOpenChange, title, fields, onImport,
           let value: any = colIndex >= 0 ? row[colIndex] : undefined
           if (value === undefined || value === "") value = f.defaultValue
           if (f.type === "number") value = parseFlexibleNumber(value)
-          if (f.type === "date" && value instanceof Date) value = value.toISOString().split("T")[0]
+          if (f.type === "date") value = parseFlexibleDate(value)
           obj[f.key] = value ?? (f.type === "number" ? 0 : "")
         })
         return obj
@@ -225,6 +299,7 @@ export function ExcelImportDialog({ open, onOpenChange, title, fields, onImport,
                           let value: any = colIndex >= 0 ? row[colIndex] : undefined
                           if (value === undefined || value === "") value = f.defaultValue
                           if (f.type === "number") value = parseFlexibleNumber(value)
+                          if (f.type === "date") value = parseFlexibleDate(value)
                           const isEmpty = value === undefined || value === ""
                           return (
                             <td key={f.key} className={`p-2 whitespace-nowrap ${isEmpty && f.required ? "text-red-400" : "text-slate-300"}`}>
