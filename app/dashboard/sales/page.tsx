@@ -37,6 +37,7 @@ const paymentMethods = [
   { value: "transfer", label: "🏦 Havale/EFT" },
   { value: "partial", label: "💰 Kısmi Ödeme" },
   { value: "unpaid", label: "⏳ Ödenmedi" },
+  { value: "gift", label: "🎁 Eşantiyon (Bedelsiz)" },
 ]
 
 export default function SalesPage() {
@@ -51,6 +52,9 @@ export default function SalesPage() {
 
   const [customerSearch, setCustomerSearch] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("cash")
+  const [saleDiscount, setSaleDiscount] = useState("")
+  const [editSaleDiscount, setEditSaleDiscount] = useState("")
+  const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [paidAmount, setPaidAmount] = useState("")
   const [showNewSale, setShowNewSale] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
@@ -73,6 +77,16 @@ export default function SalesPage() {
 
   // Ürünler, müşteriler ve satışlar artık Supabase'den geliyor.
   useEffect(() => {
+    try {
+      const companyRaw = typeof window !== "undefined" ? localStorage.getItem("yt_company") : null
+      if (companyRaw) {
+        const parsed = JSON.parse(companyRaw)
+        if (typeof parsed?.maxDiscountPercent === "number") setMaxDiscountPercent(parsed.maxDiscountPercent)
+      }
+    } catch (e) {
+      console.error("Şirket ayarları okunamadı:", e)
+    }
+
     fetchProducts()
       .then((data) => setProducts(data))
       .catch((e) => console.error("Ürünler yüklenemedi:", e))
@@ -110,16 +124,21 @@ export default function SalesPage() {
     )
   }, [products, searchTerm])
 
-  const cartTotal = useMemo(() => {
+  const cartSubtotal = useMemo(() => {
     return cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
   }, [cart])
+  const cartTotal = Math.max(0, cartSubtotal - (Number(saleDiscount) || 0))
+  const maxCartDiscount = cartSubtotal * maxDiscountPercent / 100
 
-  const editCartTotal = useMemo(() => {
+  const editCartSubtotal = useMemo(() => {
     return editCart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
   }, [editCart])
+  const editCartTotal = Math.max(0, editCartSubtotal - (Number(editSaleDiscount) || 0))
+  const maxEditCartDiscount = editCartSubtotal * maxDiscountPercent / 100
 
-  const paid = paymentMethod === "partial" ? Number(paidAmount) || 0 : (paymentMethod === "unpaid" ? 0 : cartTotal)
-  const remaining = cartTotal - paid
+  const isGiftSale = paymentMethod === "gift"
+  const paid = isGiftSale ? 0 : (paymentMethod === "partial" ? Number(paidAmount) || 0 : (paymentMethod === "unpaid" ? 0 : cartTotal))
+  const remaining = isGiftSale ? 0 : cartTotal - paid
 
   const editPaid = editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
   const editRemaining = editCartTotal - editPaid
@@ -313,6 +332,11 @@ export default function SalesPage() {
     const customer = customers.find(c => c.id === selectedCustomer)
     if (!customer) return
 
+    if (Number(saleDiscount) > maxCartDiscount) {
+      showToast(`İskonto izin verilen maksimum %${maxDiscountPercent}'i (${formatCurrency(maxCartDiscount)}) aşıyor.`, "error")
+      return
+    }
+
     // Telefon numarası kontrolü
     const phone = customer.phone || customer.phone1 || ""
     if (!phone) {
@@ -327,6 +351,7 @@ export default function SalesPage() {
         customerPhone: phone,
         items: [...cart],
         totalAmount: cartTotal,
+        discount: Number(saleDiscount) || 0,
         paid: paid,
         remaining: remaining > 0 ? remaining : 0,
         paymentMethod,
@@ -335,7 +360,7 @@ export default function SalesPage() {
       })
 
       // Update customer debt
-      if (remaining > 0) {
+      if (!isGiftSale && remaining > 0) {
         await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`, sale.id)
       }
 
@@ -360,16 +385,29 @@ export default function SalesPage() {
 
       // Add to finance
       try {
-        await createTransaction({
-          type: "income",
-          category: "Satış",
-          amount: paid,
-          description: `🛒 Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
-          date: new Date().toISOString().split("T")[0],
-          customer: customer.name,
-          source: "sale",
-          sourceId: sale.id,
-        })
+        if (isGiftSale && cartTotal > 0) {
+          await createTransaction({
+            type: "expense",
+            category: "Eşantiyon/Bedelsiz Verilen",
+            amount: cartTotal,
+            description: `🎁 Eşantiyon: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
+            date: new Date().toISOString().split("T")[0],
+            customer: customer.name,
+            source: "sale",
+            sourceId: sale.id,
+          })
+        } else if (!isGiftSale) {
+          await createTransaction({
+            type: "income",
+            category: "Satış",
+            amount: paid,
+            description: `🛒 Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
+            date: new Date().toISOString().split("T")[0],
+            customer: customer.name,
+            source: "sale",
+            sourceId: sale.id,
+          })
+        }
       } catch (e) {
         console.error("Finance save error:", e)
       }
@@ -379,6 +417,7 @@ export default function SalesPage() {
       setSelectedCustomer("")
       setPaymentMethod("cash")
       setPaidAmount("")
+      setSaleDiscount("")
       setShowNewSale(false)
       showToast("Satış tamamlandı.", "success")
     } catch (e) {
@@ -444,11 +483,16 @@ Bu işlem geri alınamaz!`)) return
     setEditCart([...sale.items])
     setEditPaymentMethod(sale.paymentMethod)
     setEditPaidAmount(sale.paid.toString())
+    setEditSaleDiscount(sale.discount ? sale.discount.toString() : "")
     setShowEditSale(true)
   }
 
   const handleUpdateSale = async () => {
     if (!editingSale || editCart.length === 0) return
+    if (Number(editSaleDiscount) > maxEditCartDiscount) {
+      showToast(`İskonto izin verilen maksimum %${maxDiscountPercent}'i (${formatCurrency(maxEditCartDiscount)}) aşıyor.`, "error")
+      return
+    }
 
     const oldSale = editingSale
     const oldRemaining = oldSale.remaining
@@ -458,6 +502,7 @@ Bu işlem geri alınamaz!`)) return
       const updatedSale = await updateSale(editingSale.id, {
         items: [...editCart],
         totalAmount: editCartTotal,
+        discount: Number(editSaleDiscount) || 0,
         paid: editPaid,
         remaining: newRemaining,
         paymentMethod: editPaymentMethod,
@@ -850,6 +895,26 @@ Bu işlem geri alınamaz!`)) return
 
                 {/* Payment */}
                 <div className="space-y-2 pt-2 border-t border-slate-700">
+                  <div className="flex justify-between text-sm text-slate-400">
+                    <span>Ara Toplam:</span>
+                    <span>{formatCurrency(cartSubtotal)}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-slate-300 text-xs">İskonto (TL)</Label>
+                    <Input
+                      type="number"
+                      value={saleDiscount}
+                      onChange={(e) => setSaleDiscount(e.target.value)}
+                      className="bg-slate-800 border-slate-600 text-white"
+                      placeholder="0"
+                    />
+                    {cartSubtotal > 0 && (
+                      <p className="text-xs text-slate-500">Maks. {formatCurrency(maxCartDiscount)} (%{maxDiscountPercent})</p>
+                    )}
+                  </div>
+                  {Number(saleDiscount) > maxCartDiscount && (
+                    <p className="text-xs text-red-400">⚠️ İzin verilen maksimum %{maxDiscountPercent}'i aşıyor, kaydedilemez.</p>
+                  )}
                   <div className="flex justify-between text-lg font-bold text-white">
                     <span>💰 Toplam Tutar:</span>
                     <span>{formatCurrency(cartTotal)}</span>
@@ -864,6 +929,11 @@ Bu işlem geri alınamaz!`)) return
                       ))}
                     </SelectContent>
                   </Select>
+                  {isGiftSale && (
+                    <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 text-sm text-purple-300">
+                      🎁 Bu satış bedelsiz (eşantiyon) olarak işaretlenecek. Müşteriden ücret alınmayacak, borç oluşmayacak — tutar kasaya gider (zarar) olarak kaydedilecek.
+                    </div>
+                  )}
                   {paymentMethod === "partial" && (
                     <div className="space-y-2">
                       <Label className="text-slate-300">💵 Alınan Tutar (TL)</Label>
@@ -887,7 +957,7 @@ Bu işlem geri alınamaz!`)) return
                   )}
                   <Button
                     onClick={handleCompleteSale}
-                    disabled={!selectedCustomer || cart.length === 0}
+                    disabled={!selectedCustomer || cart.length === 0 || Number(saleDiscount) > maxCartDiscount}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                   >
                     ✅ {paymentMethod === "unpaid" ? "Satışı Kaydet (Ödenmedi)" : "Satışı Tamamla"}
@@ -977,6 +1047,26 @@ Bu işlem geri alınamaz!`)) return
 
             {/* Payment */}
             <div className="space-y-2 pt-2 border-t border-slate-700">
+              <div className="flex justify-between text-sm text-slate-400">
+                <span>Ara Toplam:</span>
+                <span>{formatCurrency(editCartSubtotal)}</span>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-slate-300 text-xs">İskonto (TL)</Label>
+                <Input
+                  type="number"
+                  value={editSaleDiscount}
+                  onChange={(e) => setEditSaleDiscount(e.target.value)}
+                  className="bg-slate-800 border-slate-600 text-white"
+                  placeholder="0"
+                />
+                {editCartSubtotal > 0 && (
+                  <p className="text-xs text-slate-500">Maks. {formatCurrency(maxEditCartDiscount)} (%{maxDiscountPercent})</p>
+                )}
+              </div>
+              {Number(editSaleDiscount) > maxEditCartDiscount && (
+                <p className="text-xs text-red-400">⚠️ İzin verilen maksimum %{maxDiscountPercent}'i aşıyor, kaydedilemez.</p>
+              )}
               <div className="flex justify-between text-lg font-bold text-white">
                 <span>💰 Toplam Tutar:</span>
                 <span>{formatCurrency(editCartTotal)}</span>

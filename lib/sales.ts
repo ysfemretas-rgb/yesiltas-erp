@@ -16,6 +16,7 @@ export interface Sale {
   customerPhone: string
   items: SaleItem[]
   totalAmount: number
+  discount: number
   paid: number
   remaining: number
   paymentMethod: string
@@ -31,6 +32,7 @@ function fromRow(row: any): Sale {
     customerPhone: row.customer_phone ?? "",
     items: Array.isArray(row.items) ? row.items : [],
     totalAmount: Number(row.total_price) || 0,
+    discount: Number(row.discount) || 0,
     paid: Number(row.paid_amount) || 0,
     remaining: Number(row.remaining_amount) || 0,
     paymentMethod: row.payment_method ?? "cash",
@@ -49,6 +51,7 @@ function toRow(s: Partial<Sale>) {
   if (s.customerName !== undefined) row.customer_name = s.customerName
   if (s.customerPhone !== undefined) row.customer_phone = s.customerPhone
   if (s.totalAmount !== undefined) { row.total_price = s.totalAmount; row.unit_price = s.totalAmount }
+  if (s.discount !== undefined) row.discount = s.discount
   if (s.paid !== undefined) row.paid_amount = s.paid
   if (s.remaining !== undefined) row.remaining_amount = s.remaining
   if (s.paymentMethod !== undefined) row.payment_method = s.paymentMethod

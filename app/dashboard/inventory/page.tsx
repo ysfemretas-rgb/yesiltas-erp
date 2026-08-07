@@ -3,7 +3,7 @@
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { InventoryItem, fetchInventory, createInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory"
+import { InventoryItem, fetchInventory, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,7 +25,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload } from "lucide-react"
+import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
+
+const INVENTORY_IMPORT_FIELDS: ImportField[] = [
+  { key: "name", label: "Ürün Adı", required: true, type: "text" },
+  { key: "sku", label: "SKU", type: "text" },
+  { key: "category", label: "Kategori", type: "text", defaultValue: "Diğer" },
+  { key: "quantity", label: "Stok", type: "number" },
+  { key: "minQuantity", label: "Min. Stok", type: "number", defaultValue: 5 },
+  { key: "purchasePrice", label: "Alış Fiyatı", required: true, type: "number" },
+  { key: "purchaseCurrency", label: "Para Birimi", type: "text", defaultValue: "TRY" },
+  { key: "profitMargin", label: "Kâr Marjı (%)", type: "number", defaultValue: 30 },
+  { key: "supplier", label: "Tedarikçi", type: "text" },
+  { key: "location", label: "Konum", type: "text" },
+]
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 
 interface ExchangeRates {
@@ -54,9 +68,12 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [customCategory, setCustomCategory] = useState("")
+  const [editCustomCategory, setEditCustomCategory] = useState("")
   const { rates, isLoadingRates, fetchRates } = useExchangeRates()
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Ekran",
@@ -147,6 +164,31 @@ export default function InventoryPage() {
     }
   }
 
+  const handleExcelImport = async (rows: Record<string, any>[]) => {
+    const validCurrency = (c: any): "TRY" | "USD" | "EUR" => ["TRY", "USD", "EUR"].includes(String(c).toUpperCase()) ? String(c).toUpperCase() as any : "TRY"
+    const inputs = rows.map(r => {
+      const purchasePrice = Number(r.purchasePrice) || 0
+      const purchaseCurrency = validCurrency(r.purchaseCurrency)
+      const profitMargin = Number(r.profitMargin) || 30
+      const salePrice = calculateSalePrice(purchasePrice, purchaseCurrency, profitMargin, rates)
+      return {
+        name: String(r.name || "").trim(),
+        sku: String(r.sku || ""),
+        category: String(r.category || "Diğer"),
+        quantity: Number(r.quantity) || 0,
+        minQuantity: Number(r.minQuantity) || 5,
+        purchasePrice,
+        purchaseCurrency,
+        profitMargin,
+        salePrice,
+        supplier: String(r.supplier || ""),
+        location: String(r.location || ""),
+      }
+    }).filter(r => r.name)
+    const created = await createInventoryItemsBulk(inputs)
+    setInventory([...created, ...inventory])
+  }
+
   const handleAddItem = async () => {
     if (!newItem.name || !newItem.sku) {
       showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
@@ -162,7 +204,7 @@ export default function InventoryPage() {
       const item = await createInventoryItem({
         name: newItem.name,
         sku: newItem.sku,
-        category: newItem.category || "Diğer",
+        category: newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"),
         quantity: Number(newItem.quantity) || 0,
         minQuantity: Number(newItem.minQuantity) || 5,
         purchasePrice: Number(newItem.purchasePrice) || 0,
@@ -174,6 +216,7 @@ export default function InventoryPage() {
       })
       setInventory([item, ...inventory])
       setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
+      setCustomCategory("")
       setIsDialogOpen(false)
       showToast("Ürün eklendi.", "success")
     } catch (e) {
@@ -188,6 +231,7 @@ export default function InventoryPage() {
       showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
       return
     }
+    const resolvedCategory = editingItem.category === "__new__" ? (editCustomCategory.trim() || "Diğer") : editingItem.category
     const salePrice = calculateSalePrice(
       editingItem.purchasePrice,
       editingItem.purchaseCurrency,
@@ -195,10 +239,11 @@ export default function InventoryPage() {
       rates
     )
     try {
-      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, salePrice })
+      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice })
       setInventory(inventory.map(item => item.id === updated.id ? updated : item))
       setIsEditOpen(false)
       setEditingItem(null)
+      setEditCustomCategory("")
       showToast("Ürün güncellendi.", "success")
     } catch (e) {
       console.error(e)
@@ -240,9 +285,13 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">📦 Stok Yönetimi</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsImportOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+            <Upload className="mr-2 h-4 w-4" />Excel ile Yükle
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="mr-2 h-4 w-4" />
@@ -276,7 +325,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
-                    value={newItem.category}
+                    value={newItem.category === "__new__" ? "__new__" : newItem.category}
                     onValueChange={(value) => setNewItem({ ...newItem, category: value })}
                   >
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
@@ -286,9 +335,17 @@ export default function InventoryPage() {
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
+                      <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>
+                  {newItem.category === "__new__" && (
+                    <Input
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Yeni kategori adı"
+                      className="bg-slate-800 border-slate-600 text-white mt-2"
+                    />
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -397,7 +454,17 @@ export default function InventoryPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      <ExcelImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        title="Envanteri Excel ile Yükle"
+        fields={INVENTORY_IMPORT_FIELDS}
+        onImport={handleExcelImport}
+        templateHint="Excel dosyanızda şu sütunlar olmalı: Ürün Adı, SKU, Kategori, Stok, Min. Stok, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Kâr Marjı (%), Tedarikçi, Konum. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
+      />
 
       {/* Exchange Rates Card */}
       <Card className="bg-slate-900 border-slate-700">
@@ -676,7 +743,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
-                    value={editingItem.category}
+                    value={editingItem.category === "__new__" ? "__new__" : editingItem.category}
                     onValueChange={(value) => setEditingItem({ ...editingItem, category: value })}
                   >
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
@@ -686,9 +753,17 @@ export default function InventoryPage() {
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
+                      <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>
+                  {editingItem.category === "__new__" && (
+                    <Input
+                      value={editCustomCategory}
+                      onChange={(e) => setEditCustomCategory(e.target.value)}
+                      placeholder="Yeni kategori adı"
+                      className="bg-slate-800 border-slate-600 text-white mt-2"
+                    />
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">

@@ -79,6 +79,14 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
   return (data || []).map(fromRow)
 }
 
+export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id">[]): Promise<InventoryItem[]> {
+  const { data, error } = await supabase.from("inventory").insert(inputs.map(toRow)).select("*")
+  if (error) throw error
+  const created = (data || []).map(fromRow)
+  logActivity("Envanter", "created", `Excel ile ${created.length} ürün toplu eklendi`)
+  return created
+}
+
 export async function createInventoryItem(input: Omit<InventoryItem, "id">): Promise<InventoryItem> {
   const { data, error } = await supabase.from("inventory").insert(toRow(input)).select("*").single()
   if (error) throw error

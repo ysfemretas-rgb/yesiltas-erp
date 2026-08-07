@@ -73,6 +73,14 @@ export async function fetchConsumables(): Promise<Consumable[]> {
   return (data || []).map(fromRow)
 }
 
+export async function createConsumablesBulk(inputs: Omit<Consumable, "id">[]): Promise<Consumable[]> {
+  const { data, error } = await supabase.from("consumables").insert(inputs.map(toRow)).select("*")
+  if (error) throw error
+  const created = (data || []).map(fromRow)
+  logActivity("Sarf Malzeme", "created", `Excel ile ${created.length} malzeme toplu eklendi`)
+  return created
+}
+
 export async function createConsumable(input: Omit<Consumable, "id">): Promise<Consumable> {
   const { data, error } = await supabase.from("consumables").insert(toRow(input)).select("*").single()
   if (error) throw error

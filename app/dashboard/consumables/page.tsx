@@ -26,8 +26,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign } from "lucide-react"
-import { Consumable, fetchConsumables, createConsumable, updateConsumable, deleteConsumable } from "@/lib/consumables"
+import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign, Upload } from "lucide-react"
+import { Consumable, fetchConsumables, createConsumable, createConsumablesBulk, updateConsumable, deleteConsumable } from "@/lib/consumables"
+import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
+
+const CONSUMABLES_IMPORT_FIELDS: ImportField[] = [
+  { key: "name", label: "Malzeme Adı", required: true, type: "text" },
+  { key: "category", label: "Kategori", type: "text", defaultValue: "Diğer" },
+  { key: "currentStock", label: "Mevcut Stok", type: "number" },
+  { key: "minStock", label: "Min. Stok", type: "number", defaultValue: 10 },
+  { key: "unit", label: "Birim", type: "text", defaultValue: "Adet" },
+  { key: "purchasePrice", label: "Alış Fiyatı", type: "number" },
+  { key: "purchaseCurrency", label: "Para Birimi", type: "text", defaultValue: "TRY" },
+  { key: "supplier", label: "Tedarikçi", type: "text" },
+]
 
 interface ExchangeRates {
   USD: number
@@ -51,9 +63,12 @@ export default function ConsumablesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<Consumable | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [customCategory, setCustomCategory] = useState("")
+  const [editCustomCategory, setEditCustomCategory] = useState("")
   const { rates, isLoadingRates, fetchRates } = useExchangeRates()
 
   const [newItem, setNewItem] = useState<Partial<Consumable>>({
@@ -113,6 +128,23 @@ export default function ConsumablesPage() {
     }
   }
 
+  const handleExcelImport = async (rows: Record<string, any>[]) => {
+    const validCurrency = (c: any): "TRY" | "USD" | "EUR" => ["TRY", "USD", "EUR"].includes(String(c).toUpperCase()) ? String(c).toUpperCase() as any : "TRY"
+    const inputs = rows.map(r => ({
+      name: String(r.name || "").trim(),
+      category: String(r.category || "Diğer"),
+      currentStock: Number(r.currentStock) || 0,
+      minStock: Number(r.minStock) || 10,
+      unit: String(r.unit || "Adet"),
+      purchasePrice: Number(r.purchasePrice) || 0,
+      purchaseCurrency: validCurrency(r.purchaseCurrency),
+      supplier: String(r.supplier || ""),
+      lastRestocked: new Date().toISOString().split("T")[0],
+    })).filter(r => r.name)
+    const created = await createConsumablesBulk(inputs)
+    setConsumables([...created, ...consumables])
+  }
+
   const handleAddItem = async () => {
     if (!newItem.name) {
       showToast("Lütfen malzeme adı girin!", "error")
@@ -121,7 +153,7 @@ export default function ConsumablesPage() {
     try {
       const item = await createConsumable({
         name: newItem.name,
-        category: newItem.category || "Diğer",
+        category: newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"),
         currentStock: Number(newItem.currentStock) || 0,
         minStock: Number(newItem.minStock) || 10,
         unit: newItem.unit || "Adet",
@@ -132,6 +164,7 @@ export default function ConsumablesPage() {
       })
       setConsumables([item, ...consumables])
       setNewItem({ category: "Temizlik", unit: "Adet", currentStock: 0, minStock: 10, purchasePrice: 0, purchaseCurrency: "TRY" })
+      setCustomCategory("")
       setIsDialogOpen(false)
       showToast("Malzeme eklendi.", "success")
     } catch (e) {
@@ -147,10 +180,12 @@ export default function ConsumablesPage() {
       return
     }
     try {
-      const updated = await updateConsumable(editingItem.id, editingItem)
+      const resolvedCategory = editingItem.category === "__new__" ? (editCustomCategory.trim() || "Diğer") : editingItem.category
+      const updated = await updateConsumable(editingItem.id, { ...editingItem, category: resolvedCategory })
       setConsumables(consumables.map(item => item.id === updated.id ? updated : item))
       setIsEditOpen(false)
       setEditingItem(null)
+      setEditCustomCategory("")
       showToast("Malzeme güncellendi.", "success")
     } catch (e) {
       console.error(e)
@@ -206,8 +241,12 @@ export default function ConsumablesPage() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">🧪 Sarf Malzeme Takibi</h1>
+        <div className="flex gap-2">
+        <Button onClick={() => setIsImportOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+          <Upload className="mr-2 h-4 w-4" />Excel ile Yükle
+        </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -233,7 +272,7 @@ export default function ConsumablesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
-                    value={newItem.category}
+                    value={newItem.category === "__new__" ? "__new__" : newItem.category}
                     onValueChange={(value) => setNewItem({ ...newItem, category: value })}
                   >
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
@@ -243,9 +282,17 @@ export default function ConsumablesPage() {
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
+                      <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>
+                  {newItem.category === "__new__" && (
+                    <Input
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Yeni kategori adı"
+                      className="bg-slate-800 border-slate-600 text-white mt-2"
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Birim</label>
@@ -343,7 +390,17 @@ export default function ConsumablesPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      <ExcelImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        title="Sarf Malzemeleri Excel ile Yükle"
+        fields={CONSUMABLES_IMPORT_FIELDS}
+        onImport={handleExcelImport}
+        templateHint="Excel dosyanızda şu sütunlar olmalı: Malzeme Adı, Kategori, Mevcut Stok, Min. Stok, Birim, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Tedarikçi. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
+      />
 
       {/* Exchange Rates Card */}
       <Card className="bg-slate-900 border-slate-700">
@@ -592,7 +649,7 @@ export default function ConsumablesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
-                    value={editingItem.category}
+                    value={editingItem.category === "__new__" ? "__new__" : editingItem.category}
                     onValueChange={(value) => setEditingItem({ ...editingItem, category: value })}
                   >
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
@@ -602,9 +659,17 @@ export default function ConsumablesPage() {
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                       ))}
-                      <SelectItem value="Diğer" className="text-white">Diğer</SelectItem>
+                      <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>
+                  {editingItem.category === "__new__" && (
+                    <Input
+                      value={editCustomCategory}
+                      onChange={(e) => setEditCustomCategory(e.target.value)}
+                      placeholder="Yeni kategori adı"
+                      className="bg-slate-800 border-slate-600 text-white mt-2"
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Birim</label>

@@ -25,6 +25,7 @@ const ALL_PERMISSIONS = [
   { key: "Garantiler", label: "Garantiler" },
   { key: "Müşteriler", label: "Müşteriler" },
   { key: "Görevler", label: "Görevler" },
+  { key: "Demirbaşlar", label: "Demirbaşlar" },
   { key: "Personel", label: "Personel Yönetimi" },
   { key: "Raporlar", label: "Raporlar" },
   { key: "Ayarlar", label: "Ayarlar" },
