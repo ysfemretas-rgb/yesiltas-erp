@@ -220,6 +220,7 @@ export default function InventoryPage() {
         salePrice: salePrice,
         supplier: newItem.supplier || "",
         location: newItem.location || "",
+        imageUrl: newItem.imageUrl || "",
       })
       setInventory([item, ...inventory])
       setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
@@ -383,6 +384,25 @@ export default function InventoryPage() {
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Ürün Resmi (bağlantı)</label>
+                <Input
+                  value={newItem.imageUrl || ""}
+                  onChange={(e) => setNewItem({ ...newItem, imageUrl: e.target.value })}
+                  placeholder="https://... (resim adresi)"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+                {newItem.imageUrl ? (
+                  <img
+                    src={newItem.imageUrl}
+                    alt=""
+                    className="h-24 w-24 object-cover rounded border border-slate-600"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                  />
+                ) : null}
+                <p className="text-xs text-slate-500">Ürün fotoğrafının internet adresi. Sonradan da ekleyebilirsiniz.</p>
               </div>
 
               <div className="border-t border-slate-700 pt-4">

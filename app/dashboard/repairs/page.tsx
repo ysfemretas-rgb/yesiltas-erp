@@ -38,6 +38,7 @@ import { printRepairReceipt } from "@/lib/repairReceipt"
 
 interface Customer {
   id: string
+  customerCode?: string
   name: string
   phone1: string
   phone2: string
@@ -105,7 +106,7 @@ export default function RepairsPage() {
 
     fetchCustomers()
       .then((data) => {
-        if (!cancelled) setCustomers(data.map(c => ({ id: c.id, name: c.name, phone1: c.phone1 || c.phone, phone2: c.phone2, email: c.email, address: c.address })))
+        if (!cancelled) setCustomers(data.map(c => ({ id: c.id, customerCode: c.customerCode, name: c.name, phone1: c.phone1 || c.phone, phone2: c.phone2, email: c.email, address: c.address })))
       })
       .catch((e) => console.error("Müşteriler yüklenemedi:", e))
 
@@ -294,6 +295,7 @@ export default function RepairsPage() {
     const remainingNum = isGift ? 0 : calculateRemaining(netCost, paidNum)
     try {
       const newRepair = await createRepair({
+        customerCode: customers.find(c => c.id === customerId)?.customerCode || "",
         customerName,
         phone1,
         phone2,
@@ -871,7 +873,15 @@ export default function RepairsPage() {
                 <div key={repair.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <div className="text-sm font-medium text-white">#{repair.id} — {repair.customerName}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-white">{repair.customerName}</span>
+                        {repair.repairCode && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-900/40 text-orange-300 border border-orange-800">{repair.repairCode}</span>
+                        )}
+                        {repair.customerCode && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 border border-slate-600">{repair.customerCode}</span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400">
                         📱 {repair.phone1}{repair.phone2 ? ` / ${repair.phone2}` : ""} | 🔧 {repair.brand} {repair.model} | ⚠️ {repair.issue}
                       </div>

@@ -23,6 +23,7 @@ import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
 interface Customer {
   id: string
+  customerCode?: string
   name: string
   phone: string
   phone1?: string
@@ -93,7 +94,7 @@ export default function SalesPage() {
       .catch((e) => console.error("Envanter yüklenemedi:", e))
 
     fetchCustomers()
-      .then((data) => setCustomers(data.map(c => ({ id: c.id, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2, balance: 0, totalDebt: c.totalDebt, debts: c.debts }))))
+      .then((data) => setCustomers(data.map(c => ({ id: c.id, customerCode: c.customerCode, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2, balance: 0, totalDebt: c.totalDebt, debts: c.debts }))))
       .catch((e) => console.error("Müşteriler yüklenemedi:", e))
 
     fetchSales()
@@ -295,6 +296,7 @@ export default function SalesPage() {
       const sale = await createSale({
         customerId: customer.id,
         customerName: customer.name,
+        customerCode: customer.customerCode,
         customerPhone: phone,
         items: [...cart],
         totalAmount: cartTotal,
@@ -1080,7 +1082,15 @@ Bu işlem geri alınamaz!`)) return
                 <div key={sale.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-medium text-white">{sale.customerName}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-white">{sale.customerName}</span>
+                        {sale.saleCode && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-800">{sale.saleCode}</span>
+                        )}
+                        {sale.customerCode && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 border border-slate-600">{sale.customerCode}</span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400">📅 {sale.date} | 📦 {(sale.items || []).length} ürün | 💳 {paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}</div>
                     </div>
                     <div className="text-right">

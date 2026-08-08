@@ -11,6 +11,8 @@ export interface SaleItem {
 
 export interface Sale {
   id: string
+  saleCode?: string
+  customerCode?: string
   customerId: string
   customerName: string
   customerPhone: string
@@ -27,6 +29,8 @@ export interface Sale {
 function fromRow(row: any): Sale {
   return {
     id: row.id,
+    saleCode: row.sale_code ?? "",
+    customerCode: row.customer_code ?? "",
     customerId: "",
     customerName: row.customer_name ?? "",
     customerPhone: row.customer_phone ?? "",
@@ -49,6 +53,7 @@ function toRow(s: Partial<Sale>) {
     row.quantity = s.items.reduce((sum, i) => sum + i.quantity, 0)
   }
   if (s.customerName !== undefined) row.customer_name = s.customerName
+  if (s.customerCode !== undefined) row.customer_code = s.customerCode || null
   if (s.customerPhone !== undefined) row.customer_phone = s.customerPhone
   if (s.totalAmount !== undefined) { row.total_price = s.totalAmount; row.unit_price = s.totalAmount }
   if (s.discount !== undefined) row.discount = s.discount
@@ -90,7 +95,7 @@ export async function fetchSales(): Promise<Sale[]> {
   return (data || []).map(fromRow)
 }
 
-export async function createSale(input: Omit<Sale, "id">): Promise<Sale> {
+export async function createSale(input: Omit<Sale, "id" | "saleCode">): Promise<Sale> {
   const { data, error } = await supabase.from("sales").insert(toRow(input)).select("*").single()
   if (error) throw error
   const created = fromRow(data)
@@ -98,7 +103,7 @@ export async function createSale(input: Omit<Sale, "id">): Promise<Sale> {
   return created
 }
 
-export async function updateSale(id: string, input: Partial<Omit<Sale, "id">>): Promise<Sale> {
+export async function updateSale(id: string, input: Partial<Omit<Sale, "id" | "saleCode">>): Promise<Sale> {
   const { data, error } = await supabase.from("sales").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
   const updated = fromRow(data)

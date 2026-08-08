@@ -3,6 +3,8 @@ import { logActivity } from "@/lib/activityLog"
 
 export interface Repair {
   id: string
+  repairCode?: string
+  customerCode?: string
   customerName: string
   phone1: string
   phone2: string
@@ -25,6 +27,8 @@ export interface Repair {
 function fromRow(row: any): Repair {
   return {
     id: row.id,
+    repairCode: row.repair_code ?? "",
+    customerCode: row.customer_code ?? "",
     customerName: row.customer_name ?? "",
     phone1: row.phone1 ?? "",
     phone2: row.phone2 ?? "",
@@ -48,6 +52,7 @@ function fromRow(row: any): Repair {
 function toRow(r: Partial<Repair>) {
   const row: Record<string, unknown> = {}
   if (r.customerName !== undefined) row.customer_name = r.customerName
+  if (r.customerCode !== undefined) row.customer_code = r.customerCode || null
   if (r.phone1 !== undefined) row.phone1 = r.phone1
   if (r.phone2 !== undefined) row.phone2 = r.phone2
   if (r.device !== undefined) row.device_type = r.device
@@ -97,7 +102,7 @@ export async function fetchRepairs(): Promise<Repair[]> {
   return (data || []).map(fromRow)
 }
 
-export async function createRepair(input: Omit<Repair, "id">): Promise<Repair> {
+export async function createRepair(input: Omit<Repair, "id" | "repairCode">): Promise<Repair> {
   const { data, error } = await supabase.from("devices").insert(toRow(input)).select("*").single()
   if (error) throw error
   const created = fromRow(data)
@@ -105,7 +110,7 @@ export async function createRepair(input: Omit<Repair, "id">): Promise<Repair> {
   return created
 }
 
-export async function updateRepair(id: string, input: Partial<Omit<Repair, "id">>): Promise<Repair> {
+export async function updateRepair(id: string, input: Partial<Omit<Repair, "id" | "repairCode">>): Promise<Repair> {
   const { data, error } = await supabase.from("devices").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
   const updated = fromRow(data)
