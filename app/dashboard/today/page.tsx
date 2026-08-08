@@ -109,7 +109,15 @@ export default function TodayPage() {
           id: `d-${c.id}`,
           group: "debt",
           title: c.name,
-          subtitle: `${c.totalDebt.toLocaleString("tr-TR")} TL borcu var`,
+          subtitle: (() => {
+            const unpaid = (c.debts || []).filter((d: any) => d.status === "unpaid" && d.date)
+            if (unpaid.length > 0) {
+              const oldest = unpaid.reduce((min: string, d: any) => (d.date < min ? d.date : min), unpaid[0].date)
+              const days = Math.floor((Date.now() - new Date(oldest).getTime()) / 86400000)
+              if (days >= 30) return `${c.totalDebt.toLocaleString("tr-TR")} TL borcu var — ⏰ ${days} gündür ödenmedi`
+            }
+            return `${c.totalDebt.toLocaleString("tr-TR")} TL borcu var`
+          })(),
           phone,
           message: `\uD83D\uDC4B Merhaba ${c.name},\n\n\uD83D\uDCB0 *Yeşiltaş Teknoloji*'den ödeme hatırlatmasıdır.\n\nHesabınızda ${c.totalDebt.toLocaleString("tr-TR")} TL bakiye bulunmaktadır.\n\n${paymentLine}\n\nTeşekkür ederiz.\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
         })

@@ -5,7 +5,7 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { InventoryItem, fetchInventory, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,6 +66,7 @@ export default function InventoryPage() {
 
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -589,11 +590,21 @@ export default function InventoryPage() {
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-slate-500" />
               <Input
-                placeholder="Ürün adı, SKU veya tedarikçi ara..."
+                ref={searchInputRef}
+                placeholder="Ürün adı, SKU veya tedarikçi ara... (barkod okutabilirsiniz)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
+              <Button
+                size="icon"
+                variant="outline"
+                title="Barkod okutmak için tıklayın, sonra okuyucuyla ürünü okutun"
+                onClick={() => { setSearchTerm(""); searchInputRef.current?.focus() }}
+                className="border-slate-600 text-amber-400 shrink-0"
+              >
+                <Barcode className="h-4 w-4" />
+              </Button>
             </div>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-white">

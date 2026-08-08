@@ -30,8 +30,10 @@ import {
   MessageCircle,
   Pencil,
   Trash2,
-  QrCode
+  QrCode,
+  Printer
 } from "lucide-react"
+import { printRepairReceipt } from "@/lib/repairReceipt"
 
 
 interface Customer {
@@ -936,6 +938,14 @@ export default function RepairsPage() {
                       onClick={() => openQrDialog(repair)}
                     >
                       <QrCode className="w-3 h-3 mr-1" />QR Kod
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-slate-300 hover:text-white hover:bg-slate-500/10"
+                      onClick={() => printRepairReceipt(repair)}
+                    >
+                      <Printer className="w-3 h-3 mr-1" />Fiş
                     </Button>
                     <Button
                       size="sm"

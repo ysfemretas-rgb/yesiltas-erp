@@ -80,6 +80,7 @@ export default function SuppliersPage() {
 
   const activeCount = suppliers.filter(s => s.status === "active").length
   const totalOrders = suppliers.reduce((sum, s) => sum + (Number(s.totalOrders) || 0), 0)
+  const totalSupplierDebt = suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
 
   const handleAddSupplier = async () => {
     if (!newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
@@ -98,6 +99,7 @@ export default function SuppliersPage() {
         status: "active",
         totalOrders: 0,
         lastOrderDate: new Date().toISOString().split("T")[0],
+        balance: Number(newSupplier.balance) || 0,
       })
       setSuppliers([supplier, ...suppliers])
       setNewSupplier({ category: "Ekran", rating: 5, status: "active", totalOrders: 0 })
@@ -127,6 +129,7 @@ export default function SuppliersPage() {
         category: newSupplier.category || editingSupplier.category,
         rating: Number(newSupplier.rating) || editingSupplier.rating,
         status: (newSupplier.status as "active" | "inactive") || editingSupplier.status,
+        balance: newSupplier.balance !== undefined ? Number(newSupplier.balance) : editingSupplier.balance,
       })
       setSuppliers(suppliers.map(s => s.id === updated.id ? updated : s))
       setIsEditOpen(false)
@@ -160,7 +163,8 @@ export default function SuppliersPage() {
       address: supplier.address,
       category: supplier.category,
       rating: supplier.rating,
-      status: supplier.status
+      status: supplier.status,
+      balance: supplier.balance
     })
     setIsEditOpen(true)
   }
@@ -313,6 +317,16 @@ export default function SuppliersPage() {
                     placeholder="Şehir, İlçe"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Bu Tedarikçiye Borcumuz (TL)</label>
+                  <Input
+                    type="number"
+                    value={newSupplier.balance ?? ""}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, balance: Number(e.target.value) })}
+                    className="bg-slate-700 border-slate-600 text-white"
+                    placeholder="0"
+                  />
+                </div>
                 <Button onClick={handleAddSupplier} className="w-full bg-blue-600 hover:bg-blue-700">
                   <Save className="mr-2 h-4 w-4" />
                   Kaydet
@@ -349,6 +363,17 @@ export default function SuppliersPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-400">{totalOrders}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800 border-slate-700">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-300">Toplam Borcumuz</CardTitle>
+              <Package className="h-4 w-4 text-amber-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-400">
+                {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(totalSupplierDebt)}
+              </div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800 border-slate-700">
@@ -440,8 +465,13 @@ export default function SuppliersPage() {
                         <span className="text-slate-300">{supplier.totalOrders} sipariş</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-sm bg-slate-800 p-2 rounded border border-slate-600 mb-2">
+                    <div className="flex items-center justify-between text-sm bg-slate-800 p-2 rounded border border-slate-600 mb-2 flex-wrap gap-2">
                       <span className="text-slate-400">Son Sipariş: <span className="font-semibold text-white">{supplier.lastOrderDate}</span></span>
+                      {supplier.balance > 0 ? (
+                        <span className="text-amber-400 font-semibold">💳 Borcumuz: {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(supplier.balance)}</span>
+                      ) : (
+                        <span className="text-emerald-400 text-xs">✓ Borç yok</span>
+                      )}
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-600" onClick={() => handleCall(supplier.phone)}>
@@ -525,6 +555,16 @@ export default function SuppliersPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Adres</label>
                 <Input value={newSupplier.address || ""} onChange={(e) => setNewSupplier({...newSupplier, address: e.target.value})} className="bg-slate-700 border-slate-600 text-white" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Bu Tedarikçiye Borcumuz (TL)</label>
+                <Input
+                  type="number"
+                  value={newSupplier.balance ?? ""}
+                  onChange={(e) => setNewSupplier({...newSupplier, balance: Number(e.target.value)})}
+                  className="bg-slate-700 border-slate-600 text-white"
+                  placeholder="0"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Durum</label>

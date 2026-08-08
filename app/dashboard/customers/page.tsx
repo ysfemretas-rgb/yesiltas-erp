@@ -492,6 +492,15 @@ export default function CustomersPage() {
     }
   }
 
+  // En eski ödenmemiş borcun kaç gündür beklediğini hesaplar (vade takibi için).
+  const getOldestUnpaidDebtAge = (customer: Customer): number | null => {
+    const unpaid = (customer.debts || []).filter(d => d.status === "unpaid" && d.date)
+    if (unpaid.length === 0) return null
+    const oldest = unpaid.reduce((min, d) => (d.date < min ? d.date : min), unpaid[0].date)
+    const diff = Math.floor((Date.now() - new Date(oldest).getTime()) / 86400000)
+    return diff >= 0 ? diff : null
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount || 0)
   }
@@ -759,9 +768,16 @@ export default function CustomersPage() {
                       </div>
                     </div>
                     {hasDebt && (
-                      <div className="mt-2 flex items-center gap-2">
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <CreditCard className="h-3 w-3 text-red-400" />
                         <span className="text-red-400 font-medium text-sm">Borç: {formatCurrency(debt)}</span>
+                        {(() => {
+                          const days = getOldestUnpaidDebtAge(customer)
+                          if (days === null) return null
+                          if (days >= 60) return <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-300 border border-red-700">⏰ {days} gündür ödenmedi</span>
+                          if (days >= 30) return <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-300 border border-amber-700">⏰ {days} gündür ödenmedi</span>
+                          return <span className="text-xs text-slate-500">{days} gün önce</span>
+                        })()}
                       </div>
                     )}
                   </div>

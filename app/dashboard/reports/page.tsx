@@ -221,6 +221,40 @@ export default function ReportsPage() {
   const totalIncome = filteredFinance.filter(f => f.type === "income").reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
   const totalExpense = filteredFinance.filter(f => f.type === "expense").reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
   const netProfit = totalIncome - totalExpense
+
+  // Bu ay / geçen ay karşılaştırması (seçili tarih aralığından bağımsız,
+  // her zaman takvim ayı bazında hesaplanır).
+  const monthComparison = useMemo(() => {
+    const now = new Date()
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+
+    const sumIncomeBetween = (from: Date, to: Date) =>
+      financeData
+        .filter(f => f.type === "income" && f.date && new Date(f.date) >= from && new Date(f.date) < to)
+        .reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
+
+    const countBetween = (arr: { date: string }[], from: Date, to: Date) =>
+      arr.filter(x => x.date && new Date(x.date) >= from && new Date(x.date) < to).length
+
+    const thisIncome = sumIncomeBetween(thisMonthStart, new Date(now.getFullYear(), now.getMonth() + 1, 1))
+    const lastIncome = sumIncomeBetween(lastMonthStart, thisMonthStart)
+    const thisRepairs = countBetween(repairsData, thisMonthStart, new Date(now.getFullYear(), now.getMonth() + 1, 1))
+    const lastRepairs = countBetween(repairsData, lastMonthStart, thisMonthStart)
+    const thisSales = countBetween(salesData, thisMonthStart, new Date(now.getFullYear(), now.getMonth() + 1, 1))
+    const lastSales = countBetween(salesData, lastMonthStart, thisMonthStart)
+
+    const pct = (current: number, previous: number): number | null => {
+      if (previous === 0) return current === 0 ? 0 : null
+      return ((current - previous) / previous) * 100
+    }
+
+    return {
+      thisIncome, lastIncome, incomePct: pct(thisIncome, lastIncome),
+      thisRepairs, lastRepairs, repairsPct: pct(thisRepairs, lastRepairs),
+      thisSales, lastSales, salesPct: pct(thisSales, lastSales),
+    }
+  }, [financeData, repairsData, salesData])
   const totalRepairs = filteredRepairs.length
   const totalSales = filteredSales.length
   const totalCustomers = customersData.length
@@ -536,6 +570,39 @@ export default function ReportsPage() {
                   className="bg-slate-700 border-slate-600 text-white"
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bu Ay / Geçen Ay Karşılaştırması */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white text-lg">📊 Bu Ay vs Geçen Ay</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { label: "Gelir", current: formatCurrency(monthComparison.thisIncome), previous: formatCurrency(monthComparison.lastIncome), pct: monthComparison.incomePct },
+                { label: "Tamir Sayısı", current: String(monthComparison.thisRepairs), previous: String(monthComparison.lastRepairs), pct: monthComparison.repairsPct },
+                { label: "Satış Sayısı", current: String(monthComparison.thisSales), previous: String(monthComparison.lastSales), pct: monthComparison.salesPct },
+              ].map(item => (
+                <div key={item.label} className="p-4 rounded-lg border border-slate-700 bg-slate-900">
+                  <div className="text-sm text-slate-400">{item.label}</div>
+                  <div className="text-2xl font-bold text-white mt-1">{item.current}</div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-xs text-slate-500">Geçen ay: {item.previous}</span>
+                    {item.pct === null ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">yeni</span>
+                    ) : item.pct > 0 ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300 border border-emerald-700">▲ %{item.pct.toFixed(0)}</span>
+                    ) : item.pct < 0 ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-300 border border-red-700">▼ %{Math.abs(item.pct).toFixed(0)}</span>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">değişim yok</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

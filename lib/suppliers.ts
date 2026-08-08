@@ -13,6 +13,7 @@ export interface Supplier {
   status: "active" | "inactive"
   totalOrders: number
   lastOrderDate: string
+  balance: number
 }
 
 // Supabase satırı (snake_case) <-> uygulama nesnesi (camelCase) dönüşümü
@@ -29,6 +30,7 @@ function fromRow(row: any): Supplier {
     status: (row.status as "active" | "inactive") ?? "active",
     totalOrders: row.total_orders ?? 0,
     lastOrderDate: row.last_order_date ?? "",
+    balance: Number(row.balance) || 0,
   }
 }
 
@@ -44,6 +46,7 @@ function toRow(s: Partial<Supplier>) {
   if (s.status !== undefined) row.status = s.status
   if (s.totalOrders !== undefined) row.total_orders = s.totalOrders
   if (s.lastOrderDate !== undefined) row.last_order_date = s.lastOrderDate || null
+  if (s.balance !== undefined) row.balance = s.balance
   return row
 }
 
