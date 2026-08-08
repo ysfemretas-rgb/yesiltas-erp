@@ -766,9 +766,28 @@ Bu işlem geri alınamaz!`)) return
             </div>
 
             {/* Products Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <Label className="text-slate-300">📦 Envanter Kataloğu</Label>
+              <span className="text-xs text-slate-500">{filteredProducts.length} ürün</span>
+            </div>
+            {filteredProducts.length === 0 && (
+              <p className="text-sm text-slate-500 text-center py-6 border border-dashed border-slate-700 rounded-lg">
+                {products.length === 0
+                  ? "Envanterde ürün yok. Önce Envanter sayfasından ürün ekleyin."
+                  : "Aramanızla eşleşen ürün bulunamadı."}
+              </p>
+            )}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto">
               {filteredProducts.map(product => (
                 <div key={product.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
+                  {product.imageUrl ? (
+                    <img
+                      src={product.imageUrl}
+                      alt=""
+                      className="w-full h-20 object-cover rounded mb-2 border border-slate-700"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                    />
+                  ) : null}
                   <div className="text-sm font-medium text-white">{product.name}</div>
                   {product.productCode && <div className="text-[10px] font-mono text-amber-400">{product.productCode}</div>}
                   <div className={`text-xs ${product.quantity <= 0 ? "text-red-400" : "text-slate-400"}`}>

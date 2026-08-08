@@ -12,6 +12,7 @@ export interface Debt {
 
 export interface Customer {
   id: string
+  customerCode: string
   customerId: string
   firstName: string
   lastName: string
@@ -55,6 +56,7 @@ function customerFromRow(row: any, debts: Debt[]): Customer {
   const totalDebt = debts.filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
   return {
     id: row.id,
+    customerCode: row.customer_code ?? "",
     customerId: row.id,
     firstName: row.first_name ?? "",
     lastName: row.last_name ?? "",

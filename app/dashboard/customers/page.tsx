@@ -244,7 +244,7 @@ export default function CustomersPage() {
     const phone = c.phone || c.phone1 || ""
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
       phone.includes(searchTerm) ||
-      (c.customerId && c.customerId.toLowerCase().includes(searchTerm.toLowerCase()))
+      (c.customerCode && c.customerCode.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = filterStatus === "all" || c.status === filterStatus
     return matchesSearch && matchesStatus
   })
@@ -718,7 +718,7 @@ export default function CustomersPage() {
               const isActive = isCustomerActive(customer)
 
               return (
-                <div key={customer.id} className="flex items-start gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => openDetailDialog(customer)}>
+                <div key={customer.id} className="flex flex-col sm:flex-row items-start gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => openDetailDialog(customer)}>
                   <Avatar className="h-12 w-12 shrink-0">
                     <AvatarFallback className="bg-blue-600 text-white text-lg">
                       {getInitials(customer.name)}
@@ -727,7 +727,7 @@ export default function CustomersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-lg text-white">{customer.name}</span>
-                      <Badge variant="outline" className="border-slate-600 text-slate-400">{customer.customerId}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-400 font-mono text-xs">{customer.customerCode || "—"}</Badge>
                       {isActive || hasDebt ? (
                         <Badge 
                           onClick={(e) => { e.stopPropagation(); toggleStatus(customer.id); }}
@@ -749,7 +749,7 @@ export default function CustomersPage() {
                         </Badge>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-400">
                       <div className="flex items-center gap-1">
                         <Phone className="h-3 w-3" />
                         {customer.phone || customer.phone1 || "-"}
@@ -781,7 +781,7 @@ export default function CustomersPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-row flex-wrap sm:flex-col gap-2 w-full sm:w-auto shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Button size="sm" variant="outline" onClick={() => openWhatsAppDialog(customer)} className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10">
                       <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
                     </Button>

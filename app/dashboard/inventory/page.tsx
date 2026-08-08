@@ -671,8 +671,20 @@ export default function InventoryPage() {
 
               return (
                 <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-800 bg-red-900/10" : "border-slate-700 bg-slate-800/50"}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
+                  <div className="flex items-start justify-between mb-2 gap-3">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        className="h-16 w-16 rounded-lg object-cover border border-slate-600 shrink-0"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg border border-slate-700 bg-slate-800 flex items-center justify-center shrink-0">
+                        <Package className="h-6 w-6 text-slate-600" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-white">{item.name}</span>
                         <Badge variant="outline" className="text-xs border-slate-600 text-slate-300">{item.category}</Badge>
@@ -815,6 +827,22 @@ export default function InventoryPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-slate-500">Kutunun üstündeki hazır barkod. Girerseniz o barkodu okutunca da bu ürün bulunur.</p>
+                <label className="text-sm font-medium text-slate-300 pt-2 block">Ürün Resmi (bağlantı)</label>
+                <Input
+                  value={editingItem.imageUrl || ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, imageUrl: e.target.value })}
+                  placeholder="https://... (resim adresi)"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+                {editingItem.imageUrl ? (
+                  <img
+                    src={editingItem.imageUrl}
+                    alt=""
+                    className="mt-2 h-24 w-24 object-cover rounded border border-slate-600"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                  />
+                ) : null}
+                <p className="text-xs text-slate-500">Ürün fotoğrafının internet adresini yapıştırın (örn. tedarikçi sitesinden resme sağ tıklayıp "Resim adresini kopyala").</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

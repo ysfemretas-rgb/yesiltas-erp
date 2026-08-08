@@ -6,6 +6,7 @@ export interface InventoryItem {
   name: string
   productCode: string
   supplierBarcode?: string
+  imageUrl?: string
   sku: string
   category: string
   quantity: number
@@ -24,6 +25,7 @@ function fromRow(row: any): InventoryItem {
     name: row.name ?? "",
     productCode: row.product_code ?? "",
     supplierBarcode: row.supplier_barcode ?? "",
+    imageUrl: row.image_url ?? "",
     sku: row.sku ?? "",
     category: row.category ?? "",
     quantity: row.quantity ?? 0,
@@ -42,6 +44,7 @@ function toRow(i: Partial<InventoryItem>) {
   if (i.name !== undefined) row.name = i.name
   if (i.sku !== undefined) row.sku = i.sku
   if (i.supplierBarcode !== undefined) row.supplier_barcode = i.supplierBarcode || null
+  if (i.imageUrl !== undefined) row.image_url = i.imageUrl || null
   if (i.category !== undefined) row.category = i.category
   if (i.quantity !== undefined) row.quantity = i.quantity
   if (i.minQuantity !== undefined) row.min_stock = i.minQuantity
