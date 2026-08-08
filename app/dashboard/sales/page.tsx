@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package } from "lucide-react"
+import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
@@ -18,6 +18,7 @@ import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { Product, fetchProducts, createProduct, updateProduct, deleteProduct } from "@/lib/products"
+import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
 interface Customer {
   id: string
@@ -58,6 +59,7 @@ export default function SalesPage() {
   const [paidAmount, setPaidAmount] = useState("")
   const [showNewSale, setShowNewSale] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [newProduct, setNewProduct] = useState<Partial<Product>>({})
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [showEditSale, setShowEditSale] = useState(false)
@@ -660,6 +662,25 @@ Bu işlem geri alınamaz!`)) return
         </div>
       </div>
 
+      <BarcodeScannerDialog
+        open={isScannerOpen}
+        onOpenChange={setIsScannerOpen}
+        title="Barkod Okut — Sepete Ekle"
+        onScan={(code) => {
+          const found = products.find(p =>
+            (p.name || "").toLowerCase() === code.toLowerCase() ||
+            (p.category || "").toLowerCase() === code.toLowerCase()
+          ) || products.find(p => (p.name || "").toLowerCase().includes(code.toLowerCase()))
+          if (found) {
+            addToCart(found, 1)
+            showToast(`Sepete eklendi: ${found.name}`, "success")
+          } else {
+            setSearchTerm(code)
+            showToast(`"${code}" için ürün bulunamadı. Ürün kataloğunda bu kodla bir ürün olmalı.`, "error")
+          }
+        }}
+      />
+
       {/* Ürün Kataloğu Yönetimi */}
       <Dialog open={showCatalog} onOpenChange={setShowCatalog}>
         <DialogContent className="max-w-2xl bg-slate-900 border-slate-700 text-white max-h-[85vh] overflow-y-auto">
@@ -820,14 +841,25 @@ Bu işlem geri alınamaz!`)) return
             {/* Product Search */}
             <div className="space-y-2">
               <Label className="text-slate-300">🔍 Ürün Ara</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input
-                  placeholder="Ürün adı veya kategori..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-slate-800 border-slate-600 text-white"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Input
+                    placeholder="Ürün adı, kod veya kategori..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  title="Barkod okut — ürün doğrudan sepete eklenir"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="border-slate-600 text-amber-400 shrink-0"
+                >
+                  <Barcode className="h-4 w-4" />
+                </Button>
               </div>
             </div>
 

@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/select"
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
+import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
+import { printBarcodeLabels } from "@/lib/barcodeLabel"
 
 const INVENTORY_IMPORT_FIELDS: ImportField[] = [
   { key: "name", label: "Ürün Adı", required: true, type: "text" },
@@ -67,6 +69,7 @@ export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -136,6 +139,7 @@ export default function InventoryPage() {
     const search = searchTerm.toLowerCase()
     const matchesSearch = item.name.toLowerCase().includes(search) ||
       item.sku.toLowerCase().includes(search) ||
+      (item.productCode || "").toLowerCase().includes(search) ||
       item.supplier.toLowerCase().includes(search)
     const matchesCategory = filterCategory === "all" || item.category === filterCategory
     return matchesSearch && matchesCategory
@@ -458,6 +462,17 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      <BarcodeScannerDialog
+        open={isScannerOpen}
+        onOpenChange={setIsScannerOpen}
+        title="Ürün Barkodu Okut"
+        onScan={(code) => {
+          setSearchTerm(code)
+          const found = inventory.find(i => (i.productCode || "").toLowerCase() === code.toLowerCase() || i.sku.toLowerCase() === code.toLowerCase())
+          showToast(found ? `Bulundu: ${found.name}` : `"${code}" için ürün bulunamadı.`, found ? "success" : "error")
+        }}
+      />
+
       <ExcelImportDialog
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
@@ -586,29 +601,30 @@ export default function InventoryPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4 text-slate-500" />
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-slate-500 shrink-0" />
               <Input
                 ref={searchInputRef}
-                placeholder="Ürün adı, SKU veya tedarikçi ara... (barkod okutabilirsiniz)"
+                placeholder="Ürün adı, kod, SKU veya tedarikçi ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                className="flex-1 min-w-0 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
               <Button
                 size="icon"
                 variant="outline"
-                title="Barkod okutmak için tıklayın, sonra okuyucuyla ürünü okutun"
-                onClick={() => { setSearchTerm(""); searchInputRef.current?.focus() }}
+                title="Kamerayla barkod okut"
+                onClick={() => setIsScannerOpen(true)}
                 className="border-slate-600 text-amber-400 shrink-0"
               >
                 <Barcode className="h-4 w-4" />
               </Button>
             </div>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-white">
-                <SelectValue placeholder="Kategori" />
+            <div className="flex gap-2 flex-wrap">
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-full sm:w-[180px] bg-slate-800 border-slate-700 text-white">
+                  <SelectValue placeholder="Kategori" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-700">
                 <SelectItem value="all" className="text-white">Tüm Kategoriler</SelectItem>
@@ -617,6 +633,7 @@ export default function InventoryPage() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -644,9 +661,15 @@ export default function InventoryPage() {
                         <Badge variant="outline" className="text-xs border-slate-600 text-slate-300">{item.category}</Badge>
                         {isLowStock && <Badge className="bg-red-600 text-xs">Kritik Stok</Badge>}
                       </div>
-                      <div className="text-sm text-slate-400 mt-1">
-                        <Barcode className="inline h-3 w-3 mr-1" />
-                        {item.sku} • {item.supplier} • {item.location}
+                      <div className="text-sm text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                        {item.productCode && (
+                          <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-800">
+                            {item.productCode}
+                          </span>
+                        )}
+                        <span><Barcode className="inline h-3 w-3 mr-1" />{item.sku}</span>
+                        {item.supplier && <span>• {item.supplier}</span>}
+                        {item.location && <span>• {item.location}</span>}
                       </div>
                     </div>
                     <div className="text-right">
@@ -698,7 +721,17 @@ export default function InventoryPage() {
                     <div className="text-sm text-slate-400 w-24 text-right">
                       Stok: {item.quantity}/{item.minQuantity}
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-wrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => printBarcodeLabels([{ name: item.name, productCode: item.productCode, salePrice: item.salePrice }])}
+                        disabled={!item.productCode}
+                        title={item.productCode ? "Barkod etiketi yazdır" : "Ürün kodu yok"}
+                        className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                      >
+                        <Barcode className="h-4 w-4 mr-1" />Etiket
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

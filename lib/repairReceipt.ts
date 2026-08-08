@@ -53,6 +53,7 @@ export function printRepairReceipt(repair: ReceiptRepair) {
   * { box-sizing: border-box; }
   body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #111; margin: 0; font-size: 12px; line-height: 1.5; }
   .header { text-align: center; border-bottom: 2px solid #059669; padding-bottom: 8px; margin-bottom: 12px; }
+  .logo { height: 46px; width: auto; margin-bottom: 4px; }
   .company { font-size: 18px; font-weight: bold; color: #059669; }
   .company-sub { font-size: 11px; color: #555; margin-top: 2px; }
   .title { text-align: center; font-size: 14px; font-weight: bold; margin: 12px 0 8px; letter-spacing: 1px; }
@@ -76,6 +77,7 @@ export function printRepairReceipt(repair: ReceiptRepair) {
 </head>
 <body>
   <div class="header">
+    <img src="${window.location.origin}/header-logo.png" class="logo" alt="" onerror="this.style.display='none'" />
     <div class="company">${company.name || "Yeşiltaş Teknoloji"}</div>
     <div class="company-sub">
       ${company.address || ""}${company.address && company.phone ? " · " : ""}${company.phone || ""}

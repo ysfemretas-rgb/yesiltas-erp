@@ -4,6 +4,7 @@ import { logActivity } from "@/lib/activityLog"
 export interface InventoryItem {
   id: string
   name: string
+  productCode: string
   sku: string
   category: string
   quantity: number
@@ -20,6 +21,7 @@ function fromRow(row: any): InventoryItem {
   return {
     id: row.id,
     name: row.name ?? "",
+    productCode: row.product_code ?? "",
     sku: row.sku ?? "",
     category: row.category ?? "",
     quantity: row.quantity ?? 0,
