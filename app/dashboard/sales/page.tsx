@@ -3,6 +3,7 @@
 import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +18,7 @@ import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "
 import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
-import { Product, fetchProducts, createProduct, updateProduct, deleteProduct } from "@/lib/products"
+import { InventoryItem, fetchInventory, updateInventoryItem } from "@/lib/inventory"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
 interface Customer {
@@ -43,9 +44,10 @@ const paymentMethods = [
 
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
+  const router = useRouter()
   const { authorized, checking } = usePageAccess("Satış")
   const isManager = useIsManager()
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<InventoryItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [cart, setCart] = useState<SaleItem[]>([])
@@ -58,10 +60,7 @@ export default function SalesPage() {
   const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [paidAmount, setPaidAmount] = useState("")
   const [showNewSale, setShowNewSale] = useState(false)
-  const [showCatalog, setShowCatalog] = useState(false)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({})
-  const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [showEditSale, setShowEditSale] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
   const [editCart, setEditCart] = useState<SaleItem[]>([])
@@ -89,9 +88,9 @@ export default function SalesPage() {
       console.error("Şirket ayarları okunamadı:", e)
     }
 
-    fetchProducts()
+    fetchInventory()
       .then((data) => setProducts(data))
-      .catch((e) => console.error("Ürünler yüklenemedi:", e))
+      .catch((e) => console.error("Envanter yüklenemedi:", e))
 
     fetchCustomers()
       .then((data) => setCustomers(data.map(c => ({ id: c.id, name: c.name, phone: c.phone, phone1: c.phone1, phone2: c.phone2, balance: 0, totalDebt: c.totalDebt, debts: c.debts }))))
@@ -122,7 +121,10 @@ export default function SalesPage() {
     const search = searchTerm.toLowerCase()
     return products.filter(p =>
       (p.name && p.name.toLowerCase().includes(search)) ||
-      (p.category && p.category.toLowerCase().includes(search))
+      (p.category && p.category.toLowerCase().includes(search)) ||
+      (p.productCode && p.productCode.toLowerCase().includes(search)) ||
+      (p.supplierBarcode && p.supplierBarcode.toLowerCase().includes(search)) ||
+      (p.sku && p.sku.toLowerCase().includes(search))
     )
   }, [products, searchTerm])
 
@@ -145,7 +147,7 @@ export default function SalesPage() {
   const editPaid = editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
   const editRemaining = editCartTotal - editPaid
 
-  const addToCart = (product: Product, quantity: number = 1) => {
+  const addToCart = (product: InventoryItem, quantity: number = 1) => {
     if (!product || quantity < 1) return
     const existing = cart.find(item => item.productId === product.id)
     if (existing) {
@@ -155,11 +157,11 @@ export default function SalesPage() {
           : item
       ))
     } else {
-      setCart([...cart, { productId: product.id, name: product.name, price: product.price, purchasePrice: product.purchasePrice, quantity }])
+      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: product.purchasePrice, quantity }])
     }
   }
 
-  const addToEditCart = (product: Product, quantity: number = 1) => {
+  const addToEditCart = (product: InventoryItem, quantity: number = 1) => {
     if (!product || quantity < 1) return
     const existing = editCart.find(item => item.productId === product.id)
     if (existing) {
@@ -169,7 +171,7 @@ export default function SalesPage() {
           : item
       ))
     } else {
-      setEditCart([...editCart, { productId: product.id, name: product.name, price: product.price, purchasePrice: product.purchasePrice, quantity }])
+      setEditCart([...editCart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: product.purchasePrice, quantity }])
     }
   }
 
@@ -187,7 +189,7 @@ export default function SalesPage() {
       return
     }
     const product = products.find(p => p.id === productId)
-    if (product && quantity > product.stock) return
+    if (product && quantity > product.quantity) return
     setCart(cart.map(item =>
       item.productId === productId ? { ...item, quantity } : item
     ))
@@ -199,67 +201,10 @@ export default function SalesPage() {
       return
     }
     const product = products.find(p => p.id === productId)
-    if (product && quantity > product.stock) return
+    if (product && quantity > product.quantity) return
     setEditCart(editCart.map(item =>
       item.productId === productId ? { ...item, quantity } : item
     ))
-  }
-
-  const handleAddProduct = async () => {
-    if (!newProduct.name?.trim()) {
-      showToast("Lütfen ürün adı girin!", "error")
-      return
-    }
-    try {
-      if (editingProductId) {
-        const updated = await updateProduct(editingProductId, {
-          name: newProduct.name.trim(),
-          category: newProduct.category || "",
-          price: Number(newProduct.price) || 0,
-          purchasePrice: Number(newProduct.purchasePrice) || 0,
-          stock: Number(newProduct.stock) || 0,
-        })
-        setProducts(products.map(p => p.id === updated.id ? updated : p))
-        setEditingProductId(null)
-        showToast("Ürün güncellendi.", "success")
-      } else {
-        const product = await createProduct({
-          name: newProduct.name.trim(),
-          category: newProduct.category || "",
-          price: Number(newProduct.price) || 0,
-          purchasePrice: Number(newProduct.purchasePrice) || 0,
-          stock: Number(newProduct.stock) || 0,
-        })
-        setProducts([product, ...products])
-        showToast("Ürün eklendi.", "success")
-      }
-      setNewProduct({})
-    } catch (e) {
-      console.error(e)
-      showToast("Ürün kaydedilirken bir sorun oluştu.", "error")
-    }
-  }
-
-  const handleEditProductClick = (p: Product) => {
-    setEditingProductId(p.id)
-    setNewProduct({ name: p.name, category: p.category, price: p.price, purchasePrice: p.purchasePrice, stock: p.stock })
-  }
-
-  const handleCancelEditProduct = () => {
-    setEditingProductId(null)
-    setNewProduct({})
-  }
-
-  const handleDeleteProduct = async (id: string) => {
-    if (!confirm("Bu ürünü kataloğdan silmek istediğinize emin misiniz?")) return
-    try {
-      await deleteProduct(id)
-      setProducts(products.filter((p) => p.id !== id))
-      showToast("Ürün silindi.", "success")
-    } catch (e) {
-      console.error(e)
-      showToast("Ürün silinirken bir sorun oluştu.", "error")
-    }
   }
 
   const handleAddNewCustomer = async () => {
@@ -370,7 +315,7 @@ export default function SalesPage() {
       const updatedProducts = products.map(p => {
         const cartItem = cart.find(item => item.productId === p.id)
         if (cartItem) {
-          return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) }
+          return { ...p, quantity: Math.max(0, p.quantity - cartItem.quantity) }
         }
         return p
       })
@@ -378,7 +323,7 @@ export default function SalesPage() {
       cart.forEach((item) => {
         const p = products.find((prod) => prod.id === item.productId)
         if (p) {
-          updateProduct(p.id, { stock: Math.max(0, p.stock - item.quantity) }).catch((e) => console.error("Stok güncellenemedi:", e))
+          updateInventoryItem(p.id, { quantity: Math.max(0, p.quantity - item.quantity) }).catch((e) => console.error("Stok güncellenemedi:", e))
         }
       })
 
@@ -449,7 +394,7 @@ Bu işlem geri alınamaz!`)) return
       const updatedProducts = products.map(p => {
         const saleItem = sale.items.find(item => item.productId === p.id)
         if (saleItem) {
-          return { ...p, stock: p.stock + saleItem.quantity }
+          return { ...p, quantity: p.quantity + saleItem.quantity }
         }
         return p
       })
@@ -457,7 +402,7 @@ Bu işlem geri alınamaz!`)) return
       sale.items.forEach((item) => {
         const p = products.find((prod) => prod.id === item.productId)
         if (p) {
-          updateProduct(p.id, { stock: p.stock + item.quantity }).catch((e) => console.error("Stok güncellenemedi:", e))
+          updateInventoryItem(p.id, { quantity: p.quantity + item.quantity }).catch((e) => console.error("Stok güncellenemedi:", e))
         }
       })
 
@@ -517,12 +462,12 @@ Bu işlem geri alınamaz!`)) return
         const oldQty = oldItem ? oldItem.quantity : 0
         const newQty = newItem ? newItem.quantity : 0
         const diff = oldQty - newQty
-        return { ...p, stock: p.stock + diff }
+        return { ...p, quantity: p.quantity + diff }
       })
       setProducts(updatedProducts)
       updatedProducts.forEach((p, i) => {
-        if (p.stock !== products[i]?.stock) {
-          updateProduct(p.id, { stock: p.stock }).catch((e) => console.error("Stok güncellenemedi:", e))
+        if (p.quantity !== products[i]?.quantity) {
+          updateInventoryItem(p.id, { quantity: p.quantity }).catch((e) => console.error("Stok güncellenemedi:", e))
         }
       })
 
@@ -653,8 +598,8 @@ Bu işlem geri alınamaz!`)) return
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🛒 Satışlar</h1>
         <div className="flex gap-2">
-          <Button onClick={() => setShowCatalog(true)} variant="outline" className="border-slate-600 text-slate-300">
-            <Package className="w-4 h-4 mr-2" />Ürün Kataloğu
+          <Button onClick={() => router.push("/dashboard/inventory")} variant="outline" className="border-slate-600 text-slate-300">
+            <Package className="w-4 h-4 mr-2" />Envanteri Aç
           </Button>
           <Button onClick={() => setShowNewSale(true)} className="bg-emerald-600 hover:bg-emerald-700">
             <ShoppingCart className="w-4 h-4 mr-2" />Yeni Satış
@@ -667,69 +612,26 @@ Bu işlem geri alınamaz!`)) return
         onOpenChange={setIsScannerOpen}
         title="Barkod Okut — Sepete Ekle"
         onScan={(code) => {
+          const lower = code.toLowerCase()
           const found = products.find(p =>
-            (p.name || "").toLowerCase() === code.toLowerCase() ||
-            (p.category || "").toLowerCase() === code.toLowerCase()
-          ) || products.find(p => (p.name || "").toLowerCase().includes(code.toLowerCase()))
-          if (found) {
-            addToCart(found, 1)
-            showToast(`Sepete eklendi: ${found.name}`, "success")
-          } else {
+            (p.productCode || "").toLowerCase() === lower ||
+            (p.supplierBarcode || "").toLowerCase() === lower ||
+            (p.sku || "").toLowerCase() === lower
+          )
+          if (!found) {
             setSearchTerm(code)
-            showToast(`"${code}" için ürün bulunamadı. Ürün kataloğunda bu kodla bir ürün olmalı.`, "error")
+            showToast(`"${code}" için ürün bulunamadı. Envanterde ürünü düzenleyip "Satıcının Barkodu" alanına bu kodu ekleyebilirsiniz.`, "error")
+            return
           }
+          if (found.quantity <= 0) {
+            showToast(`${found.name} — stokta yok!`, "error")
+            return
+          }
+          addToCart(found, 1)
+          showToast(`Sepete eklendi: ${found.name} (${found.productCode})`, "success")
         }}
       />
 
-      {/* Ürün Kataloğu Yönetimi */}
-      <Dialog open={showCatalog} onOpenChange={setShowCatalog}>
-        <DialogContent className="max-w-2xl bg-slate-900 border-slate-700 text-white max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-xl">📦 Ürün Kataloğu</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
-              <Input placeholder="Ürün adı *" value={newProduct.name || ""} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} className="bg-slate-900 border-slate-600 text-white col-span-2" />
-              <Input placeholder="Kategori" value={newProduct.category || ""} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} className="bg-slate-900 border-slate-600 text-white" />
-              <Input type="number" placeholder="Satış Fiyatı" value={newProduct.price || ""} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
-              <Input type="number" placeholder="Alış Fiyatı (kâr hesabı için)" value={newProduct.purchasePrice || ""} onChange={(e) => setNewProduct({ ...newProduct, purchasePrice: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
-              <Input type="number" placeholder="Stok" value={newProduct.stock || ""} onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })} className="bg-slate-900 border-slate-600 text-white" />
-              <div className="col-span-2 flex gap-2">
-                <Button onClick={handleAddProduct} className="bg-emerald-600 hover:bg-emerald-700 flex-1">
-                  {editingProductId ? <><Pencil className="w-4 h-4 mr-2" />Güncelle</> : <><Plus className="w-4 h-4 mr-2" />Ürünü Ekle</>}
-                </Button>
-                {editingProductId && (
-                  <Button onClick={handleCancelEditProduct} variant="outline" className="border-slate-600 text-slate-300">
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {products.length === 0 ? (
-                <p className="text-slate-500 text-sm text-center py-4">Henüz ürün eklenmemiş.</p>
-              ) : (
-                products.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg border border-slate-700">
-                    <div>
-                      <div className="text-sm font-medium text-white">{p.name}</div>
-                      <div className="text-xs text-slate-400">{p.category} · {formatCurrency(p.price)} · Stok: {p.stock}</div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => handleEditProductClick(p)} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {isManager && (
-                        <Button size="sm" variant="ghost" onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -868,14 +770,17 @@ Bu işlem geri alınamaz!`)) return
               {filteredProducts.map(product => (
                 <div key={product.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <div className="text-sm font-medium text-white">{product.name}</div>
-                  <div className="text-xs text-slate-400">{formatCurrency(product.price)} | 📦 Stok: {product.stock}</div>
+                  {product.productCode && <div className="text-[10px] font-mono text-amber-400">{product.productCode}</div>}
+                  <div className={`text-xs ${product.quantity <= 0 ? "text-red-400" : "text-slate-400"}`}>
+                    {formatCurrency(product.salePrice)} | 📦 Stok: {product.quantity}{product.quantity <= 0 && " (tükendi)"}
+                  </div>
                   <div className="flex items-center gap-2 mt-2">
                     <Input
                       type="number"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       min={1}
-                      max={product.stock}
+                      max={product.quantity}
                       defaultValue={1}
                       className="w-16 h-8 bg-slate-900 border-slate-600 text-white text-sm"
                       id={`qty-${product.id}`}
@@ -1051,12 +956,12 @@ Bu işlem geri alınamaz!`)) return
                 {filteredProducts.map(product => (
                   <div key={product.id} className="p-2 bg-slate-800 rounded-lg border border-slate-700">
                     <div className="text-sm text-white">{product.name}</div>
-                    <div className="text-xs text-slate-400">{formatCurrency(product.price)} | 📦 {product.stock}</div>
+                    <div className="text-xs text-slate-400">{formatCurrency(product.salePrice)} | 📦 {product.quantity}</div>
                     <div className="flex items-center gap-1 mt-1">
                       <Input
                         type="number"
                         min={1}
-                        max={product.stock}
+                        max={product.quantity}
                         defaultValue={1}
                         className="w-14 h-7 bg-slate-900 border-slate-600 text-white text-xs"
                         id={`edit-qty-${product.id}`}

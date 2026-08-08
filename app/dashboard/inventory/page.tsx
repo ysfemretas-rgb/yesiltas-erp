@@ -70,6 +70,7 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
+  const [isSupplierBarcodeScannerOpen, setIsSupplierBarcodeScannerOpen] = useState(false)
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -140,6 +141,7 @@ export default function InventoryPage() {
     const matchesSearch = item.name.toLowerCase().includes(search) ||
       item.sku.toLowerCase().includes(search) ||
       (item.productCode || "").toLowerCase().includes(search) ||
+      (item.supplierBarcode || "").toLowerCase().includes(search) ||
       item.supplier.toLowerCase().includes(search)
     const matchesCategory = filterCategory === "all" || item.category === filterCategory
     return matchesSearch && matchesCategory
@@ -463,13 +465,28 @@ export default function InventoryPage() {
       </div>
 
       <BarcodeScannerDialog
+        open={isSupplierBarcodeScannerOpen}
+        onOpenChange={setIsSupplierBarcodeScannerOpen}
+        title="Satıcı Barkodunu Okut"
+        onScan={(code) => {
+          if (editingItem) setEditingItem({ ...editingItem, supplierBarcode: code })
+          showToast(`Satıcı barkodu alındı: ${code}`, "success")
+        }}
+      />
+
+      <BarcodeScannerDialog
         open={isScannerOpen}
         onOpenChange={setIsScannerOpen}
         title="Ürün Barkodu Okut"
         onScan={(code) => {
           setSearchTerm(code)
-          const found = inventory.find(i => (i.productCode || "").toLowerCase() === code.toLowerCase() || i.sku.toLowerCase() === code.toLowerCase())
-          showToast(found ? `Bulundu: ${found.name}` : `"${code}" için ürün bulunamadı.`, found ? "success" : "error")
+          const lower = code.toLowerCase()
+          const found = inventory.find(i =>
+            (i.productCode || "").toLowerCase() === lower ||
+            (i.supplierBarcode || "").toLowerCase() === lower ||
+            i.sku.toLowerCase() === lower
+          )
+          showToast(found ? `Bulundu: ${found.name}` : `"${code}" için ürün bulunamadı. Ürünü düzenleyip "Satıcının Barkodu" alanına bu kodu ekleyebilirsiniz.`, found ? "success" : "error")
         }}
       />
 
@@ -775,9 +792,33 @@ export default function InventoryPage() {
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
+              <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                <label className="text-sm font-medium text-slate-300">Ürün Kodumuz</label>
+                <div className="font-mono text-amber-300 text-sm">{editingItem.productCode || "—"}</div>
+                <label className="text-sm font-medium text-slate-300 pt-2 block">Satıcının Barkodu (opsiyonel)</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={editingItem.supplierBarcode || ""}
+                    onChange={(e) => setEditingItem({ ...editingItem, supplierBarcode: e.target.value })}
+                    placeholder="Örn: 8690504027508"
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    title="Kamerayla okut"
+                    onClick={() => setIsSupplierBarcodeScannerOpen(true)}
+                    className="border-slate-600 text-amber-400 shrink-0"
+                  >
+                    <Barcode className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500">Kutunun üstündeki hazır barkod. Girerseniz o barkodu okutunca da bu ürün bulunur.</p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">SKU / Barkod <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-medium text-slate-300">SKU <span className="text-red-400">*</span></label>
                   <Input
                     value={editingItem.sku}
                     onChange={(e) => setEditingItem({ ...editingItem, sku: e.target.value })}
