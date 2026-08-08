@@ -81,7 +81,7 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
   return (data || []).map(fromRow)
 }
 
-export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id">[]): Promise<InventoryItem[]> {
+export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id" | "productCode">[]): Promise<InventoryItem[]> {
   const { data, error } = await supabase.from("inventory").insert(inputs.map(toRow)).select("*")
   if (error) throw error
   const created = (data || []).map(fromRow)
@@ -89,7 +89,7 @@ export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id">
   return created
 }
 
-export async function createInventoryItem(input: Omit<InventoryItem, "id">): Promise<InventoryItem> {
+export async function createInventoryItem(input: Omit<InventoryItem, "id" | "productCode">): Promise<InventoryItem> {
   const { data, error } = await supabase.from("inventory").insert(toRow(input)).select("*").single()
   if (error) throw error
   const created = fromRow(data)
@@ -97,7 +97,7 @@ export async function createInventoryItem(input: Omit<InventoryItem, "id">): Pro
   return created
 }
 
-export async function updateInventoryItem(id: string, input: Partial<Omit<InventoryItem, "id">>): Promise<InventoryItem> {
+export async function updateInventoryItem(id: string, input: Partial<Omit<InventoryItem, "id" | "productCode">>): Promise<InventoryItem> {
   const { data, error } = await supabase.from("inventory").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
   const updated = fromRow(data)
