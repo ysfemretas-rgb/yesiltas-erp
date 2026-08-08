@@ -425,9 +425,26 @@ export default function ReportsPage() {
               td { padding: 6px 8px; border-bottom: 1px solid #ddd; font-size: 13px; }
               tr:first-child td { font-weight: bold; background: #f0fdf4; }
               @media print { body { padding: 0; } }
+              .toolbar {
+                position: sticky; top: 0; z-index: 99;
+                display: flex; gap: 8px; justify-content: center;
+                padding: 10px; margin-bottom: 12px;
+                background: #f1f5f9; border-bottom: 1px solid #cbd5e1;
+              }
+              .toolbar button {
+                font-family: inherit; font-size: 14px; font-weight: 600;
+                padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
+              }
+              .btn-print { background: #059669; color: #fff; }
+              .btn-close { background: #e2e8f0; color: #334155; }
+              @media print { .no-print { display: none !important; } }
             </style>
           </head>
           <body>
+            <div class="toolbar no-print">
+              <button class="btn-print" onclick="window.print()">🖨️ Yazdır</button>
+              <button class="btn-close" onclick="window.close(); setTimeout(function(){ history.back(); }, 150);">✕ Kapat</button>
+            </div>
             <h1>Yeşiltaş Teknoloji</h1>
             <h2>Rapor — ${data.tarihAraligi}</h2>
             ${rows("Özet", [
@@ -463,7 +480,8 @@ export default function ReportsPage() {
         printWindow.document.close()
         printWindow.onload = () => {
           printWindow.focus()
-          printWindow.print()
+          const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+          if (!isMobile) printWindow.print()
         }
       } else {
         showToast("Yazdırma penceresi açılamadı. Tarayıcınızın pop-up engelleyicisini kontrol edin.", "error")

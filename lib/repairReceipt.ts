@@ -72,10 +72,26 @@ export function printRepairReceipt(repair: ReceiptRepair) {
   .sig { flex: 1; text-align: center; font-size: 10px; color: #555; }
   .sig-line { border-top: 1px solid #999; margin-bottom: 4px; height: 34px; }
   .footer { text-align: center; margin-top: 14px; font-size: 10px; color: #777; }
-  @media print { .no-print { display: none; } }
+  .toolbar {
+    position: sticky; top: 0; z-index: 99;
+    display: flex; gap: 8px; justify-content: center;
+    padding: 10px; margin: -12mm -12mm 10px -12mm;
+    background: #f1f5f9; border-bottom: 1px solid #cbd5e1;
+  }
+  .toolbar button {
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
+  }
+  .btn-print { background: #059669; color: #fff; }
+  .btn-close { background: #e2e8f0; color: #334155; }
+  @media print { .no-print { display: none !important; } }
 </style>
 </head>
 <body>
+  <div class="toolbar no-print">
+    <button class="btn-print" onclick="window.print()">🖨️ Yazdır</button>
+    <button class="btn-close" onclick="window.close(); setTimeout(function(){ history.back(); }, 150);">✕ Kapat</button>
+  </div>
   <div class="header">
     <img src="${window.location.origin}/header-logo.png" class="logo" alt="" onerror="this.style.display='none'" />
     <div class="company">${company.name || "Yeşiltaş Teknoloji"}</div>
@@ -130,7 +146,10 @@ export function printRepairReceipt(repair: ReceiptRepair) {
   <div class="footer">${company.name || "Yeşiltaş Teknoloji"} · Bu fiş 2 nüsha düzenlenir.</div>
 
   <script>
-    window.onload = function() { window.print(); }
+    window.onload = function() {
+      var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (!isMobile) { window.print(); }
+    }
   </script>
 </body>
 </html>`
