@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Plus, Trash2, Pencil, Package2, Upload, RefreshCw } from "lucide-react"
+import { Plus, Trash2, Pencil, Package2, Upload, RefreshCw, Search } from "lucide-react"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
@@ -51,6 +51,12 @@ export default function FixedAssetsPage() {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<FixedAsset | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterCategory, setFilterCategory] = useState("all")
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState("")
+  const [customCategory, setCustomCategory] = useState("")
+  const [editCustomCategory, setEditCustomCategory] = useState("")
   const [newAsset, setNewAsset] = useState<Partial<FixedAsset>>({
     category: "Alet/Ekipman",
     quantity: 1,
@@ -70,6 +76,17 @@ export default function FixedAssetsPage() {
 
   const totalValueTRY = assets.reduce((sum, a) => sum + toTRY(a.purchasePrice, a.purchaseCurrency, rates) * a.quantity, 0)
 
+  const categories = Array.from(new Set(assets.map(a => a.category).filter(Boolean)))
+
+  const filteredAssets = assets.filter(a => {
+    const matchesSearch = searchTerm === "" ||
+      a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.notes.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = filterCategory === "all" || a.category === filterCategory
+    return matchesSearch && matchesCategory
+  })
+
   const handleAddAsset = async () => {
     if (!newAsset.name?.trim()) {
       showToast("Lütfen ürün adı girin!", "error")
@@ -78,7 +95,7 @@ export default function FixedAssetsPage() {
     try {
       const asset = await createFixedAsset({
         name: newAsset.name.trim(),
-        category: newAsset.category || "Diğer",
+        category: newAsset.category === "__new__" ? (customCategory.trim() || "Diğer") : (newAsset.category || "Diğer"),
         quantity: Number(newAsset.quantity) || 1,
         purchasePrice: Number(newAsset.purchasePrice) || 0,
         purchaseCurrency: newAsset.purchaseCurrency || "TRY",
@@ -88,6 +105,7 @@ export default function FixedAssetsPage() {
       })
       setAssets([asset, ...assets])
       setNewAsset({ category: "Alet/Ekipman", quantity: 1, purchaseCurrency: "TRY", purchaseDate: new Date().toISOString().split("T")[0] })
+      setCustomCategory("")
       setIsDialogOpen(false)
       showToast("Demirbaş eklendi.", "success")
     } catch (e) {
@@ -99,10 +117,12 @@ export default function FixedAssetsPage() {
   const handleUpdateAsset = async () => {
     if (!editingAsset) return
     try {
-      const updated = await updateFixedAsset(editingAsset.id, editingAsset)
+      const resolvedCategory = editingAsset.category === "__new__" ? (editCustomCategory.trim() || "Diğer") : editingAsset.category
+      const updated = await updateFixedAsset(editingAsset.id, { ...editingAsset, category: resolvedCategory })
       setAssets(assets.map(a => a.id === updated.id ? updated : a))
       setIsEditOpen(false)
       setEditingAsset(null)
+      setEditCustomCategory("")
       showToast("Demirbaş güncellendi.", "success")
     } catch (e) {
       console.error(e)
@@ -127,16 +147,22 @@ export default function FixedAssetsPage() {
   }
 
   const toggleSelectAll = () => {
-    setSelectedIds(prev => prev.length === assets.length ? [] : assets.map(a => a.id))
+    setSelectedIds(prev => prev.length === filteredAssets.length ? [] : filteredAssets.map(a => a.id))
   }
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedIds.length === 0) return
-    if (!confirm(`${selectedIds.length} demirbaşı silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
+    setBulkDeleteConfirmText("")
+    setShowBulkDeleteConfirm(true)
+  }
+
+  const confirmBulkDelete = async () => {
     try {
       const count = await deleteFixedAssetsBulk(selectedIds)
       setAssets(assets.filter(a => !selectedIds.includes(a.id)))
       setSelectedIds([])
+      setShowBulkDeleteConfirm(false)
+      setBulkDeleteConfirmText("")
       showToast(`${count} demirbaş silindi.`, "success")
     } catch (e: any) {
       console.error(e)
@@ -219,7 +245,7 @@ export default function FixedAssetsPage() {
             {assets.length > 0 && (
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
-                  <input type="checkbox" checked={selectedIds.length === assets.length} onChange={toggleSelectAll} className="rounded" />
+                  <input type="checkbox" checked={selectedIds.length === filteredAssets.length && filteredAssets.length > 0} onChange={toggleSelectAll} className="rounded" />
                   Tümünü Seç
                 </label>
                 {selectedIds.length > 0 && isManager && (
@@ -230,15 +256,37 @@ export default function FixedAssetsPage() {
               </div>
             )}
           </div>
+          <div className="flex gap-2 flex-wrap pt-2">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Ürün adı, konum veya nota göre ara..."
+                className="pl-8 bg-slate-800 border-slate-600 text-white"
+              />
+            </div>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-full sm:w-48 bg-slate-800 border-slate-600 text-white">
+                <SelectValue placeholder="Kategori" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600">
+                <SelectItem value="all" className="text-white">Tüm Kategoriler</SelectItem>
+                {categories.map(c => <SelectItem key={c} value={c} className="text-white">{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           {!isLoaded ? (
             <p className="text-slate-500 text-center py-8">Yükleniyor...</p>
           ) : assets.length === 0 ? (
             <p className="text-slate-500 text-center py-8">Henüz demirbaş eklenmemiş.</p>
+          ) : filteredAssets.length === 0 ? (
+            <p className="text-slate-500 text-center py-8">Arama/filtreyle eşleşen demirbaş bulunamadı.</p>
           ) : (
             <div className="space-y-2">
-              {assets.map((a) => (
+              {filteredAssets.map((a) => (
                 <div key={a.id} className={`p-3 bg-slate-800 rounded-lg border ${selectedIds.includes(a.id) ? "border-emerald-500" : "border-slate-700"}`}>
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="flex items-start gap-3">
@@ -296,12 +344,21 @@ export default function FixedAssetsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-slate-300">Kategori</Label>
-                <Select value={newAsset.category} onValueChange={(v) => setNewAsset({ ...newAsset, category: v })}>
+                <Select value={newAsset.category === "__new__" ? "__new__" : newAsset.category} onValueChange={(v) => setNewAsset({ ...newAsset, category: v })}>
                   <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-600">
                     {CATEGORIES.map(c => <SelectItem key={c} value={c} className="text-white">{c}</SelectItem>)}
+                    <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                   </SelectContent>
                 </Select>
+                {newAsset.category === "__new__" && (
+                  <Input
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    placeholder="Yeni kategori adı"
+                    className="bg-slate-800 border-slate-600 text-white mt-1"
+                  />
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-slate-300">Adet</Label>
@@ -360,12 +417,21 @@ export default function FixedAssetsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-slate-300">Kategori</Label>
-                  <Select value={editingAsset.category} onValueChange={(v) => setEditingAsset({ ...editingAsset, category: v })}>
+                  <Select value={editingAsset.category === "__new__" ? "__new__" : editingAsset.category} onValueChange={(v) => setEditingAsset({ ...editingAsset, category: v })}>
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-600">
                       {CATEGORIES.map(c => <SelectItem key={c} value={c} className="text-white">{c}</SelectItem>)}
+                      <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>
+                  {editingAsset.category === "__new__" && (
+                    <Input
+                      value={editCustomCategory}
+                      onChange={(e) => setEditCustomCategory(e.target.value)}
+                      placeholder="Yeni kategori adı"
+                      className="bg-slate-800 border-slate-600 text-white mt-1"
+                    />
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-slate-300">Adet</Label>
@@ -404,6 +470,44 @@ export default function FixedAssetsPage() {
               <Button onClick={handleUpdateAsset} className="w-full bg-emerald-600 hover:bg-emerald-700">Kaydet</Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <DialogContent className="max-w-md bg-slate-900 border-red-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">⚠️ {selectedIds.length} Demirbaşı Sil</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-300">Şu kayıtları kalıcı olarak sileceksiniz, bu işlem geri alınamaz:</p>
+            <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm text-slate-300 space-y-1">
+              {assets.filter(a => selectedIds.includes(a.id)).map(a => (
+                <div key={a.id}>• {a.name}{a.quantity > 1 && ` (x${a.quantity})`}</div>
+              ))}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-slate-300">Onaylamak için <span className="font-bold text-red-400">SİL</span> yazın</Label>
+              <Input
+                value={bulkDeleteConfirmText}
+                onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+                className="bg-slate-800 border-slate-600 text-white"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowBulkDeleteConfirm(false)} className="flex-1 border-slate-600 text-slate-300">
+                Vazgeç
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={bulkDeleteConfirmText.trim().toUpperCase() !== "SİL"}
+                onClick={confirmBulkDelete}
+                className="flex-1 disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />Kalıcı Olarak Sil
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
