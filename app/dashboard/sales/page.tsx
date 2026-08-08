@@ -835,15 +835,15 @@ Bu işlem geri alınamaz!`)) return
                       <div className="flex items-center gap-2">
                         <div className="text-sm font-bold text-emerald-400">{formatCurrency(item.price * item.quantity)}</div>
                         <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateQuantity(item.productId, item.quantity - 1)}>
+                          <Button size="icon" variant="outline" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateQuantity(item.productId, item.quantity - 1)}>
                             <Minus className="w-3 h-3" />
                           </Button>
                           <span className="text-sm text-white w-6 text-center">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateQuantity(item.productId, item.quantity + 1)}>
+                          <Button size="icon" variant="outline" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateQuantity(item.productId, item.quantity + 1)}>
                             <Plus className="w-3 h-3" />
                           </Button>
                         </div>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeFromCart(item.productId)}>
+                        <Button size="icon" variant="outline" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeFromCart(item.productId)}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
@@ -948,15 +948,15 @@ Bu işlem geri alınamaz!`)) return
                   <div className="flex items-center gap-2">
                     <div className="text-sm font-bold text-emerald-400">{formatCurrency(item.price * item.quantity)}</div>
                     <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateEditQuantity(item.productId, item.quantity - 1)}>
+                      <Button size="icon" variant="outline" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateEditQuantity(item.productId, item.quantity - 1)}>
                         <Minus className="w-3 h-3" />
                       </Button>
                       <span className="text-sm text-white w-6 text-center">{item.quantity}</span>
-                      <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateEditQuantity(item.productId, item.quantity + 1)}>
+                      <Button size="icon" variant="outline" className="h-6 w-6 text-slate-400 hover:text-white" onClick={() => updateEditQuantity(item.productId, item.quantity + 1)}>
                         <Plus className="w-3 h-3" />
                       </Button>
                     </div>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeFromEditCart(item.productId)}>
+                    <Button size="icon" variant="outline" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeFromEditCart(item.productId)}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
@@ -1103,16 +1103,16 @@ Bu işlem geri alınamaz!`)) return
                   <div className="mt-2 flex gap-2 flex-wrap">
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="text-green-400 hover:text-green-300 hover:bg-green-500/10" 
+                      variant="outline" 
+                      className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10" 
                       onClick={() => sendWhatsApp(sale)}
                     >
                       <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
                     </Button>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10" 
+                      variant="outline" 
+                      className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10" 
                       onClick={() => openEditSale(sale)}
                     >
                       <Pencil className="w-3 h-3 mr-1" />Düzenle
@@ -1120,8 +1120,8 @@ Bu işlem geri alınamaz!`)) return
                     {isManager && (
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10" 
+                      variant="outline" 
+                      className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10" 
                       onClick={() => handleDeleteSale(sale.id)}
                     >
                       <Trash2 className="w-3 h-3 mr-1" />Sil

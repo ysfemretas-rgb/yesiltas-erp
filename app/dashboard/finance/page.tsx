@@ -500,7 +500,7 @@ export default function FinancePage() {
                 </div>
                 <div className="col-span-1 text-center flex justify-center gap-1">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => openEditDialog(transaction)}
                     className="h-7 px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
@@ -509,7 +509,7 @@ export default function FinancePage() {
                   </Button>
                   {isManager && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => handleDeleteTransaction(transaction.id)}
                     className="h-7 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"

@@ -274,7 +274,7 @@ export default function TasksPage() {
                       </div>
                     </div>
                     {isManager && (
-                    <Button size="sm" variant="ghost" onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                    <Button size="sm" variant="outline" onClick={() => handleDeleteTask(task.id)} className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                     )}

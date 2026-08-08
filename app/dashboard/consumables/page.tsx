@@ -604,18 +604,18 @@ export default function ConsumablesPage() {
                       </Button>
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="outline"
                         onClick={() => openEditDialog(item)}
-                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                        className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       >
                         <Pencil className="h-4 w-4 mr-1" />Düzenle
                       </Button>
                       {isManager && (
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="outline"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                       >
                         <Trash2 className="h-4 w-4 mr-1" />Sil
                       </Button>

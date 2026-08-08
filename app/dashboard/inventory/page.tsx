@@ -28,6 +28,7 @@ import {
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
+import { ImageUploadField } from "@/components/ImageUploadField"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
 
 const INVENTORY_IMPORT_FIELDS: ImportField[] = [
@@ -71,6 +72,7 @@ export default function InventoryPage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [isSupplierBarcodeScannerOpen, setIsSupplierBarcodeScannerOpen] = useState(false)
+  const [isNewSupplierBarcodeScannerOpen, setIsNewSupplierBarcodeScannerOpen] = useState(false)
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -221,6 +223,7 @@ export default function InventoryPage() {
         supplier: newItem.supplier || "",
         location: newItem.location || "",
         imageUrl: newItem.imageUrl || "",
+        supplierBarcode: newItem.supplierBarcode || "",
       })
       setInventory([item, ...inventory])
       setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
@@ -386,23 +389,33 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Ürün Resmi (bağlantı)</label>
-                <Input
-                  value={newItem.imageUrl || ""}
-                  onChange={(e) => setNewItem({ ...newItem, imageUrl: e.target.value })}
-                  placeholder="https://... (resim adresi)"
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
-                {newItem.imageUrl ? (
-                  <img
-                    src={newItem.imageUrl}
-                    alt=""
-                    className="h-24 w-24 object-cover rounded border border-slate-600"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+              <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                <label className="text-sm font-medium text-slate-300">Satıcının Barkodu (opsiyonel)</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newItem.supplierBarcode || ""}
+                    onChange={(e) => setNewItem({ ...newItem, supplierBarcode: e.target.value })}
+                    placeholder="Örn: 8690504027508"
+                    className="bg-slate-800 border-slate-600 text-white"
                   />
-                ) : null}
-                <p className="text-xs text-slate-500">Ürün fotoğrafının internet adresi. Sonradan da ekleyebilirsiniz.</p>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    title="Kamerayla okut"
+                    onClick={() => setIsNewSupplierBarcodeScannerOpen(true)}
+                    className="border-slate-600 text-amber-400 shrink-0"
+                  >
+                    <Barcode className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500">Kutunun üstündeki hazır barkod. Girerseniz o barkodu okutunca da bu ürün bulunur.</p>
+                <div className="pt-2">
+                  <ImageUploadField
+                    value={newItem.imageUrl}
+                    onChange={(url) => setNewItem({ ...newItem, imageUrl: url })}
+                  />
+                </div>
               </div>
 
               <div className="border-t border-slate-700 pt-4">
@@ -483,6 +496,16 @@ export default function InventoryPage() {
         </Dialog>
         </div>
       </div>
+
+      <BarcodeScannerDialog
+        open={isNewSupplierBarcodeScannerOpen}
+        onOpenChange={setIsNewSupplierBarcodeScannerOpen}
+        title="Satıcı Barkodunu Okut"
+        onScan={(code) => {
+          setNewItem({ ...newItem, supplierBarcode: code })
+          showToast(`Satıcı barkodu alındı: ${code}`, "success")
+        }}
+      />
 
       <BarcodeScannerDialog
         open={isSupplierBarcodeScannerOpen}
@@ -772,29 +795,29 @@ export default function InventoryPage() {
                     </div>
                     <div className="flex gap-1 flex-wrap">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => printBarcodeLabels([{ name: item.name, productCode: item.productCode, salePrice: item.salePrice }])}
                         disabled={!item.productCode}
                         title={item.productCode ? "Barkod etiketi yazdır" : "Ürün kodu yok"}
-                        className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                        className="border-amber-600 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
                         <Barcode className="h-4 w-4 mr-1" />Etiket
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => openEditDialog(item)}
-                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                        className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       >
                         <Pencil className="h-4 w-4 mr-1" />Düzenle
                       </Button>
                       {isManager && (
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                       >
                         <Trash2 className="h-4 w-4 mr-1" />Sil
                       </Button>
@@ -847,22 +870,12 @@ export default function InventoryPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-slate-500">Kutunun üstündeki hazır barkod. Girerseniz o barkodu okutunca da bu ürün bulunur.</p>
-                <label className="text-sm font-medium text-slate-300 pt-2 block">Ürün Resmi (bağlantı)</label>
-                <Input
-                  value={editingItem.imageUrl || ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, imageUrl: e.target.value })}
-                  placeholder="https://... (resim adresi)"
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
-                {editingItem.imageUrl ? (
-                  <img
-                    src={editingItem.imageUrl}
-                    alt=""
-                    className="mt-2 h-24 w-24 object-cover rounded border border-slate-600"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                <div className="pt-2">
+                  <ImageUploadField
+                    value={editingItem.imageUrl}
+                    onChange={(url) => setEditingItem({ ...editingItem, imageUrl: url })}
                   />
-                ) : null}
-                <p className="text-xs text-slate-500">Ürün fotoğrafının internet adresini yapıştırın (örn. tedarikçi sitesinden resme sağ tıklayıp "Resim adresini kopyala").</p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

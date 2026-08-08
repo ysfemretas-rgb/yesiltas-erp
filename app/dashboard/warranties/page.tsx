@@ -439,27 +439,27 @@ export default function WarrantiesPage() {
                   </div>
                   <div className="flex gap-1 ml-2 flex-wrap">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       onClick={() => sendWhatsApp(warranty)}
-                      className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                      className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10"
                     >
                       <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       onClick={() => openEditDialog(warranty)}
-                      className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                      className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                     >
                       <Pencil className="w-3 h-3 mr-1" />Düzenle
                     </Button>
                     {isManager && (
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       onClick={() => handleDeleteWarranty(warranty.id)}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                     >
                       <Trash2 className="w-3 h-3 mr-1" />Sil
                     </Button>

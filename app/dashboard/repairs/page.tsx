@@ -600,7 +600,7 @@ export default function RepairsPage() {
                   <div className="flex items-center justify-between">
                     <Label className="text-emerald-400 font-semibold">Yeni Müşteri Bilgileri</Label>
                     <Button 
-                      variant="ghost" 
+                      variant="outline" 
                       size="sm" 
                       onClick={() => setIsNewCustomerDialogOpen(true)}
                       className="text-emerald-400 hover:text-emerald-300"
@@ -913,8 +913,8 @@ export default function RepairsPage() {
                     {repair.status === "completed" && (
                       <Button
                         size="sm"
-                        variant="ghost"
-                        className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                        variant="outline"
+                        className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10"
                         onClick={() => sendWhatsApp(repair)}
                       >
                         <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
@@ -935,32 +935,32 @@ export default function RepairsPage() {
                     </Select>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                      variant="outline"
+                      className="border-amber-600 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
                       onClick={() => openNoteDialog(repair)}
                     >
                       <AlertCircle className="w-3 h-3 mr-1" />Not
                     </Button>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                      variant="outline"
+                      className="border-cyan-600 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
                       onClick={() => openQrDialog(repair)}
                     >
                       <QrCode className="w-3 h-3 mr-1" />QR Kod
                     </Button>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-slate-300 hover:text-white hover:bg-slate-500/10"
+                      variant="outline"
+                      className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-500/10"
                       onClick={() => printRepairReceipt(repair)}
                     >
                       <Printer className="w-3 h-3 mr-1" />Fiş
                     </Button>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                      variant="outline"
+                      className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       onClick={() => openEditDialog(repair)}
                     >
                       <Pencil className="w-3 h-3 mr-1" />Düzenle
@@ -968,8 +968,8 @@ export default function RepairsPage() {
                     {isManager && (
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      variant="outline"
+                      className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                       onClick={() => handleDeleteRepair(repair.id)}
                     >
                       <Trash2 className="w-3 h-3 mr-1" />Sil

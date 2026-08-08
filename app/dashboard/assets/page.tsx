@@ -229,7 +229,7 @@ export default function FixedAssetsPage() {
                 <div className="text-xs text-slate-400">Toplam Değer (TL)</div>
                 <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalValueTRY)}</div>
               </div>
-              <Button size="icon" variant="ghost" onClick={fetchRates} disabled={isLoadingRates} className="text-slate-400">
+              <Button size="icon" variant="outline" onClick={fetchRates} disabled={isLoadingRates} className="text-slate-400">
                 <RefreshCw className={`h-4 w-4 ${isLoadingRates ? "animate-spin" : ""}`} />
               </Button>
             </div>
@@ -314,11 +314,11 @@ export default function FixedAssetsPage() {
                         </div>
                       )}
                       <div className="flex gap-1 justify-end mt-1">
-                        <Button size="sm" variant="ghost" onClick={() => { setEditingAsset(a); setIsEditOpen(true) }} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-7 px-2">
+                        <Button size="sm" variant="outline" onClick={() => { setEditingAsset(a); setIsEditOpen(true) }} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-7 px-2">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         {isManager && (
-                          <Button size="sm" variant="ghost" onClick={() => handleDeleteAsset(a.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 px-2">
+                          <Button size="sm" variant="outline" onClick={() => handleDeleteAsset(a.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 px-2">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}
