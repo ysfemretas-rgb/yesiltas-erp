@@ -5,7 +5,7 @@ export interface InventoryItem {
   id: string
   name: string
   productCode: string
-  supplierBarcode: string
+  supplierBarcode?: string
   sku: string
   category: string
   quantity: number
