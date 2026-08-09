@@ -156,6 +156,40 @@ function RepairsPageContent() {
     return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
   }, [repairs])
 
+  // QR etiketi okutulduğunda (?open=<id> ile gelindiğinde) ilgili tamir
+  // kaydını otomatik açar. (React kuralları gereği erken "return"lerden
+  // önce, diğer hook'larla aynı yerde tanımlanmalı.)
+  const openEditDialog = (repair: Repair) => {
+    setSelectedRepair(repair)
+    setCustomerName(repair.customerName)
+    setPhone1(repair.phone1)
+    setPhone2(repair.phone2)
+    setDevice(repair.device)
+    setBrand(repair.brand)
+    setModel(repair.model)
+    setIssue(repair.issue)
+    setImei(repair.imei || "")
+    setCost((repair.cost + (repair.discount || 0)).toString())
+    setDiscount(repair.discount ? repair.discount.toString() : "")
+    setPaymentType(repair.paymentType)
+    setPaidAmount(repair.paid.toString())
+    setNotesInput(repair.notes)
+    setIsEditDialogOpen(true)
+  }
+
+  useEffect(() => {
+    const openId = searchParams.get("open")
+    if (!openId || repairs.length === 0) return
+    const found = repairs.find((r) => r.id === openId)
+    if (found) {
+      openEditDialog(found)
+      router.replace("/dashboard/repairs")
+    } else {
+      showToast("QR kodundaki tamir kaydı bulunamadı.", "error")
+      router.replace("/dashboard/repairs")
+    }
+  }, [searchParams, repairs])
+
   if (checking) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -496,24 +530,6 @@ function RepairsPageContent() {
       console.error(e)
       showToast("Not eklenirken bir sorun oluştu.", "error")
     }
-  }
-
-  const openEditDialog = (repair: Repair) => {
-    setSelectedRepair(repair)
-    setCustomerName(repair.customerName)
-    setPhone1(repair.phone1)
-    setPhone2(repair.phone2)
-    setDevice(repair.device)
-    setBrand(repair.brand)
-    setModel(repair.model)
-    setIssue(repair.issue)
-    setImei(repair.imei || "")
-    setCost((repair.cost + (repair.discount || 0)).toString())
-    setDiscount(repair.discount ? repair.discount.toString() : "")
-    setPaymentType(repair.paymentType)
-    setPaidAmount(repair.paid.toString())
-    setNotesInput(repair.notes)
-    setIsEditDialogOpen(true)
   }
 
   const openNoteDialog = (repair: Repair) => {
