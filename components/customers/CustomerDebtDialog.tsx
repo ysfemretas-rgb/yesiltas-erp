@@ -20,11 +20,18 @@ interface NewDebtInput {
   description: string
 }
 
+interface RelatedDebtItem {
+  label: string
+  amount: number
+  code?: string
+}
+
 interface CustomerDebtDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   customerName?: string
   debts: Debt[]
+  relatedDebts?: RelatedDebtItem[]
   onPayDebt: (debtId: string) => void
   newDebt: NewDebtInput
   onNewDebtChange: (debt: NewDebtInput) => void
@@ -37,6 +44,7 @@ export function CustomerDebtDialog({
   onOpenChange,
   customerName,
   debts,
+  relatedDebts = [],
   onPayDebt,
   newDebt,
   onNewDebtChange,
@@ -50,9 +58,29 @@ export function CustomerDebtDialog({
           <DialogTitle className="text-white">Borç Yönetimi - {customerName}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          {relatedDebts.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Satış / Tamirden Gelen Bakiyeler</label>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {relatedDebts.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-800 border border-slate-700">
+                    <div>
+                      <div className="text-sm text-white">{d.label}</div>
+                      {d.code && <div className="text-xs text-slate-500 font-mono">{d.code}</div>}
+                    </div>
+                    <span className="text-amber-400 font-medium text-sm">{formatCurrency(d.amount)}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">Bu bakiyeler ilgili satış/tamir kaydı düzenlenerek kapatılır, buradan ödenemez.</p>
+            </div>
+          )}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">Mevcut Borçlar</label>
+            <label className="text-sm font-medium text-slate-300">Manuel Borçlar</label>
             <div className="space-y-2 max-h-40 overflow-y-auto">
+              {(debts || []).length === 0 && (
+                <p className="text-sm text-slate-500 py-2">Manuel eklenmiş borç yok.</p>
+              )}
               {(debts || []).map((debt) => (
                 <div key={debt.id} className="flex items-center justify-between p-2 rounded bg-slate-800 border border-slate-700">
                   <div>

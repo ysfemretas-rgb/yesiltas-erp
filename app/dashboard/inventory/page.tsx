@@ -29,6 +29,7 @@ import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon,
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 import { ImageUploadField } from "@/components/ImageUploadField"
+import { fetchSuppliers, Supplier } from "@/lib/suppliers"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
 
 const INVENTORY_IMPORT_FIELDS: ImportField[] = [
@@ -73,6 +74,7 @@ export default function InventoryPage() {
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [isSupplierBarcodeScannerOpen, setIsSupplierBarcodeScannerOpen] = useState(false)
   const [isNewSupplierBarcodeScannerOpen, setIsNewSupplierBarcodeScannerOpen] = useState(false)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -104,6 +106,9 @@ export default function InventoryPage() {
       .finally(() => {
         if (!cancelled) setIsLoaded(true)
       })
+    fetchSuppliers()
+      .then((data) => { if (!cancelled) setSuppliers(data) })
+      .catch((e) => console.error("Tedarikçiler yüklenemedi:", e))
     return () => { cancelled = true }
   }, [])
   if (checking) {
@@ -141,7 +146,6 @@ export default function InventoryPage() {
   const filteredItems = inventoryWithPrices.filter((item) => {
     const search = searchTerm.toLowerCase()
     const matchesSearch = item.name.toLowerCase().includes(search) ||
-      item.sku.toLowerCase().includes(search) ||
       (item.productCode || "").toLowerCase().includes(search) ||
       (item.supplierBarcode || "").toLowerCase().includes(search) ||
       item.supplier.toLowerCase().includes(search)
@@ -199,7 +203,7 @@ export default function InventoryPage() {
   }
 
   const handleAddItem = async () => {
-    if (!newItem.name || !newItem.sku) {
+    if (!newItem.name) {
       showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
       return
     }
@@ -212,7 +216,7 @@ export default function InventoryPage() {
     try {
       const item = await createInventoryItem({
         name: newItem.name,
-        sku: newItem.sku,
+        sku: "",
         category: newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"),
         quantity: Number(newItem.quantity) || 0,
         minQuantity: Number(newItem.minQuantity) || 5,
@@ -238,7 +242,7 @@ export default function InventoryPage() {
 
   const handleUpdateItem = async () => {
     if (!editingItem) return
-    if (!editingItem.name || !editingItem.sku) {
+    if (!editingItem.name) {
       showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
       return
     }
@@ -323,16 +327,7 @@ export default function InventoryPage() {
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">SKU / Barkod <span className="text-red-400">*</span></label>
-                  <Input
-                    value={newItem.sku || ""}
-                    onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
-                    placeholder="SKU kodu"
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
@@ -481,12 +476,20 @@ export default function InventoryPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
-                <Input
-                  value={newItem.supplier || ""}
-                  onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
-                  placeholder="Tedarikçi adı"
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
+                <Select value={newItem.supplier || "__none__"} onValueChange={(v) => setNewItem({ ...newItem, supplier: v === "__none__" ? "" : v })}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue placeholder="Tedarikçi seçin" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="__none__" className="text-slate-400">— Seçilmedi —</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.name} className="text-white">{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {suppliers.length === 0 && (
+                  <p className="text-xs text-slate-500">Kayıtlı tedarikçi yok — Tedarikçiler sayfasından ekleyebilirsiniz.</p>
+                )}
               </div>
               <Button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Kaydet
@@ -527,7 +530,7 @@ export default function InventoryPage() {
           const found = inventory.find(i =>
             (i.productCode || "").toLowerCase() === lower ||
             (i.supplierBarcode || "").toLowerCase() === lower ||
-            i.sku.toLowerCase() === lower
+            (i.sku || "").toLowerCase() === lower
           )
           showToast(found ? `Bulundu: ${found.name}` : `"${code}" için ürün bulunamadı. Ürünü düzenleyip "Satıcının Barkodu" alanına bu kodu ekleyebilirsiniz.`, found ? "success" : "error")
         }}
@@ -641,7 +644,7 @@ export default function InventoryPage() {
             <div className="space-y-2">
               {lowStockItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-white">{item.name} ({item.sku})</span>
+                  <span className="font-medium text-white">{item.name}</span>
                   <Badge className="bg-red-600">Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
                 </div>
               ))}
@@ -739,7 +742,6 @@ export default function InventoryPage() {
                             {item.productCode}
                           </span>
                         )}
-                        <span><Barcode className="inline h-3 w-3 mr-1" />{item.sku}</span>
                         {item.supplier && <span>• {item.supplier}</span>}
                         {item.location && <span>• {item.location}</span>}
                       </div>
@@ -877,15 +879,7 @@ export default function InventoryPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">SKU <span className="text-red-400">*</span></label>
-                  <Input
-                    value={editingItem.sku}
-                    onChange={(e) => setEditingItem({ ...editingItem, sku: e.target.value })}
-                    className="bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
                   <Select
@@ -1003,11 +997,17 @@ export default function InventoryPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
-                <Input
-                  value={editingItem.supplier}
-                  onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
+                <Select value={editingItem.supplier || "__none__"} onValueChange={(v) => setEditingItem({ ...editingItem, supplier: v === "__none__" ? "" : v })}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue placeholder="Tedarikçi seçin" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="__none__" className="text-slate-400">— Seçilmedi —</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.name} className="text-white">{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button onClick={handleUpdateItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Güncelle

@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, Building, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Loader2 } from "lucide-react"
 import { exportBackup } from "@/lib/backup"
+import { WhatsAppTemplates, DEFAULT_TEMPLATES as DEFAULT_WA_TEMPLATES, getWhatsAppTemplates, saveWhatsAppTemplates } from "@/lib/whatsappTemplates"
 
 interface CompanySettings {
   name: string
@@ -82,6 +83,7 @@ export default function SettingsPage() {
   const [backupLoading, setBackupLoading] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
+  const [waTemplates, setWaTemplates] = useState<WhatsAppTemplates>(DEFAULT_WA_TEMPLATES)
   const [users, setUsers] = useState<AppUser[]>([])
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([])
   const [saved, setSaved] = useState(false)
@@ -110,6 +112,8 @@ export default function SettingsPage() {
     try {
       const companySaved = localStorage.getItem("yt_company")
       if (companySaved) setCompany({ ...getInitialCompany(), ...JSON.parse(companySaved) })
+
+      setWaTemplates(getWhatsAppTemplates())
 
       const usersSaved = localStorage.getItem("yt_app_users")
       if (usersSaved) {
@@ -316,6 +320,7 @@ export default function SettingsPage() {
         <Tabs defaultValue="company">
           <TabsList className="flex w-full gap-1 overflow-x-auto bg-slate-800 p-1">
             <TabsTrigger value="company" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Şirket</TabsTrigger>
+            <TabsTrigger value="whatsapp" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">WhatsApp Mesajları</TabsTrigger>
             <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcılar</TabsTrigger>
             <TabsTrigger value="logins" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Giriş/Çıkış</TabsTrigger>
             <TabsTrigger value="system" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Sistem</TabsTrigger>
@@ -416,6 +421,78 @@ export default function SettingsPage() {
                   />
                   <p className="text-xs text-slate-500">Teknik Servis ve Satışlar'da bu oranı aşan indirim yapılamaz — sizi zarara sokacak indirimleri otomatik engeller.</p>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* WhatsApp Mesajları */}
+          <TabsContent value="whatsapp" className="space-y-4">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white">💬 WhatsApp Mesaj Şablonları</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <p className="text-sm text-slate-400">
+                  Satışlar, Teknik Servis ve Müşteriler sayfalarındaki "WhatsApp" butonlarının gönderdiği mesajı buradan düzenleyebilirsiniz. Üçü birbirinden bağımsızdır.
+                </p>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-white">🛒 Satış Mesajı</label>
+                  <p className="text-xs text-slate-500">
+                    Kullanılabilir alanlar: <code className="text-emerald-400">{"{musteri}"}</code> <code className="text-emerald-400">{"{urunler}"}</code> <code className="text-emerald-400">{"{toplam}"}</code> <code className="text-emerald-400">{"{odeme_durumu}"}</code> <code className="text-emerald-400">{"{tarih}"}</code>
+                  </p>
+                  <textarea
+                    value={waTemplates.sales}
+                    onChange={(e) => setWaTemplates({ ...waTemplates, sales: e.target.value })}
+                    rows={8}
+                    className="w-full rounded-md bg-slate-900 border border-slate-600 text-white text-sm p-3 font-mono"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => setWaTemplates({ ...waTemplates, sales: DEFAULT_WA_TEMPLATES.sales })} className="border-slate-600 text-slate-300">
+                    Varsayılana Döndür
+                  </Button>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-700 pt-4">
+                  <label className="text-sm font-medium text-white">🔧 Teknik Servis Mesajı</label>
+                  <p className="text-xs text-slate-500">
+                    Kullanılabilir alanlar: <code className="text-emerald-400">{"{musteri}"}</code> <code className="text-emerald-400">{"{cihaz}"}</code> <code className="text-emerald-400">{"{odeme_durumu}"}</code>
+                  </p>
+                  <textarea
+                    value={waTemplates.repairs}
+                    onChange={(e) => setWaTemplates({ ...waTemplates, repairs: e.target.value })}
+                    rows={6}
+                    className="w-full rounded-md bg-slate-900 border border-slate-600 text-white text-sm p-3 font-mono"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => setWaTemplates({ ...waTemplates, repairs: DEFAULT_WA_TEMPLATES.repairs })} className="border-slate-600 text-slate-300">
+                    Varsayılana Döndür
+                  </Button>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-700 pt-4">
+                  <label className="text-sm font-medium text-white">👥 Müşteri Borç Hatırlatma Mesajı</label>
+                  <p className="text-xs text-slate-500">
+                    Kullanılabilir alanlar: <code className="text-emerald-400">{"{musteri}"}</code> <code className="text-emerald-400">{"{odeme_bilgisi}"}</code>
+                  </p>
+                  <textarea
+                    value={waTemplates.customerDebt}
+                    onChange={(e) => setWaTemplates({ ...waTemplates, customerDebt: e.target.value })}
+                    rows={6}
+                    className="w-full rounded-md bg-slate-900 border border-slate-600 text-white text-sm p-3 font-mono"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => setWaTemplates({ ...waTemplates, customerDebt: DEFAULT_WA_TEMPLATES.customerDebt })} className="border-slate-600 text-slate-300">
+                    Varsayılana Döndür
+                  </Button>
+                </div>
+
+                <Button
+                  onClick={() => {
+                    saveWhatsAppTemplates(waTemplates)
+                    showToast("WhatsApp mesaj şablonları kaydedildi.", "success")
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 w-full"
+                >
+                  <Save className="mr-2 h-4 w-4" />Şablonları Kaydet
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

@@ -24,8 +24,21 @@ function daysUntil(dateStr: string): number {
 // Artık gerçek verileri (envanter, garanti, müşteri borcu, bekleyen tamir)
 // doğrudan Supabase'den okuyup aksiyon alınması gereken durumları tek bir
 // bildirim listesinde toplar.
+const SEEN_KEY = 'yt_seen_notifications'
+
+function getSeenIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = localStorage.getItem(SEEN_KEY)
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch {
+    return new Set()
+  }
+}
+
 export function useNotifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => getSeenIds())
 
   const refresh = useCallback(async () => {
     const list: AppNotification[] = []
@@ -115,5 +128,21 @@ export function useNotifications() {
     return () => clearInterval(interval)
   }, [refresh])
 
-  return { notifications, refresh }
+  // Bildirimleri "görüldü" olarak işaretler — bunları bir daha kırmızı
+  // rozette saymaz, ama aynı sorun devam ettiği sürece listede görünmeye
+  // devam eder (sorun çözülene kadar tamamen kaybolmaz).
+  const markAllSeen = useCallback(() => {
+    setSeenIds((prev) => {
+      const next = new Set(prev)
+      notifications.forEach((n) => next.add(n.id))
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(next)))
+      }
+      return next
+    })
+  }, [notifications])
+
+  const unseenCount = notifications.filter((n) => !seenIds.has(n.id)).length
+
+  return { notifications, refresh, markAllSeen, unseenCount }
 }

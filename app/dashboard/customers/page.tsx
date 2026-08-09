@@ -5,6 +5,7 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
+import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { CustomerWhatsAppDialog } from "@/components/customers/CustomerWhatsAppDialog"
 import { CustomerDebtDialog } from "@/components/customers/CustomerDebtDialog"
 
@@ -416,38 +417,36 @@ export default function CustomersPage() {
     const transactions = getCustomerTransactions(selectedCustomer.id)
     const totalRemaining = transactions.reduce((sum, t) => sum + t.remaining, 0)
 
-    let message = `\uD83D\uDC4B Merhaba *${selectedCustomer.firstName || selectedCustomer.name}*,\n\n`
-    message += `\u2705 *Yeşiltaş Teknoloji*'den bilgilendirme mesajıdır.\n\n`
-
+    let odemeBilgisi = ""
     if (type === "simple") {
-      if (totalRemaining > 0) {
-        message += `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL\n`
-        message += paymentLine
-      } else {
-        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!\n`
-      }
+      odemeBilgisi = totalRemaining > 0
+        ? `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL\n${paymentLine}`
+        : `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!`
     } else {
       if (transactions.length > 0) {
-        message += `\uD83D\uDCCB *İşlem Detaylarınız:*\n\n`
+        let detay = `\uD83D\uDCCB *İşlem Detaylarınız:*\n\n`
         transactions.forEach(t => {
-          message += `\uD83D\uDCCC *${t.description}*\n`
-          message += `   \uD83D\uDCB0 Toplam: ${t.total.toLocaleString("tr-TR")} TL\n`
-          message += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL\n`
+          detay += `\uD83D\uDCCC *${t.description}*\n`
+          detay += `   \uD83D\uDCB0 Toplam: ${t.total.toLocaleString("tr-TR")} TL\n`
+          detay += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL\n`
           if (t.remaining > 0) {
-            message += `   \u23F3 Kalan: ${t.remaining.toLocaleString("tr-TR")} TL\n`
+            detay += `   \u23F3 Kalan: ${t.remaining.toLocaleString("tr-TR")} TL\n`
           }
-          message += `   \uD83D\uDCC5 Tarih: ${t.date}\n\n`
+          detay += `   \uD83D\uDCC5 Tarih: ${t.date}\n\n`
         })
         if (totalRemaining > 0) {
-          message += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL\n`
-          message += paymentLine
+          detay += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL\n${paymentLine}`
         }
+        odemeBilgisi = detay
       } else {
-        message += `\uD83C\uDF89 Borcunuz bulunmamaktadır.\n`
+        odemeBilgisi = `\uD83C\uDF89 Borcunuz bulunmamaktadır.`
       }
     }
 
-    message += `\n\uD83D\uDE4F Teşekkür ederiz, iyi günler dileriz!\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
+    const message = renderTemplate(getWhatsAppTemplates().customerDebt, {
+      musteri: selectedCustomer.firstName || selectedCustomer.name,
+      odeme_bilgisi: odemeBilgisi,
+    })
 
     const cleanPhone = phone.startsWith("0") ? phone.substring(1) : phone
     window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
@@ -969,6 +968,14 @@ export default function CustomersPage() {
         onOpenChange={setIsDebtOpen}
         customerName={selectedCustomer?.name}
         debts={selectedCustomer?.debts || []}
+        relatedDebts={selectedCustomer ? [
+          ...repairs
+            .filter(r => (r.customerName === selectedCustomer.name || r.customerName?.includes(selectedCustomer.firstName || "")) && r.remaining > 0)
+            .map(r => ({ label: `Tamir: ${r.brand} ${r.model}`, amount: r.remaining, code: r.repairCode })),
+          ...sales
+            .filter(s => (s.customerName === selectedCustomer.name || s.customerName?.includes(selectedCustomer.firstName || "")) && s.remaining > 0)
+            .map(s => ({ label: `Satış: ${(s.items || []).map(i => i.name).join(", ")}`, amount: s.remaining, code: s.saleCode })),
+        ] : []}
         onPayDebt={(debtId) => handlePayDebt(selectedCustomer!.id, debtId)}
         newDebt={newDebt}
         onNewDebtChange={setNewDebt}

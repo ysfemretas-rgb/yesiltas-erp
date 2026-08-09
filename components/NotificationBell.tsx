@@ -6,7 +6,7 @@ import { Bell } from "lucide-react"
 import { useNotifications } from "@/hooks/useNotifications"
 
 export function NotificationBell() {
-  const { notifications } = useNotifications()
+  const { notifications, markAllSeen, unseenCount } = useNotifications()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -22,21 +22,29 @@ export function NotificationBell() {
 
   const dangerCount = notifications.filter((n) => n.severity === "danger").length
 
+  const handleToggle = () => {
+    setOpen((o) => {
+      const next = !o
+      if (next) markAllSeen()
+      return next
+    })
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleToggle}
         className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
         title="Bildirimler"
       >
         <Bell className="h-4 w-4" />
-        {notifications.length > 0 && (
+        {unseenCount > 0 && (
           <span
             className={`absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${
               dangerCount > 0 ? "bg-red-500" : "bg-amber-500"
             }`}
           >
-            {notifications.length > 9 ? "9+" : notifications.length}
+            {unseenCount > 9 ? "9+" : unseenCount}
           </span>
         )}
       </button>

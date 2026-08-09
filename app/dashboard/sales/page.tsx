@@ -19,6 +19,7 @@ import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { InventoryItem, fetchInventory, updateInventoryItem } from "@/lib/inventory"
+import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
 interface Customer {
@@ -543,20 +544,18 @@ Bu işlem geri alınamaz!`)) return
       }
 
       const items = (sale.items || []).map(i => `\u{1F4E6} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("\n")
-      let message = `\u{1F44B} Merhaba *${customerName}*,\n\n`
-      message += `\u{2705} *Yeşiltaş Teknoloji* satış isleminiz hakkında bilgi vermek istiyoruz.\n\n`
-      message += `\u{1F6D2} *Satış Detaylari:*\n${items || "Ürün bilgisi yok"}\n\n`
-      message += `\u{1F4B0} *Toplam Tutar:* ${(sale.totalAmount || 0).toLocaleString("tr-TR")} TL\n`
-      if (sale.remaining > 0) {
-        message += `\u{1F4B5} *Alınan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL\n`
-        message += `\u{23F3} *Kalan Borç:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL\n`
-        message += `\u{1F4B3} *Ödeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}\n`
-      } else {
-        message += `\u{2705} *Ödeme:* Tamamlandı\n`
-        message += `\u{1F4B3} *Ödeme Sekli:* ${paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod}\n`
-      }
-      message += `\u{1F4C5} *Tarih:* ${sale.date}\n`
-      message += `\n\u{1F64F} Teşekkür ederiz, iyi günler dileriz!\n\u{1F3EA} *Yeşiltaş Teknoloji*`
+      const odemeSekli = paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod
+      const odemeDurumu = sale.remaining > 0
+        ? `\u{1F4B5} *Alınan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL\n\u{23F3} *Kalan Borç:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
+        : `\u{2705} *Ödeme:* Tamamlandı\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
+
+      const message = renderTemplate(getWhatsAppTemplates().sales, {
+        musteri: customerName,
+        urunler: items || "Ürün bilgisi yok",
+        toplam: (sale.totalAmount || 0).toLocaleString("tr-TR"),
+        odeme_durumu: odemeDurumu,
+        tarih: sale.date,
+      })
 
       window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
     } catch (err) {

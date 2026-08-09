@@ -8,6 +8,7 @@ import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/re
 import { fetchCustomers, createCustomer } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
+import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { QrDialog } from "@/components/repairs/QrDialog"
 import { NoteDialog } from "@/components/repairs/NoteDialog"
 import { getRepairStatusBadge as getStatusBadge, getRepairPaymentBadge as getPaymentBadge, formatCurrency } from "@/components/repairs/RepairBadges"
@@ -542,20 +543,16 @@ export default function RepairsPage() {
 
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
-    let message = `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n`
-    message += `\u2705 *${repair.brand} ${repair.model}* cihazınızın tamiri tamamlanmıştır. \uD83D\uDD27\n\n`
 
-    if (repair.remaining > 0) {
-      message += `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}\n`
-      message += `\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}\n`
-      message += `\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}\n\n`
-      message += `\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
-    } else {
-      message += `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n`
-      message += `\u2705 Hemen teslim alabilirsiniz.`
-    }
+    const odemeDurumu = repair.remaining > 0
+      ? `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}\n\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}\n\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}\n\n\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
+      : `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\u2705 Hemen teslim alabilirsiniz.`
 
-    message += `\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*\n\uD83D\uDCDE Bizi tercih ettiğiniz için teşekkür ederiz! \uD83D\uDE4F`
+    const message = renderTemplate(getWhatsAppTemplates().repairs, {
+      musteri: repair.customerName,
+      cihaz: `${repair.brand} ${repair.model}`,
+      odeme_durumu: odemeDurumu,
+    })
 
     window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
   }
