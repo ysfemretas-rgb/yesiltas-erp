@@ -120,7 +120,9 @@ export function printRepairReceipt(repair: ReceiptRepair) {
   <div class="money">
     <div class="money-row"><span>Tahmini / Anlaşılan Ücret</span><span>${formatCurrency(repair.cost)}</span></div>
     <div class="money-row"><span>Alınan Ön Ödeme</span><span>${formatCurrency(repair.paid)}</span></div>
-    <div class="money-row total"><span>Kalan Tutar</span><span class="remaining">${formatCurrency(repair.remaining)}</span></div>
+    ${repair.remaining < 0
+      ? `<div class="money-row total"><span>Fazla Ödeme (Alacağınız)</span><span class="remaining">${formatCurrency(-repair.remaining)}</span></div>`
+      : `<div class="money-row total"><span>Kalan Tutar</span><span class="remaining">${formatCurrency(repair.remaining)}</span></div>`}
   </div>
 
   ${company.iban ? `<div style="margin-top:8px;font-size:10px;color:#555;">

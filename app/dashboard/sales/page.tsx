@@ -303,13 +303,14 @@ export default function SalesPage() {
         totalAmount: cartTotal,
         discount: Number(saleDiscount) || 0,
         paid: paid,
-        remaining: remaining > 0 ? remaining : 0,
+        remaining: remaining,
         paymentMethod,
         date: new Date().toISOString().split("T")[0],
         status: "completed",
       })
 
-      // Update customer debt
+      // Update customer debt (fazla ödeme varsa — remaining negatifse — borç
+      // eklenmiyor; müşteri o satıştan alacaklı sayılıyor, bkz. relatedDebts)
       if (!isGiftSale && remaining > 0) {
         await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`, sale.id)
       }
@@ -446,7 +447,7 @@ Bu işlem geri alınamaz!`)) return
 
     const oldSale = editingSale
     const oldRemaining = oldSale.remaining
-    const newRemaining = editRemaining > 0 ? editRemaining : 0
+    const newRemaining = editRemaining
 
     try {
       const updatedSale = await updateSale(editingSale.id, {
@@ -475,6 +476,8 @@ Bu işlem geri alınamaz!`)) return
       })
 
       // Update customer debt: eski bağlı borcu temizle, yeni bakiye varsa yeniden oluştur
+      // (yeni bakiye negatifse — fazla ödeme — borç kaydı oluşturulmuyor, müşteri o
+      // satıştan alacaklı sayılıyor)
       if (oldRemaining > 0 || newRemaining > 0) {
         await deleteDebtsBySource("sale", editingSale.id)
         if (newRemaining > 0) {
@@ -488,7 +491,7 @@ Bu işlem geri alınamaz!`)) return
         setCustomers(customers.map((c: any) => {
           if (c.id !== oldSale.customerId) return c
           const currentDebt = c.totalDebt || c.balance || 0
-          const newDebt = Math.max(0, currentDebt - oldRemaining + newRemaining)
+          const newDebt = currentDebt - Math.max(0, oldRemaining) + Math.max(0, newRemaining)
           return { ...c, totalDebt: newDebt, balance: newDebt }
         }))
       }
@@ -547,7 +550,9 @@ Bu işlem geri alınamaz!`)) return
       const odemeSekli = paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod
       const odemeDurumu = sale.remaining > 0
         ? `\u{1F4B5} *Alınan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL\n\u{23F3} *Kalan Borç:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
-        : `\u{2705} *Ödeme:* Tamamlandı\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
+        : sale.remaining < 0
+          ? `\u{2705} *Ödeme:* Tamamlandı\n\u{1F4B0} *Fazla Ödeme (Alacağınız):* ${(-sale.remaining).toLocaleString("tr-TR")} TL\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
+          : `\u{2705} *Ödeme:* Tamamlandı\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
 
       const message = renderTemplate(getWhatsAppTemplates().sales, {
         musteri: customerName,
@@ -650,7 +655,7 @@ Bu işlem geri alınamaz!`)) return
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Bekleyen Tahsilat</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-amber-400">{formatCurrency(sales.reduce((sum, s) => sum + (s.remaining || 0), 0))}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-amber-400">{formatCurrency(sales.reduce((sum, s) => sum + Math.max(0, s.remaining || 0), 0))}</div></CardContent>
         </Card>
       </div>
 
@@ -905,7 +910,11 @@ Bu işlem geri alınamaz!`)) return
                       />
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-400">💵 Alınan: {formatCurrency(paid)}</span>
-                        <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</span>
+                        {remaining >= 0 ? (
+                          <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</span>
+                        ) : (
+                          <span className="text-cyan-400">💰 Fazla Ödeme (Alacaklı): {formatCurrency(-remaining)}</span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1049,7 +1058,11 @@ Bu işlem geri alınamaz!`)) return
                   />
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-400">💵 Alınan: {formatCurrency(editPaid)}</span>
-                    <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(editRemaining)}</span>
+                    {editRemaining >= 0 ? (
+                      <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(editRemaining)}</span>
+                    ) : (
+                      <span className="text-cyan-400">💰 Fazla Ödeme (Alacaklı): {formatCurrency(-editRemaining)}</span>
+                    )}
                   </div>
                 </div>
               )}
@@ -1094,8 +1107,8 @@ Bu işlem geri alınamaz!`)) return
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">{formatCurrency(sale.totalAmount)}</div>
-                      <Badge className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : (sale.paid === 0 && sale.totalAmount > 0 ? "bg-red-600/20 text-red-400" : "bg-emerald-600/20 text-emerald-400")}>
-                        {sale.remaining > 0 ? `⏳ Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : (sale.paid === 0 && sale.totalAmount > 0 ? "❌ Ödenmedi" : "✅ Tamamlandı")}
+                      <Badge className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : (sale.remaining < 0 ? "bg-cyan-600/20 text-cyan-400" : (sale.paid === 0 && sale.totalAmount > 0 ? "bg-red-600/20 text-red-400" : "bg-emerald-600/20 text-emerald-400"))}>
+                        {sale.remaining > 0 ? `⏳ Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : (sale.remaining < 0 ? `💰 Alacaklı: ${formatCurrency(-sale.remaining)}` : (sale.paid === 0 && sale.totalAmount > 0 ? "❌ Ödenmedi" : "✅ Tamamlandı"))}
                       </Badge>
                     </div>
                   </div>

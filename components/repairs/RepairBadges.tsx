@@ -19,6 +19,9 @@ export function getRepairStatusBadge(status: string) {
 }
 
 export function getRepairPaymentBadge(type: string, remaining: number) {
+  if (remaining < 0) {
+    return <Badge className="bg-cyan-600"><Wallet className="h-3 w-3 mr-1" />Alacaklı ({formatCurrency(-remaining)})</Badge>
+  }
   if (remaining > 0 && type !== "unpaid") {
     return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kısmi ({formatCurrency(remaining)} kaldı)</Badge>
   }

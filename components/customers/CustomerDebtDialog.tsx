@@ -68,7 +68,11 @@ export function CustomerDebtDialog({
                       <div className="text-sm text-white">{d.label}</div>
                       {d.code && <div className="text-xs text-slate-500 font-mono">{d.code}</div>}
                     </div>
-                    <span className="text-amber-400 font-medium text-sm">{formatCurrency(d.amount)}</span>
+                    {d.amount >= 0 ? (
+                      <span className="text-amber-400 font-medium text-sm">{formatCurrency(d.amount)}</span>
+                    ) : (
+                      <span className="text-cyan-400 font-medium text-sm">Alacaklı: {formatCurrency(-d.amount)}</span>
+                    )}
                   </div>
                 ))}
               </div>

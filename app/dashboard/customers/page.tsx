@@ -248,7 +248,8 @@ export default function CustomersPage() {
     return map
   }, [customers, repairs, sales])
 
-  const totalDebt = customers.reduce((sum, c) => sum + (customerDebts.get(c.id) || 0), 0)
+  const totalDebt = customers.reduce((sum, c) => sum + Math.max(0, customerDebts.get(c.id) || 0), 0)
+  const totalCustomerCredit = customers.reduce((sum, c) => sum + Math.max(0, -(customerDebts.get(c.id) || 0)), 0)
   const activeCount = customers.filter(c => isCustomerActive(c)).length
   const debtCount = customers.filter(c => (customerDebts.get(c.id) || 0) > 0).length
 
@@ -670,6 +671,17 @@ export default function CustomersPage() {
             <div className="text-2xl font-bold text-orange-400">{formatCurrency(totalDebt)}</div>
           </CardContent>
         </Card>
+        {totalCustomerCredit > 0 && (
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-300">Müşterilerin Bizden Alacağı (Fazla Ödeme)</CardTitle>
+              <CreditCard className="h-4 w-4 text-cyan-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-cyan-400">{formatCurrency(totalCustomerCredit)}</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Card className="bg-slate-900 border-slate-800">
@@ -703,6 +715,7 @@ export default function CustomersPage() {
             {filteredCustomers.map((customer) => {
               const debt = customerDebts.get(customer.id) || 0
               const hasDebt = debt > 0
+              const hasCredit = debt < 0
               const isActive = isCustomerActive(customer)
 
               return (
@@ -736,6 +749,11 @@ export default function CustomersPage() {
                           {formatCurrency(debt)} Borç
                         </Badge>
                       )}
+                      {hasCredit && (
+                        <Badge className="bg-cyan-900/50 text-cyan-300 border-cyan-700">
+                          {formatCurrency(-debt)} Alacaklı
+                        </Badge>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-400">
                       <div className="flex items-center gap-1">
@@ -766,6 +784,12 @@ export default function CustomersPage() {
                           if (days >= 30) return <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-300 border border-amber-700">⏰ {days} gündür ödenmedi</span>
                           return <span className="text-xs text-slate-500">{days} gün önce</span>
                         })()}
+                      </div>
+                    )}
+                    {hasCredit && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <CreditCard className="h-3 w-3 text-cyan-400" />
+                        <span className="text-cyan-400 font-medium text-sm">Alacaklı: {formatCurrency(-debt)} (fazla ödeme)</span>
                       </div>
                     )}
                   </div>
@@ -959,10 +983,10 @@ export default function CustomersPage() {
         debts={selectedCustomer?.debts || []}
         relatedDebts={selectedCustomer ? [
           ...repairs
-            .filter(r => (r.customerName === selectedCustomer.name || r.customerName?.includes(selectedCustomer.firstName || "")) && r.remaining > 0)
+            .filter(r => (r.customerName === selectedCustomer.name || r.customerName?.includes(selectedCustomer.firstName || "")) && r.remaining !== 0)
             .map(r => ({ label: `Tamir: ${r.brand} ${r.model}`, amount: r.remaining, code: r.repairCode })),
           ...sales
-            .filter(s => (s.customerName === selectedCustomer.name || s.customerName?.includes(selectedCustomer.firstName || "")) && s.remaining > 0)
+            .filter(s => (s.customerName === selectedCustomer.name || s.customerName?.includes(selectedCustomer.firstName || "")) && s.remaining !== 0)
             .map(s => ({ label: `Satış: ${(s.items || []).map(i => i.name).join(", ")}`, amount: s.remaining, code: s.saleCode })),
         ] : []}
         onPayDebt={(debtId) => handlePayDebt(selectedCustomer!.id, debtId)}

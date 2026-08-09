@@ -152,8 +152,9 @@ function RepairsPageContent() {
     const inProgress = repairs.filter((r) => r.status === "in_progress").length
     const completed = repairs.filter((r) => r.status === "completed").length
     const totalRevenue = repairs.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.paid, 0)
-    const totalRemaining = repairs.reduce((sum, r) => sum + r.remaining, 0)
-    return { total, waiting, inProgress, completed, totalRevenue, totalRemaining }
+    const totalRemaining = repairs.reduce((sum, r) => sum + Math.max(0, r.remaining), 0)
+    const totalCredit = repairs.reduce((sum, r) => sum + Math.max(0, -r.remaining), 0)
+    return { total, waiting, inProgress, completed, totalRevenue, totalRemaining, totalCredit }
   }, [repairs])
 
   // QR etiketi okutulduğunda (?open=<id> ile gelindiğinde) ilgili tamir
@@ -281,8 +282,10 @@ function RepairsPageContent() {
     }
   }
 
+  // Kalan bakiye artık 0'da sınırlanmıyor: negatif çıkarsa müşteri fazla
+  // ödemiş demektir — bu da bize borç değil, müşteriye "alacak" anlamına gelir.
   const calculateRemaining = (totalCost: number, paid: number) => {
-    return Math.max(0, totalCost - paid)
+    return totalCost - paid
   }
 
   const addFinanceTransaction = async (repair: Repair) => {
@@ -589,7 +592,9 @@ function RepairsPageContent() {
 
     const odemeDurumu = repair.remaining > 0
       ? `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}\n\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}\n\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}\n\n\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
-      : `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\u2705 Hemen teslim alabilirsiniz.`
+      : repair.remaining < 0
+        ? `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\uD83D\uDCB5 *Fazla Ödeme (Alacağınız):* ${formatCurrency(-repair.remaining)}\n\u2705 Hemen teslim alabilirsiniz.`
+        : `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\u2705 Hemen teslim alabilirsiniz.`
 
     const message = renderTemplate(getWhatsAppTemplates().repairs, {
       musteri: repair.customerName,
@@ -817,7 +822,11 @@ function RepairsPageContent() {
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
                     <div><span className="text-slate-400">Alınan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
-                    <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                    {calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0) >= 0 ? (
+                      <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                    ) : (
+                      <div><span className="text-slate-400">Fazla Ödeme:</span> <span className="text-cyan-400 font-bold">{formatCurrency(-calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                    )}
                   </div>
                 </div>
               )}
@@ -877,6 +886,16 @@ function RepairsPageContent() {
             <div className="text-3xl font-bold text-amber-400">{formatCurrency(stats.totalRemaining)}</div>
           </CardContent>
         </Card>
+        {stats.totalCredit > 0 && (
+          <Card className="bg-slate-900 border-slate-700">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-400">Müşterilerin Bizden Alacağı (Fazla Ödeme)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-cyan-400">{formatCurrency(stats.totalCredit)}</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
@@ -940,6 +959,9 @@ function RepairsPageContent() {
                         {formatCurrency(repair.cost)}
                         {repair.remaining > 0 && (
                           <span className="text-amber-400 text-xs font-normal ml-1">(Kalan: {formatCurrency(repair.remaining)})</span>
+                        )}
+                        {repair.remaining < 0 && (
+                          <span className="text-cyan-400 text-xs font-normal ml-1">(Alacaklı: {formatCurrency(-repair.remaining)})</span>
                         )}
                       </div>
                       {repair.discount > 0 && (
@@ -1150,7 +1172,11 @@ function RepairsPageContent() {
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div><span className="text-slate-400">Toplam:</span> <span className="text-white font-bold">{formatCurrency(parseFloat(cost) || 0)}</span></div>
                   <div><span className="text-slate-400">Alınan:</span> <span className="text-emerald-400 font-bold">{formatCurrency(parseFloat(paidAmount) || 0)}</span></div>
-                  <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                  {calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0) >= 0 ? (
+                    <div><span className="text-slate-400">Kalan:</span> <span className="text-amber-400 font-bold">{formatCurrency(calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                  ) : (
+                    <div><span className="text-slate-400">Fazla Ödeme:</span> <span className="text-cyan-400 font-bold">{formatCurrency(-calculateRemaining(parseFloat(cost) || 0, parseFloat(paidAmount) || 0))}</span></div>
+                  )}
                 </div>
               </div>
             )}

@@ -64,20 +64,21 @@ export default function SuppliersPage() {
     return () => { cancelled = true }
   }, [])
 
-  // Her tedarikçi için: kaç ürün alındı ve ödenmemiş/kısmi ödenmiş
-  // alışlardan doğan borç ne kadar — envanterdeki gerçek verilerden.
+  // Her tedarikçi için: kaç ürün alındı, ödenmemiş/kısmi ödenmiş alışlardan
+  // doğan borcumuz ne kadar, ve fazla ödeme yaptıysak tedarikçiden alacağımız
+  // ne kadar — hepsi envanterdeki gerçek verilerden hesaplanıyor.
   const supplierStats = (supplierName: string) => {
     const items = inventory.filter((i) => i.supplier === supplierName)
     const orderCount = items.length
-    const debt = items.reduce((sum, i) => {
+    const net = items.reduce((sum, i) => {
       const priceInTRY = i.purchaseCurrency === "USD" ? i.purchasePrice * rates.USD
         : i.purchaseCurrency === "EUR" ? i.purchasePrice * rates.EUR
         : i.purchasePrice
       const total = priceInTRY * i.quantity
       const paid = i.paymentStatus === "paid" ? total : i.paymentStatus === "partial" ? (i.paidAmount || 0) : 0
-      return sum + Math.max(0, total - paid)
+      return sum + (total - paid)
     }, 0)
-    return { orderCount, debt }
+    return { orderCount, debt: Math.max(0, net), credit: Math.max(0, -net) }
   }
 
   const getRatingStars = (rating: number) => {
@@ -106,6 +107,7 @@ export default function SuppliersPage() {
   const activeCount = suppliers.filter(s => s.status === "active").length
   const totalOrders = suppliers.reduce((sum, s) => sum + supplierStats(s.name).orderCount, 0)
   const totalSupplierDebt = suppliers.reduce((sum, s) => sum + supplierStats(s.name).debt, 0)
+  const totalSupplierCredit = suppliers.reduce((sum, s) => sum + supplierStats(s.name).credit, 0)
 
   const handleAddSupplier = async () => {
     if (!newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
@@ -392,6 +394,19 @@ export default function SuppliersPage() {
               </div>
             </CardContent>
           </Card>
+          {totalSupplierCredit > 0 && (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-300">Tedarikçilerden Alacağımız (Fazla Ödeme)</CardTitle>
+                <Package className="h-4 w-4 text-cyan-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-cyan-400">
+                  {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(totalSupplierCredit)}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Kategori</CardTitle>
@@ -487,6 +502,8 @@ export default function SuppliersPage() {
                       <span className="text-slate-400">Son Sipariş: <span className="font-semibold text-white">{supplier.lastOrderDate}</span></span>
                       {stats.debt > 0 ? (
                         <span className="text-amber-400 font-semibold">💳 Borcumuz: {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(stats.debt)}</span>
+                      ) : stats.credit > 0 ? (
+                        <span className="text-cyan-400 font-semibold">💰 Alacağımız: {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(stats.credit)}</span>
                       ) : (
                         <span className="text-emerald-400 text-xs">✓ Borç yok</span>
                       )}
