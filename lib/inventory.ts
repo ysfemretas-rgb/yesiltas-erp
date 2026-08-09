@@ -17,6 +17,11 @@ export interface InventoryItem {
   salePrice: number
   supplier: string
   location: string
+  // Bu alışta tedarikçiye ödeme yapıldı mı? Tedarikçiler sayfasındaki
+  // "borcumuz" ve "sipariş sayısı" artık elle girilmiyor, bu alanlardan
+  // otomatik hesaplanıyor.
+  paymentStatus: "paid" | "unpaid" | "partial"
+  paidAmount: number
 }
 
 function fromRow(row: any): InventoryItem {
@@ -36,6 +41,8 @@ function fromRow(row: any): InventoryItem {
     salePrice: Number(row.sale_price) || 0,
     supplier: row.supplier ?? "",
     location: row.location ?? "",
+    paymentStatus: (row.payment_status as InventoryItem["paymentStatus"]) ?? "unpaid",
+    paidAmount: Number(row.paid_amount) || 0,
   }
 }
 
@@ -54,6 +61,8 @@ function toRow(i: Partial<InventoryItem>) {
   if (i.salePrice !== undefined) row.sale_price = i.salePrice
   if (i.supplier !== undefined) row.supplier = i.supplier
   if (i.location !== undefined) row.location = i.location
+  if (i.paymentStatus !== undefined) row.payment_status = i.paymentStatus
+  if (i.paidAmount !== undefined) row.paid_amount = i.paidAmount
   return row
 }
 

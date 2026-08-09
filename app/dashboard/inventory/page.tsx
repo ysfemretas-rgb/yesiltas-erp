@@ -92,6 +92,8 @@ export default function InventoryPage() {
     purchaseCurrency: "USD",
     profitMargin: 30,
     salePrice: 0,
+    paymentStatus: "unpaid",
+    paidAmount: 0,
   })
   useEffect(() => {
     let cancelled = false
@@ -228,9 +230,11 @@ export default function InventoryPage() {
         location: newItem.location || "",
         imageUrl: newItem.imageUrl || "",
         supplierBarcode: newItem.supplierBarcode || "",
+        paymentStatus: newItem.paymentStatus || "unpaid",
+        paidAmount: newItem.paymentStatus === "partial" ? (Number(newItem.paidAmount) || 0) : 0,
       })
       setInventory([item, ...inventory])
-      setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0 })
+      setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
       setCustomCategory("")
       setIsDialogOpen(false)
       showToast("Ürün eklendi.", "success")
@@ -492,6 +496,30 @@ export default function InventoryPage() {
                   <p className="text-xs text-slate-500">Kayıtlı tedarikçi yok — Tedarikçiler sayfasından ekleyebilirsiniz.</p>
                 )}
               </div>
+              {newItem.supplier && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Tedarikçiye Ödeme Durumu</label>
+                  <Select value={newItem.paymentStatus || "unpaid"} onValueChange={(v: "paid" | "unpaid" | "partial") => setNewItem({ ...newItem, paymentStatus: v })}>
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="unpaid" className="text-white">Ödenmedi</SelectItem>
+                      <SelectItem value="partial" className="text-white">Kısmi Ödendi</SelectItem>
+                      <SelectItem value="paid" className="text-white">Ödendi</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {newItem.paymentStatus === "partial" && (
+                    <Input
+                      type="number"
+                      value={newItem.paidAmount ?? ""}
+                      onChange={(e) => setNewItem({ ...newItem, paidAmount: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                      placeholder="Ödenen tutar (TL)"
+                    />
+                  )}
+                </div>
+              )}
               <Button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Kaydet
               </Button>
@@ -743,7 +771,14 @@ export default function InventoryPage() {
                             {item.productCode}
                           </span>
                         )}
-                        {item.supplier && <span>• {item.supplier}</span>}
+                        {item.supplier && (
+                          <span className="flex items-center gap-1">
+                            • {item.supplier}
+                            {item.paymentStatus === "paid" && <Badge className="bg-emerald-900/50 text-emerald-300 border-emerald-700 text-[10px] px-1.5 py-0">Ödendi</Badge>}
+                            {item.paymentStatus === "partial" && <Badge className="bg-amber-900/50 text-amber-300 border-amber-700 text-[10px] px-1.5 py-0">Kısmi Ödendi</Badge>}
+                            {item.paymentStatus === "unpaid" && <Badge className="bg-red-900/50 text-red-300 border-red-700 text-[10px] px-1.5 py-0">Ödenmedi</Badge>}
+                          </span>
+                        )}
                         {item.location && <span>• {item.location}</span>}
                       </div>
                     </div>
@@ -1010,6 +1045,30 @@ export default function InventoryPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {editingItem.supplier && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Tedarikçiye Ödeme Durumu</label>
+                  <Select value={editingItem.paymentStatus || "unpaid"} onValueChange={(v: "paid" | "unpaid" | "partial") => setEditingItem({ ...editingItem, paymentStatus: v })}>
+                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="unpaid" className="text-white">Ödenmedi</SelectItem>
+                      <SelectItem value="partial" className="text-white">Kısmi Ödendi</SelectItem>
+                      <SelectItem value="paid" className="text-white">Ödendi</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {editingItem.paymentStatus === "partial" && (
+                    <Input
+                      type="number"
+                      value={editingItem.paidAmount ?? ""}
+                      onChange={(e) => setEditingItem({ ...editingItem, paidAmount: Number(e.target.value) })}
+                      className="bg-slate-800 border-slate-600 text-white"
+                      placeholder="Ödenen tutar (TL)"
+                    />
+                  )}
+                </div>
+              )}
               <Button onClick={handleUpdateItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Güncelle
               </Button>

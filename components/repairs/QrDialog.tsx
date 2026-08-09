@@ -23,11 +23,13 @@ interface QrDialogProps {
 }
 
 // QR kod artık düz metin değil, bir bağlantı taşıyor. Telefonun kendi kamerasıyla
-// okutulunca doğrudan bu kaydı açan tarayıcı sayfasına gider; uygulama içindeki
-// "QR Okut" özelliğiyle okutulunca da aynı kayda anında yönlendirir.
+// okutulunca GİRİŞ İSTEMEDEN salt-okunur durum sayfasını açar (bkz.
+// app/repair-status/[id]). Düzenlemek için o sayfadaki "Giriş yap ve
+// düzenle" bağlantısı kullanılır. Uygulama içindeki "QR Okut" özelliği
+// (zaten giriş yapılmış olduğu için) doğrudan yönetim kaydını açar.
 function buildQrUrl(repair: RepairForQr) {
   const origin = typeof window !== "undefined" ? window.location.origin : ""
-  return `${origin}/dashboard/repairs?open=${repair.id}`
+  return `${origin}/repair-status/${repair.id}`
 }
 
 function buildQrCaption(repair: RepairForQr) {

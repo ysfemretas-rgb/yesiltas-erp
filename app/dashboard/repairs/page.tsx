@@ -546,7 +546,9 @@ function RepairsPageContent() {
     let targetId: string | null = null
     try {
       const url = new URL(scanned)
-      targetId = url.searchParams.get("open")
+      // Yeni etiketler /repair-status/<id> taşıyor; eski basılmış
+      // etiketlerde ise ?open=<id> olabilir — ikisini de destekle.
+      targetId = url.searchParams.get("open") || url.pathname.split("/repair-status/")[1]?.split(/[/?#]/)[0] || null
     } catch {
       // URL değil, muhtemelen bir tamir kodu (YTT-0001) — koda göre ara
     }

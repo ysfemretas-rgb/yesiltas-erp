@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,6 +13,7 @@ import { supabase } from "@/lib/supabase"
 const EMAIL_DOMAIN = "@yesiltas.local"
 
 export default function LoginForm() {
+  const searchParams = useSearchParams()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -20,11 +22,15 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [shouldRedirect, setShouldRedirect] = useState(false)
 
+  // QR kod gibi bir yerden "buraya giriş yaptıktan sonra dön" bağlantısıyla
+  // gelindiyse (?redirect=/dashboard/...), girişten sonra oraya yönlendirir;
+  // yoksa her zamanki gibi ana panele gider.
   useEffect(() => {
     if (shouldRedirect) {
-      window.location.href = "/dashboard"
+      const target = searchParams.get("redirect")
+      window.location.href = target && target.startsWith("/") ? target : "/dashboard"
     }
-  }, [shouldRedirect])
+  }, [shouldRedirect, searchParams])
 
   const handleLogin = async () => {
     if (!username || !password) {

@@ -1,4 +1,5 @@
 import Image from "next/image"
+import { Suspense } from "react"
 import LoginForm from "./LoginForm"
 
 export default function LoginPage() {
@@ -13,7 +14,9 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-slate-400">Teknik Servis Yönetim Sistemi</p>
         </div>
 
-        <LoginForm />
+        <Suspense fallback={<div className="text-center text-slate-500 text-sm">Yükleniyor...</div>}>
+          <LoginForm />
+        </Suspense>
 
         <p className="mt-6 text-center text-xs text-slate-600">
           Yeşiltaş Teknoloji &copy; 2026 - Tüm hakları saklıdır.

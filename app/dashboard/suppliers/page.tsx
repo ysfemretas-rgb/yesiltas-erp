@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, Trash2, Edit3, X, ExternalLink, MessageCircle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
 
 import { Supplier, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/suppliers"
+import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
 const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
 
@@ -21,9 +23,11 @@ export default function SuppliersPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Tedarikçiler")
   const isManager = useIsManager()
+  const { rates } = useExchangeRates()
 
   const [isLoaded, setIsLoaded] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -52,8 +56,29 @@ export default function SuppliersPage() {
       .finally(() => {
         if (!cancelled) setIsLoaded(true)
       })
+    // Envanterdeki alışlar tedarikçi borcunu ve sipariş sayısını otomatik
+    // hesaplamak için gerekli — bkz. supplierStats aşağıda.
+    fetchInventory()
+      .then((data) => { if (!cancelled) setInventory(data) })
+      .catch((err) => console.error("Envanter yüklenemedi:", err))
     return () => { cancelled = true }
   }, [])
+
+  // Her tedarikçi için: kaç ürün alındı ve ödenmemiş/kısmi ödenmiş
+  // alışlardan doğan borç ne kadar — envanterdeki gerçek verilerden.
+  const supplierStats = (supplierName: string) => {
+    const items = inventory.filter((i) => i.supplier === supplierName)
+    const orderCount = items.length
+    const debt = items.reduce((sum, i) => {
+      const priceInTRY = i.purchaseCurrency === "USD" ? i.purchasePrice * rates.USD
+        : i.purchaseCurrency === "EUR" ? i.purchasePrice * rates.EUR
+        : i.purchasePrice
+      const total = priceInTRY * i.quantity
+      const paid = i.paymentStatus === "paid" ? total : i.paymentStatus === "partial" ? (i.paidAmount || 0) : 0
+      return sum + Math.max(0, total - paid)
+    }, 0)
+    return { orderCount, debt }
+  }
 
   const getRatingStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -79,8 +104,8 @@ export default function SuppliersPage() {
   })
 
   const activeCount = suppliers.filter(s => s.status === "active").length
-  const totalOrders = suppliers.reduce((sum, s) => sum + (Number(s.totalOrders) || 0), 0)
-  const totalSupplierDebt = suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
+  const totalOrders = suppliers.reduce((sum, s) => sum + supplierStats(s.name).orderCount, 0)
+  const totalSupplierDebt = suppliers.reduce((sum, s) => sum + supplierStats(s.name).debt, 0)
 
   const handleAddSupplier = async () => {
     if (!newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
@@ -99,7 +124,7 @@ export default function SuppliersPage() {
         status: "active",
         totalOrders: 0,
         lastOrderDate: new Date().toISOString().split("T")[0],
-        balance: Number(newSupplier.balance) || 0,
+        balance: 0,
       })
       setSuppliers([supplier, ...suppliers])
       setNewSupplier({ category: "Ekran", rating: 5, status: "active", totalOrders: 0 })
@@ -129,7 +154,6 @@ export default function SuppliersPage() {
         category: newSupplier.category || editingSupplier.category,
         rating: Number(newSupplier.rating) || editingSupplier.rating,
         status: (newSupplier.status as "active" | "inactive") || editingSupplier.status,
-        balance: newSupplier.balance !== undefined ? Number(newSupplier.balance) : editingSupplier.balance,
       })
       setSuppliers(suppliers.map(s => s.id === updated.id ? updated : s))
       setIsEditOpen(false)
@@ -164,7 +188,6 @@ export default function SuppliersPage() {
       category: supplier.category,
       rating: supplier.rating,
       status: supplier.status,
-      balance: supplier.balance
     })
     setIsEditOpen(true)
   }
@@ -317,16 +340,9 @@ export default function SuppliersPage() {
                     placeholder="Şehir, İlçe"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Bu Tedarikçiye Borcumuz (TL)</label>
-                  <Input
-                    type="number"
-                    value={newSupplier.balance ?? ""}
-                    onChange={(e) => setNewSupplier({ ...newSupplier, balance: Number(e.target.value) })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                    placeholder="0"
-                  />
-                </div>
+                <p className="text-xs text-slate-500">
+                  ℹ️ Sipariş sayısı ve borç artık Envanter'deki alışlardan otomatik hesaplanıyor — burada elle girmenize gerek yok.
+                </p>
                 <Button onClick={handleAddSupplier} className="w-full bg-blue-600 hover:bg-blue-700">
                   <Save className="mr-2 h-4 w-4" />
                   Kaydet
@@ -430,7 +446,9 @@ export default function SuppliersPage() {
 
             <div className="space-y-3">
               {filteredSuppliers.length > 0 ? (
-                filteredSuppliers.map((supplier) => (
+                filteredSuppliers.map((supplier) => {
+                  const stats = supplierStats(supplier.name)
+                  return (
                   <div key={supplier.id} className="rounded-lg border border-slate-600 bg-slate-700/50 p-4 hover:bg-slate-700 transition-colors">
                     <div className="flex items-start justify-between mb-2">
                       <div>
@@ -462,13 +480,13 @@ export default function SuppliersPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <Package className="h-3 w-3" />
-                        <span className="text-slate-300">{supplier.totalOrders} sipariş</span>
+                        <span className="text-slate-300">{stats.orderCount} sipariş (Envanter)</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-sm bg-slate-800 p-2 rounded border border-slate-600 mb-2 flex-wrap gap-2">
                       <span className="text-slate-400">Son Sipariş: <span className="font-semibold text-white">{supplier.lastOrderDate}</span></span>
-                      {supplier.balance > 0 ? (
-                        <span className="text-amber-400 font-semibold">💳 Borcumuz: {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(supplier.balance)}</span>
+                      {stats.debt > 0 ? (
+                        <span className="text-amber-400 font-semibold">💳 Borcumuz: {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(stats.debt)}</span>
                       ) : (
                         <span className="text-emerald-400 text-xs">✓ Borç yok</span>
                       )}
@@ -493,7 +511,8 @@ export default function SuppliersPage() {
                       )}
                     </div>
                   </div>
-                ))
+                  )
+                })
               ) : (
                 <p className="text-slate-400 text-center py-8">Tedarikçi bulunamadı.</p>
               )}
@@ -556,16 +575,9 @@ export default function SuppliersPage() {
                 <label className="text-sm font-medium text-slate-300">Adres</label>
                 <Input value={newSupplier.address || ""} onChange={(e) => setNewSupplier({...newSupplier, address: e.target.value})} className="bg-slate-700 border-slate-600 text-white" />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Bu Tedarikçiye Borcumuz (TL)</label>
-                <Input
-                  type="number"
-                  value={newSupplier.balance ?? ""}
-                  onChange={(e) => setNewSupplier({...newSupplier, balance: Number(e.target.value)})}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  placeholder="0"
-                />
-              </div>
+              <p className="text-xs text-slate-500">
+                ℹ️ Sipariş sayısı ve borç Envanter'deki alışlardan otomatik hesaplanıyor.
+              </p>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Durum</label>
                 <Select value={newSupplier.status} onValueChange={(value: "active" | "inactive") => setNewSupplier({...newSupplier, status: value})}>

@@ -71,6 +71,60 @@ function toRow(r: Partial<Repair>) {
   return row
 }
 
+// QR kod ile giriş yapmadan görüntülenen, salt-okunur küçük veri seti.
+// Güvenli bir Supabase fonksiyonu (get_repair_public) üzerinden gelir —
+// bkz. supabase-repair-public-view-migration.sql. Bu fonksiyon SADECE
+// verilen ID'ye ait tek kaydı döndürür, tüm listeyi değil.
+export interface PublicRepairView {
+  id: string
+  repairCode: string
+  customerCode: string
+  customerName: string
+  phone1: string
+  device: string
+  brand: string
+  model: string
+  issue: string
+  status: "waiting" | "in_progress" | "completed"
+  cost: number
+  discount: number
+  paid: number
+  remaining: number
+  paymentType: string
+  notes: string
+  imei?: string
+  createdAt: string
+  completedAt?: string
+}
+
+export async function fetchRepairPublic(id: string): Promise<PublicRepairView | null> {
+  const { data, error } = await supabase.rpc("get_repair_public", { p_id: id })
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  return {
+    id: row.id,
+    repairCode: row.repair_code ?? "",
+    customerCode: row.customer_code ?? "",
+    customerName: row.customer_name ?? "",
+    phone1: row.phone1 ?? "",
+    device: row.device_type ?? "Telefon",
+    brand: row.brand ?? "",
+    model: row.model ?? "",
+    issue: row.complaint ?? "",
+    status: (row.status as PublicRepairView["status"]) ?? "waiting",
+    cost: Number(row.cost) || 0,
+    discount: Number(row.discount) || 0,
+    paid: Number(row.paid_amount) || 0,
+    remaining: Number(row.remaining_amount) || 0,
+    paymentType: row.payment_type ?? "unpaid",
+    notes: row.notes ?? "",
+    imei: row.imei ?? undefined,
+    createdAt: row.received_date ? String(row.received_date).slice(0, 10) : "",
+    completedAt: row.completed_date ? String(row.completed_date).slice(0, 10) : undefined,
+  }
+}
+
 export async function fetchRepairs(): Promise<Repair[]> {
   const { data, error } = await supabase.from("devices").select("*").order("received_date", { ascending: false }).limit(1000)
   if (error) throw error
