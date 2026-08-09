@@ -542,21 +542,6 @@ function RepairsPageContent() {
     setIsQrDialogOpen(true)
   }
 
-  // QR etiketi okutulduğunda (?open=<id> ile gelindiğinde) ilgili tamir
-  // kaydını otomatik açar.
-  useEffect(() => {
-    const openId = searchParams.get("open")
-    if (!openId || repairs.length === 0) return
-    const found = repairs.find((r) => r.id === openId)
-    if (found) {
-      openEditDialog(found)
-      router.replace("/dashboard/repairs")
-    } else {
-      showToast("QR kodundaki tamir kaydı bulunamadı.", "error")
-      router.replace("/dashboard/repairs")
-    }
-  }, [searchParams, repairs])
-
   const handleRepairQrScan = (scanned: string) => {
     let targetId: string | null = null
     try {
