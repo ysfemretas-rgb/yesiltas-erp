@@ -385,6 +385,7 @@ export default function InventoryPage() {
               </div>
 
               <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                <p className="text-xs text-slate-500">🏷️ Ürün kodumuz (YTE-XXXX) kaydettikten sonra otomatik atanacak.</p>
                 <label className="text-sm font-medium text-slate-300">Satıcının Barkodu (opsiyonel)</label>
                 <div className="flex gap-2">
                   <Input
