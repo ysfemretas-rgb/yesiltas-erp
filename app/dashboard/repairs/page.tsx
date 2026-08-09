@@ -13,7 +13,8 @@ import { QrDialog } from "@/components/repairs/QrDialog"
 import { NoteDialog } from "@/components/repairs/NoteDialog"
 import { getRepairStatusBadge as getStatusBadge, getRepairPaymentBadge as getPaymentBadge, formatCurrency } from "@/components/repairs/RepairBadges"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,6 +36,7 @@ import {
   Printer
 } from "lucide-react"
 import { printRepairReceipt } from "@/lib/repairReceipt"
+import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
 
 interface Customer {
@@ -48,8 +50,10 @@ interface Customer {
 }
 
 
-export default function RepairsPage() {
+function RepairsPageContent() {
   const { toast, showToast, hideToast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { authorized, checking } = usePageAccess("Tamir")
   const isManager = useIsManager()
 
@@ -62,6 +66,7 @@ export default function RepairsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false)
   const [isQrDialogOpen, setIsQrDialogOpen] = useState(false)
+  const [isRepairScannerOpen, setIsRepairScannerOpen] = useState(false)
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false)
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null)
   const [noteText, setNoteText] = useState("")
@@ -521,6 +526,41 @@ export default function RepairsPage() {
     setIsQrDialogOpen(true)
   }
 
+  // QR etiketi okutulduğunda (?open=<id> ile gelindiğinde) ilgili tamir
+  // kaydını otomatik açar.
+  useEffect(() => {
+    const openId = searchParams.get("open")
+    if (!openId || repairs.length === 0) return
+    const found = repairs.find((r) => r.id === openId)
+    if (found) {
+      openEditDialog(found)
+      router.replace("/dashboard/repairs")
+    } else {
+      showToast("QR kodundaki tamir kaydı bulunamadı.", "error")
+      router.replace("/dashboard/repairs")
+    }
+  }, [searchParams, repairs])
+
+  const handleRepairQrScan = (scanned: string) => {
+    let targetId: string | null = null
+    try {
+      const url = new URL(scanned)
+      targetId = url.searchParams.get("open")
+    } catch {
+      // URL değil, muhtemelen bir tamir kodu (YTT-0001) — koda göre ara
+    }
+    const found = targetId
+      ? repairs.find((r) => r.id === targetId)
+      : repairs.find((r) => (r.repairCode || "").toLowerCase() === scanned.trim().toLowerCase())
+
+    if (found) {
+      openEditDialog(found)
+      showToast(`Bulundu: ${found.customerName}`, "success")
+    } else {
+      showToast("Bu QR koduna ait tamir kaydı bulunamadı.", "error")
+    }
+  }
+
   const resetForm = () => {
     setCustomerId("")
     setCustomerName("")
@@ -560,8 +600,12 @@ export default function RepairsPage() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🔧 Teknik Servis</h1>
+        <div className="flex gap-2">
+        <Button onClick={() => setIsRepairScannerOpen(true)} variant="outline" className="border-slate-600 text-cyan-400">
+          <QrCode className="h-4 w-4 mr-2" />QR Okut
+        </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -786,6 +830,7 @@ export default function RepairsPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -1130,6 +1175,13 @@ export default function RepairsPage() {
 
       <QrDialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen} repair={selectedRepair} />
 
+      <BarcodeScannerDialog
+        open={isRepairScannerOpen}
+        onOpenChange={setIsRepairScannerOpen}
+        title="Tamir Kaydı QR Okut"
+        onScan={handleRepairQrScan}
+      />
+
       <Dialog open={isNewCustomerDialogOpen} onOpenChange={setIsNewCustomerDialogOpen}>
         <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
@@ -1163,5 +1215,13 @@ export default function RepairsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function RepairsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><div className="text-white">Yükleniyor...</div></div>}>
+      <RepairsPageContent />
+    </Suspense>
   )
 }

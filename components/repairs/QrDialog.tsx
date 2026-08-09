@@ -22,7 +22,15 @@ interface QrDialogProps {
   repair: RepairForQr | null
 }
 
-function buildQrText(repair: RepairForQr) {
+// QR kod artık düz metin değil, bir bağlantı taşıyor. Telefonun kendi kamerasıyla
+// okutulunca doğrudan bu kaydı açan tarayıcı sayfasına gider; uygulama içindeki
+// "QR Okut" özelliğiyle okutulunca da aynı kayda anında yönlendirir.
+function buildQrUrl(repair: RepairForQr) {
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  return `${origin}/dashboard/repairs?open=${repair.id}`
+}
+
+function buildQrCaption(repair: RepairForQr) {
   return [
     `Kayit No: ${repair.repairCode || repair.id.slice(0, 8).toUpperCase()}`,
     repair.customerCode ? `Musteri No: ${repair.customerCode}` : null,
@@ -37,7 +45,7 @@ function buildQrText(repair: RepairForQr) {
 // QR etiketini ayrı pencerede yazdırır — sayfanın tamamı yerine sadece etiketi
 // basar, mobilde de kapatma butonu bulunur.
 function printQrLabel(repair: RepairForQr) {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(buildQrText(repair))}`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(buildQrUrl(repair))}`
   const code = repair.repairCode || repair.id.slice(0, 8).toUpperCase()
 
   const html = `<!DOCTYPE html>
@@ -110,7 +118,7 @@ export function QrDialog({ open, onOpenChange, repair }: QrDialogProps) {
           <div className="flex flex-col items-center gap-3 py-4">
             <div className="rounded-lg bg-white p-3">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(buildQrText(repair))}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(buildQrUrl(repair))}`}
                 alt="Cihaz QR Kodu"
                 width={220}
                 height={220}
