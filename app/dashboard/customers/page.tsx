@@ -4,6 +4,8 @@ import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt } from "@/lib/customers"
+import { fetchRepairs as fetchRepairsData } from "@/lib/repairs"
+import { fetchSales as fetchSalesData } from "@/lib/sales"
 import { validatePhone } from "@/lib/validation"
 import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { CustomerWhatsAppDialog } from "@/components/customers/CustomerWhatsAppDialog"
@@ -34,12 +36,14 @@ import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, 
 
 interface Repair {
   id: number
+  repairCode?: string
   customerId?: number
   customerName: string
   phone1: string
   phone2: string
   device: string
   brand: string
+  model?: string
   cost: number
   paid: number
   remaining: number
@@ -49,6 +53,7 @@ interface Repair {
 
 interface Sale {
   id: number
+  saleCode?: string
   customerId: number
   customerName: string
   totalAmount: number
@@ -87,66 +92,50 @@ export default function CustomersPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
-  // Müşterileri Supabase'den yükle, tamir/satış verisini (henüz Supabase'e
-  // taşınmadığı için) localStorage'dan okuyup borç senkronizasyonunu uygula
+  // Müşterileri, tamirleri ve satışları doğrudan Supabase'den yükleyip
+  // borç senkronizasyonunu uygula.
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    const savedRepairs = localStorage.getItem("yt_repairs")
-    const savedSales = localStorage.getItem("yt_sales")
-    let loadedRepairs: Repair[] = []
-    let loadedSales: Sale[] = []
+    Promise.all([
+      fetchRepairsData().catch((e) => { console.error("Tamirler yüklenemedi:", e); return [] }),
+      fetchSalesData().catch((e) => { console.error("Satışlar yüklenemedi:", e); return [] }),
+    ]).then(([loadedRepairs, loadedSales]) => {
+      setRepairs(loadedRepairs as any)
+      setSales(loadedSales as any)
 
-    try {
-      if (savedRepairs) {
-        const parsed = JSON.parse(savedRepairs)
-        if (Array.isArray(parsed)) {
-          loadedRepairs = parsed
-          setRepairs(parsed)
-        }
-      }
-      if (savedSales) {
-        const parsed = JSON.parse(savedSales)
-        if (Array.isArray(parsed)) {
-          loadedSales = parsed
-          setSales(parsed)
-        }
-      }
-    } catch (e) {
-      console.error("Tamir/satış verisi okunamadı:", e)
-    }
+      fetchCustomers()
+        .then((loadedCustomers) => {
+          // Tamir ve satışlardan gelen borcu, müşterinin manuel borçlarıyla birleştir
+          const syncedCustomers = loadedCustomers.map(customer => {
+            const customerRepairs = (loadedRepairs as any[]).filter(r =>
+              r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
+            )
+            const customerSales = (loadedSales as any[]).filter(s =>
+              s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
+            )
 
-    fetchCustomers()
-      .then((loadedCustomers) => {
-        // Tamir ve satışlardan gelen borcu, müşterinin manuel borçlarıyla birleştir
-        const syncedCustomers = loadedCustomers.map(customer => {
-          const customerRepairs = loadedRepairs.filter(r =>
-            r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
-          )
-          const customerSales = loadedSales.filter(s =>
-            s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
-          )
+            const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
+            const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
+            const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
 
-          const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
-          const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
-          const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
-
-          return {
-            ...customer,
-            totalDebt: repairDebt + saleDebt + manualDebt,
-            totalRepairs: customerRepairs.length,
-            status: (repairDebt + saleDebt + manualDebt) > 0 ? "active" as const : customer.status,
-            phone: customer.phone || customer.phone1 || "",
-            phone1: customer.phone1 || customer.phone || "",
-          }
+            return {
+              ...customer,
+              totalDebt: repairDebt + saleDebt + manualDebt,
+              totalRepairs: customerRepairs.length,
+              status: (repairDebt + saleDebt + manualDebt) > 0 ? "active" as const : customer.status,
+              phone: customer.phone || customer.phone1 || "",
+              phone1: customer.phone1 || customer.phone || "",
+            }
+          })
+          setCustomers(syncedCustomers)
         })
-        setCustomers(syncedCustomers)
-      })
-      .catch((e) => {
-        console.error("Müşteriler yüklenemedi:", e)
-        showToast("Müşteriler yüklenirken bir sorun oluştu.", "error")
-      })
-      .finally(() => setIsLoaded(true))
+        .catch((e) => {
+          console.error("Müşteriler yüklenemedi:", e)
+          showToast("Müşteriler yüklenirken bir sorun oluştu.", "error")
+        })
+        .finally(() => setIsLoaded(true))
+    })
   }, [])
 
   // Teknik Servis ve Satış sayfaları henüz Supabase'e taşınmadığı için hâlâ
