@@ -198,6 +198,8 @@ export default function InventoryPage() {
         salePrice,
         supplier: String(r.supplier || ""),
         location: String(r.location || ""),
+        paymentStatus: "unpaid" as const,
+        paidAmount: 0,
       }
     }).filter(r => r.name)
     const created = await createInventoryItemsBulk(inputs)
