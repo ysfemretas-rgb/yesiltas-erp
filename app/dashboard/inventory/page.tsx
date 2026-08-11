@@ -512,13 +512,26 @@ export default function InventoryPage() {
                     </SelectContent>
                   </Select>
                   {newItem.paymentStatus === "partial" && (
-                    <Input
-                      type="number"
-                      value={newItem.paidAmount ?? ""}
-                      onChange={(e) => setNewItem({ ...newItem, paidAmount: Number(e.target.value) })}
-                      className="bg-slate-800 border-slate-600 text-white"
-                      placeholder="Ödenen tutar (TL)"
-                    />
+                    <>
+                      <Input
+                        type="number"
+                        value={newItem.paidAmount ?? ""}
+                        onChange={(e) => setNewItem({ ...newItem, paidAmount: Number(e.target.value) })}
+                        className="bg-slate-800 border-slate-600 text-white"
+                        placeholder="Ödenen tutar (TL)"
+                      />
+                      {(() => {
+                        const priceInTRY = newItem.purchaseCurrency === "USD" ? (newItem.purchasePrice || 0) * rates.USD
+                          : newItem.purchaseCurrency === "EUR" ? (newItem.purchasePrice || 0) * rates.EUR
+                          : (newItem.purchasePrice || 0)
+                        const total = priceInTRY * (newItem.quantity || 0)
+                        const net = total - (Number(newItem.paidAmount) || 0)
+                        if (!total) return null
+                        return net >= 0
+                          ? <p className="text-xs text-amber-400">⏳ Bu alıştan kalan borcumuz: {formatCurrency(net)}</p>
+                          : <p className="text-xs text-cyan-400">💰 Fazla ödendi — tedarikçiden alacağımız: {formatCurrency(-net)}</p>
+                      })()}
+                    </>
                   )}
                 </div>
               )}
@@ -1061,13 +1074,26 @@ export default function InventoryPage() {
                     </SelectContent>
                   </Select>
                   {editingItem.paymentStatus === "partial" && (
-                    <Input
-                      type="number"
-                      value={editingItem.paidAmount ?? ""}
-                      onChange={(e) => setEditingItem({ ...editingItem, paidAmount: Number(e.target.value) })}
-                      className="bg-slate-800 border-slate-600 text-white"
-                      placeholder="Ödenen tutar (TL)"
-                    />
+                    <>
+                      <Input
+                        type="number"
+                        value={editingItem.paidAmount ?? ""}
+                        onChange={(e) => setEditingItem({ ...editingItem, paidAmount: Number(e.target.value) })}
+                        className="bg-slate-800 border-slate-600 text-white"
+                        placeholder="Ödenen tutar (TL)"
+                      />
+                      {(() => {
+                        const priceInTRY = editingItem.purchaseCurrency === "USD" ? editingItem.purchasePrice * rates.USD
+                          : editingItem.purchaseCurrency === "EUR" ? editingItem.purchasePrice * rates.EUR
+                          : editingItem.purchasePrice
+                        const total = priceInTRY * editingItem.quantity
+                        const net = total - (Number(editingItem.paidAmount) || 0)
+                        if (!total) return null
+                        return net >= 0
+                          ? <p className="text-xs text-amber-400">⏳ Bu alıştan kalan borcumuz: {formatCurrency(net)}</p>
+                          : <p className="text-xs text-cyan-400">💰 Fazla ödendi — tedarikçiden alacağımız: {formatCurrency(-net)}</p>
+                      })()}
+                    </>
                   )}
                 </div>
               )}

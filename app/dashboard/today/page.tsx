@@ -8,7 +8,8 @@ import { Toast, useToast } from "@/components/toast"
 import { fetchWarranties } from "@/lib/warranties"
 import { fetchAppointments } from "@/lib/appointments"
 import { fetchCustomers } from "@/lib/customers"
-import { fetchRepairs } from "@/lib/repairs"
+import { fetchRepairs, Repair } from "@/lib/repairs"
+import { fetchSales } from "@/lib/sales"
 
 interface ReminderItem {
   id: string
@@ -85,8 +86,16 @@ export default function TodayPage() {
       console.error("Randevular yüklenemedi:", e)
     }
 
+    let repairsData: Repair[] = []
+    try {
+      repairsData = await fetchRepairs()
+    } catch (e) {
+      console.error("Tamir kayıtları yüklenemedi:", e)
+    }
+
     try {
       const customers = await fetchCustomers()
+      const sales = await fetchSales().catch((e) => { console.error("Satışlar yüklenemedi:", e); return [] })
       let iban = ""
       let accountName = ""
       try {
@@ -104,7 +113,20 @@ export default function TodayPage() {
         : `\uD83C\uDFE6 Havale/EFT ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.`
       for (const c of customers) {
         const phone = c.phone || c.phone1 || ""
-        if (!phone || !c.totalDebt || c.totalDebt <= 0) continue
+        if (!phone) continue
+        // Toplam borç: manuel borçlar + tamir/satıştan gelen bakiyeler (tamir/satış
+        // sayfalarındaki hesaplamayla aynı yöntem). Fazla ödemesi varsa (alacaklıysa)
+        // net negatif çıkar ve hatırlatma listesine hiç girmez — sadece gerçek
+        // borçlular listelenir.
+        const manualDebt = (c.debts || []).filter((d: any) => d.status === "unpaid").reduce((sum: number, d: any) => sum + d.amount, 0)
+        const repairDebt = repairsData
+          .filter(r => r.customerName === c.name || r.customerName?.includes(c.firstName || ""))
+          .reduce((sum, r) => sum + (r.remaining || 0), 0)
+        const saleDebt = sales
+          .filter(s => s.customerName === c.name || s.customerName?.includes(c.firstName || ""))
+          .reduce((sum, s) => sum + (s.remaining || 0), 0)
+        const totalDebt = manualDebt + repairDebt + saleDebt
+        if (totalDebt <= 0) continue
         newItems.push({
           id: `d-${c.id}`,
           group: "debt",
@@ -114,12 +136,12 @@ export default function TodayPage() {
             if (unpaid.length > 0) {
               const oldest = unpaid.reduce((min: string, d: any) => (d.date < min ? d.date : min), unpaid[0].date)
               const days = Math.floor((Date.now() - new Date(oldest).getTime()) / 86400000)
-              if (days >= 30) return `${c.totalDebt.toLocaleString("tr-TR")} TL borcu var — ⏰ ${days} gündür ödenmedi`
+              if (days >= 30) return `${totalDebt.toLocaleString("tr-TR")} TL borcu var — ⏰ ${days} gündür ödenmedi`
             }
-            return `${c.totalDebt.toLocaleString("tr-TR")} TL borcu var`
+            return `${totalDebt.toLocaleString("tr-TR")} TL borcu var`
           })(),
           phone,
-          message: `\uD83D\uDC4B Merhaba ${c.name},\n\n\uD83D\uDCB0 *Yeşiltaş Teknoloji*'den ödeme hatırlatmasıdır.\n\nHesabınızda ${c.totalDebt.toLocaleString("tr-TR")} TL bakiye bulunmaktadır.\n\n${paymentLine}\n\nTeşekkür ederiz.\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
+          message: `\uD83D\uDC4B Merhaba ${c.name},\n\n\uD83D\uDCB0 *Yeşiltaş Teknoloji*'den ödeme hatırlatmasıdır.\n\nHesabınızda ${totalDebt.toLocaleString("tr-TR")} TL bakiye bulunmaktadır.\n\n${paymentLine}\n\nTeşekkür ederiz.\n\n\uD83C\uDFEA Yeşiltaş Teknoloji`,
         })
       }
     } catch (e) {
@@ -127,8 +149,7 @@ export default function TodayPage() {
     }
 
     try {
-      const repairs = await fetchRepairs()
-      for (const r of repairs) {
+      for (const r of repairsData) {
         if (r.status !== "waiting" || !r.phone1 || !r.createdAt) continue
         const waitingDays = -daysUntil(r.createdAt)
         if (waitingDays < 2) continue
@@ -142,7 +163,7 @@ export default function TodayPage() {
         })
       }
     } catch (e) {
-      console.error("Tamir kayıtları yüklenemedi:", e)
+      console.error("Tamir hatırlatmaları oluşturulamadı:", e)
     }
 
     setItems(newItems)

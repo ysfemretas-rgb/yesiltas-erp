@@ -411,7 +411,9 @@ export default function CustomersPage() {
     if (type === "simple") {
       odemeBilgisi = totalRemaining > 0
         ? `\uD83D\uDCB0 *Toplam Borcunuz:* ${totalRemaining.toLocaleString("tr-TR")} TL\n${paymentLine}`
-        : `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!`
+        : totalRemaining < 0
+          ? `\uD83C\uDF89 Borcunuz bulunmamaktadır. Ayrıca fazla ödemeniz nedeniyle *${(-totalRemaining).toLocaleString("tr-TR")} TL* alacağınız bulunmaktadır.`
+          : `\uD83C\uDF89 Borcunuz bulunmamaktadır. Teşekkür ederiz!`
     } else {
       if (transactions.length > 0) {
         let detay = `\uD83D\uDCCB *İşlem Detaylarınız:*\n\n`
@@ -421,11 +423,15 @@ export default function CustomersPage() {
           detay += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL\n`
           if (t.remaining > 0) {
             detay += `   \u23F3 Kalan: ${t.remaining.toLocaleString("tr-TR")} TL\n`
+          } else if (t.remaining < 0) {
+            detay += `   \uD83D\uDCB0 Fazla Ödeme (Alacağınız): ${(-t.remaining).toLocaleString("tr-TR")} TL\n`
           }
           detay += `   \uD83D\uDCC5 Tarih: ${t.date}\n\n`
         })
         if (totalRemaining > 0) {
           detay += `\uD83D\uDCB0 *Toplam Kalan Borç:* ${totalRemaining.toLocaleString("tr-TR")} TL\n${paymentLine}`
+        } else if (totalRemaining < 0) {
+          detay += `\uD83D\uDCB0 *Toplam Alacağınız:* ${(-totalRemaining).toLocaleString("tr-TR")} TL`
         }
         odemeBilgisi = detay
       } else {
