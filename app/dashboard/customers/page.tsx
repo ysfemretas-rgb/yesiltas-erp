@@ -1,9 +1,10 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt } from "@/lib/customers"
+import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt, collectBalance } from "@/lib/customers"
 import { fetchRepairs as fetchRepairsData } from "@/lib/repairs"
 import { fetchSales as fetchSalesData } from "@/lib/sales"
 import { validatePhone } from "@/lib/validation"
@@ -35,9 +36,11 @@ import {
 import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle } from "lucide-react"
 
 interface Repair {
-  id: number
+  id: string
+  customerCode?: string
+  paymentType?: string
   repairCode?: string
-  customerId?: number
+  customerId?: string
   customerName: string
   phone1: string
   phone2: string
@@ -52,9 +55,12 @@ interface Repair {
 }
 
 interface Sale {
-  id: number
+  id: string
   saleCode?: string
-  customerId: number
+  customerId: string
+  customerCode?: string
+  paymentMethod?: string
+  status?: string
   customerName: string
   totalAmount: number
   paid: number
@@ -92,72 +98,59 @@ export default function CustomersPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
-  // Müşterileri, tamirleri ve satışları doğrudan Supabase'den yükleyip
-  // borç senkronizasyonunu uygula.
-  useEffect(() => {
-    if (typeof window === "undefined") return
+  // Bir tamir/satış kaydı hangi müşteriye ait? Eskiden isim "içeriyor mu" diye bakılıyordu
+  // ("Ahmet" tüm Ahmet'lerin borcunu karıştırırdı). Artık sırayla: kayıtlı müşteri ID'si,
+  // müşteri kodu, ve sadece isim BENZERSİZSE tam isim eşleşmesi.
+  const nameCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    customers.forEach(c => {
+      const key = (c.name || "").trim().toLowerCase()
+      map.set(key, (map.get(key) || 0) + 1)
+    })
+    return map
+  }, [customers])
 
-    Promise.all([
+  const belongsTo = (customer: Customer, rec: { customerId?: string; customerCode?: string; customerName?: string }) => {
+    if (rec.customerId) return rec.customerId === customer.id
+    if (rec.customerCode) return rec.customerCode === customer.customerCode
+    const key = (customer.name || "").trim().toLowerCase()
+    return !!key && (rec.customerName || "").trim().toLowerCase() === key && (nameCounts.get(key) || 0) === 1
+  }
+
+  const activeSales = (list: Sale[]) => list.filter(s => s.status !== "cancelled")
+
+  // Müşterileri, tamirleri ve satışları doğrudan Supabase'den yükler.
+  const loadAll = async () => {
+    const [loadedRepairs, loadedSales] = await Promise.all([
       fetchRepairsData().catch((e) => { console.error("Tamirler yüklenemedi:", e); return [] }),
       fetchSalesData().catch((e) => { console.error("Satışlar yüklenemedi:", e); return [] }),
-    ]).then(([loadedRepairs, loadedSales]) => {
-      setRepairs(loadedRepairs as any)
-      setSales(loadedSales as any)
+    ])
+    setRepairs(loadedRepairs as any)
+    setSales(loadedSales as any)
+    try {
+      const loadedCustomers = await fetchCustomers()
+      setCustomers(loadedCustomers)
+    } catch (e) {
+      console.error("Müşteriler yüklenemedi:", e)
+      showToast("Müşteriler yüklenirken bir sorun oluştu.", "error")
+    } finally {
+      setIsLoaded(true)
+    }
+  }
 
-      fetchCustomers()
-        .then((loadedCustomers) => {
-          // Tamir ve satışlardan gelen borcu, müşterinin manuel borçlarıyla birleştir
-          const syncedCustomers = loadedCustomers.map(customer => {
-            const customerRepairs = (loadedRepairs as any[]).filter(r =>
-              r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
-            )
-            const customerSales = (loadedSales as any[]).filter(s =>
-              s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
-            )
-
-            const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
-            const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
-            const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
-
-            return {
-              ...customer,
-              totalDebt: repairDebt + saleDebt + manualDebt,
-              totalRepairs: customerRepairs.length,
-              status: (repairDebt + saleDebt + manualDebt) > 0 ? "active" as const : customer.status,
-              phone: customer.phone || customer.phone1 || "",
-              phone1: customer.phone1 || customer.phone || "",
-            }
-          })
-          setCustomers(syncedCustomers)
-        })
-        .catch((e) => {
-          console.error("Müşteriler yüklenemedi:", e)
-          showToast("Müşteriler yüklenirken bir sorun oluştu.", "error")
-        })
-        .finally(() => setIsLoaded(true))
-    })
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    loadAll()
   }, [])
 
-  // Teknik Servis ve Satış sayfaları henüz Supabase'e taşınmadığı için hâlâ
-  // localStorage'daki müşteri listesini okuyor. Onlar taşınana kadar, o
-  // sayfaların güncel müşteri görebilmesi için burada bir ayna (mirror) tutuyoruz —
-  // asıl kaynak Supabase, bu sadece uyumluluk içindir.
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_customers", JSON.stringify(customers))
-  }, [customers, isLoaded])
-
-  // Calculate customer debt from repairs/sales in real-time
+  // Müşterinin borcu: tamir kalanı + satış kalanı + SADECE elle eklenmiş borçlar.
+  // (Satış/tamirden doğan borç kayıtları zaten kalan tutarda sayıldığı için tekrar toplanmıyordu — çift sayım.)
   const getCustomerDebt = (customer: Customer) => {
-    const customerRepairs = repairs.filter(r => 
-      r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
-    )
-    const customerSales = sales.filter(s => 
-      s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
-    )
-    const repairDebt = customerRepairs.reduce((sum, r) => sum + (r.remaining || 0), 0)
-    const saleDebt = customerSales.reduce((sum, s) => sum + (s.remaining || 0), 0)
-    const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
+    const customerRepairs = repairs.filter(r => belongsTo(customer, r))
+    const customerSales = activeSales(sales).filter(s => belongsTo(customer, s))
+    const repairDebt = customerRepairs.filter(r => r.paymentType !== "gift").reduce((sum, r) => sum + (r.remaining || 0), 0)
+    const saleDebt = customerSales.filter(s => s.paymentMethod !== "gift").reduce((sum, s) => sum + (s.remaining || 0), 0)
+    const manualDebt = (customer.debts || []).filter(d => d.status === "unpaid" && (d.source ?? "manual") === "manual").reduce((sum, d) => sum + d.amount, 0)
     return repairDebt + saleDebt + manualDebt
   }
 
@@ -171,59 +164,68 @@ export default function CustomersPage() {
     return lastVisit >= thirtyDaysAgo
   }
 
-  const toggleStatus = (id: string) => {
-    setCustomers(customers.map(c =>
-      c.id === id ? { ...c, status: c.status === "active" ? "inactive" : "active" } : c
-    ))
+  const toggleStatus = async (id: string) => {
+    const current = customers.find(c => c.id === id)
+    if (!current) return
+    const next = current.status === "active" ? "inactive" : "active"
+    setCustomers(customers.map(c => c.id === id ? { ...c, status: next } : c))
+    try {
+      await updateCustomer(id, { status: next })
+    } catch (e) {
+      console.error(e)
+      setCustomers(customers)
+      showToast("Durum kaydedilemedi.", "error")
+    }
   }
 
   const getCustomerTransactions = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
     if (!customer) return []
 
-    const customerRepairs = repairs.filter(r => 
-      r.customerName === customer.name || r.customerName?.includes(customer.firstName || "")
-    )
-    const customerSales = sales.filter(s => 
-      s.customerName === customer.name || s.customerName?.includes(customer.firstName || "")
-    )
+    const customerRepairs = repairs.filter(r => belongsTo(customer, r))
+    const customerSales = activeSales(sales).filter(s => belongsTo(customer, s))
 
     const transactions: {
       type: "repair" | "sale"
-      id: number
+      id: string
       description: string
       total: number
       paid: number
       remaining: number
       date: string
+      gift: boolean
     }[] = []
 
     customerRepairs.forEach(r => {
-      if (r.remaining > 0 || r.paid > 0) {
+      const gift = r.paymentType === "gift"
+      // Eşantiyon (bedelsiz) tamirler tutarı 0 olsa bile geçmişte görünür
+      if (gift || r.remaining > 0 || r.paid > 0) {
         transactions.push({
           type: "repair",
           id: r.id,
-          description: `${r.brand} ${r.device} - Tamir`,
+          description: `${gift ? "🎁 " : ""}${r.brand} ${r.device} - Tamir${gift ? " (Eşantiyon)" : ""}`,
           total: r.cost,
-          paid: r.paid || 0,
-          remaining: r.remaining || 0,
+          paid: gift ? 0 : (r.paid || 0),
+          remaining: gift ? 0 : (r.remaining || 0),
           date: r.createdAt,
+          gift,
         })
       }
     })
 
+    // Tüm satışlar listelenir: eşantiyon ve tutarı 0 olanlar dahil (eskiden sadece ödeme/borç içerenler geliyordu)
     customerSales.forEach(s => {
-      if (s.remaining > 0 || s.paid > 0) {
-        transactions.push({
-          type: "sale",
-          id: s.id,
-          description: `Satış: ${s.items?.map(i => i.name).join(", ") || "Ürün"}`,
-          total: s.totalAmount,
-          paid: s.paid || 0,
-          remaining: s.remaining || 0,
-          date: s.date,
-        })
-      }
+      const gift = s.paymentMethod === "gift"
+      transactions.push({
+        type: "sale",
+        id: s.id,
+        description: `${gift ? "🎁 " : ""}Satış: ${s.items?.map(i => i.name).join(", ") || "Ürün"}${gift ? " (Eşantiyon)" : ""}`,
+        total: s.totalAmount,
+        paid: gift ? 0 : (s.paid || 0),
+        remaining: gift ? 0 : (s.remaining || 0),
+        date: s.date,
+        gift,
+      })
     })
 
     return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -281,7 +283,7 @@ export default function CustomersPage() {
         address: newCustomer.address || "",
         city: newCustomer.city || "İstanbul",
         totalRepairs: 0,
-        lastVisit: new Date().toISOString().split("T")[0],
+        lastVisit: localDateStr(),
         status: "active",
         notes: newCustomer.notes || "",
       })
@@ -447,6 +449,27 @@ export default function CustomersPage() {
     const cleanPhone = phone.startsWith("0") ? phone.substring(1) : phone
     window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
     setIsWhatsAppOpen(false)
+  }
+
+  const manualDebtsOf = (customer: Customer) => (customer.debts || []).filter(d => (d.source ?? "manual") === "manual")
+
+  // Satış / tamir bakiyesini (kısmen ya da tamamen) tahsil eder; kasaya gelir yazılır.
+  const handleCollect = async (item: { kind: "sale" | "repair"; id: string; amount: number; label: string }) => {
+    const input = window.prompt(`${item.label}\nKalan: ${formatCurrency(item.amount)}\n\nTahsil edilen tutar (TL):`, String(item.amount))
+    if (input === null) return
+    const amount = Number(String(input).replace(",", "."))
+    if (!amount || amount <= 0) {
+      showToast("Geçerli bir tutar girin.", "error")
+      return
+    }
+    try {
+      const result = await collectBalance(item.kind, item.id, amount)
+      await loadAll()
+      showToast(`${formatCurrency(result.collected)} tahsil edildi.`, "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Tahsilat kaydedilemedi.", "error")
+    }
   }
 
   const handleAddDebt = async () => {
@@ -887,7 +910,11 @@ export default function CustomersPage() {
                               </div>
                               <div className="text-right">
                                 <div className="text-sm text-white">Toplam: {formatCurrency(t.total)}</div>
-                                <div className="text-xs text-emerald-400">Alınan: {formatCurrency(t.paid)}</div>
+                                {t.gift ? (
+                                  <div className="text-xs text-purple-300">🎁 Bedelsiz (eşantiyon)</div>
+                                ) : (
+                                  <div className="text-xs text-emerald-400">Alınan: {formatCurrency(t.paid)}</div>
+                                )}
                                 {t.remaining > 0 && (
                                   <div className="text-xs text-red-400">Kalan: {formatCurrency(t.remaining)}</div>
                                 )}
@@ -906,11 +933,11 @@ export default function CustomersPage() {
                   })()}
                 </div>
 
-                {(selectedCustomer.debts || []).length > 0 && (
+                {manualDebtsOf(selectedCustomer).length > 0 && (
                   <div className="border-t border-slate-700 pt-4">
                     <h3 className="text-lg font-semibold text-white mb-3">Manuel Borçlar</h3>
                     <div className="space-y-2">
-                      {selectedCustomer.debts.map(debt => (
+                      {manualDebtsOf(selectedCustomer).map(debt => (
                         <div key={debt.id} className="flex justify-between p-2 bg-slate-800 rounded-lg">
                           <div>
                             <div className="text-sm text-white">{debt.description}</div>
@@ -986,15 +1013,16 @@ export default function CustomersPage() {
         open={isDebtOpen}
         onOpenChange={setIsDebtOpen}
         customerName={selectedCustomer?.name}
-        debts={selectedCustomer?.debts || []}
+        debts={selectedCustomer ? manualDebtsOf(selectedCustomer) : []}
         relatedDebts={selectedCustomer ? [
           ...repairs
-            .filter(r => (r.customerName === selectedCustomer.name || r.customerName?.includes(selectedCustomer.firstName || "")) && r.remaining !== 0)
-            .map(r => ({ label: `Tamir: ${r.brand} ${r.model}`, amount: r.remaining, code: r.repairCode })),
-          ...sales
-            .filter(s => (s.customerName === selectedCustomer.name || s.customerName?.includes(selectedCustomer.firstName || "")) && s.remaining !== 0)
-            .map(s => ({ label: `Satış: ${(s.items || []).map(i => i.name).join(", ")}`, amount: s.remaining, code: s.saleCode })),
+            .filter(r => belongsTo(selectedCustomer, r) && r.paymentType !== "gift" && r.remaining !== 0)
+            .map(r => ({ label: `Tamir: ${r.brand} ${r.model}`, amount: r.remaining, code: r.repairCode, kind: "repair" as const, id: r.id })),
+          ...activeSales(sales)
+            .filter(s => belongsTo(selectedCustomer, s) && s.paymentMethod !== "gift" && s.remaining !== 0)
+            .map(s => ({ label: `Satış: ${(s.items || []).map(i => i.name).join(", ")}`, amount: s.remaining, code: s.saleCode, kind: "sale" as const, id: s.id })),
         ] : []}
+        onCollect={handleCollect}
         onPayDebt={(debtId) => handlePayDebt(selectedCustomer!.id, debtId)}
         newDebt={newDebt}
         onNewDebtChange={setNewDebt}

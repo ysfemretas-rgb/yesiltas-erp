@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
@@ -253,7 +254,7 @@ function RepairsPageContent() {
         email: newCustomerEmail || "",
         address: newCustomerAddress || "",
         status: "active",
-        lastVisit: new Date().toISOString().split("T")[0],
+        lastVisit: localDateStr(),
       })
       const newCustomer: Customer = {
         id: created.id,
@@ -296,7 +297,7 @@ function RepairsPageContent() {
         category: "Tamir Geliri",
         amount: repair.paid,
         description: `${repair.brand} ${repair.model} ${repair.device} Tamiri`,
-        date: new Date().toISOString().split("T")[0],
+        date: localDateStr(),
         customer: repair.customerName,
         source: "repair",
         sourceId: repair.id,
@@ -354,7 +355,7 @@ function RepairsPageContent() {
         remaining: remainingNum,
         paymentType: paymentType as Repair["paymentType"],
         notes: notesInput,
-        createdAt: new Date().toISOString().split("T")[0],
+        createdAt: localDateStr(),
       })
       setRepairs([newRepair, ...repairs])
 
@@ -366,7 +367,7 @@ function RepairsPageContent() {
             category: "Eşantiyon/Bedelsiz Verilen",
             amount: netCost,
             description: `🎁 Eşantiyon: ${newRepair.brand} ${newRepair.model} — ${newRepair.customerName}`,
-            date: new Date().toISOString().split("T")[0],
+            date: localDateStr(),
             customer: newRepair.customerName,
             source: "repair",
             sourceId: newRepair.id,
@@ -444,7 +445,7 @@ function RepairsPageContent() {
             category: "Eşantiyon/Bedelsiz Verilen",
             amount: netCost,
             description: `🎁 Eşantiyon: ${updatedRepair.brand} ${updatedRepair.model} — ${updatedRepair.customerName}`,
-            date: new Date().toISOString().split("T")[0],
+            date: localDateStr(),
             customer: updatedRepair.customerName,
             source: "repair",
             sourceId: updatedRepair.id,
@@ -459,7 +460,7 @@ function RepairsPageContent() {
           category: "Tamir Geliri",
           amount: diff,
           description: `${updatedRepair.brand} ${updatedRepair.model} - Ek Ödeme`,
-          date: new Date().toISOString().split("T")[0],
+          date: localDateStr(),
           customer: updatedRepair.customerName,
           source: "repair",
           sourceId: updatedRepair.id,
@@ -479,29 +480,17 @@ function RepairsPageContent() {
     const repair = repairs.find(r => r.id === id)
     if (!repair) return
 
-    const wasAlreadyCompleted = repair.status === "completed"
 
     try {
       const updatedRepair = await updateRepair(id, {
         status: newStatus,
-        completedAt: newStatus === "completed" ? new Date().toISOString().split("T")[0] : repair.completedAt,
+        completedAt: newStatus === "completed" ? localDateStr() : repair.completedAt,
       })
 
       setRepairs(repairs.map((r) => r.id === id ? updatedRepair : r))
 
-      // Add to finance when completed and has payment (sadece ilk kez tamamlanınca)
-      if (newStatus === "completed" && !wasAlreadyCompleted && repair.paid > 0) {
-        await createTransaction({
-          type: "income",
-          category: "Tamir Geliri",
-          amount: repair.paid,
-          description: `${repair.brand} ${repair.model} - Tamir Tamamlandı`,
-          date: new Date().toISOString().split("T")[0],
-          customer: repair.customerName,
-          source: "repair",
-          sourceId: repair.id,
-        })
-      }
+      // Not: Alınan ödeme kasaya zaten kayıt açılırken / ödeme eklenirken yazılıyor.
+      // Eskiden tamamlanınca aynı tutar ikinci kez gelire yazılıyordu (çift gelir).
     } catch (e) {
       console.error(e)
       showToast("Durum güncellenirken bir sorun oluştu.", "error")

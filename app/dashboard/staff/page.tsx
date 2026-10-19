@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect } from "react"
@@ -93,7 +94,7 @@ export default function StaffPage() {
     role: "Teknisyen",
     department: "Tamir",
     status: "active",
-    joinDate: new Date().toISOString().split("T")[0],
+    joinDate: localDateStr(),
     permissions: defaultPermissions["Teknisyen"],
     salary: 18500,
   })
@@ -162,7 +163,7 @@ export default function StaffPage() {
         phone: newMember.phone?.trim() || "",
         role: newMember.role || "Teknisyen",
         department: newMember.department || "Tamir",
-        joinDate: newMember.joinDate || new Date().toISOString().split("T")[0],
+        joinDate: newMember.joinDate || localDateStr(),
         status: "active",
         permissions: newMember.permissions || defaultPermissions[newMember.role || "Teknisyen"] || [],
         salary: Number(newMember.salary) || 0,
@@ -172,7 +173,7 @@ export default function StaffPage() {
         role: "Teknisyen",
         department: "Tamir",
         status: "active",
-        joinDate: new Date().toISOString().split("T")[0],
+        joinDate: localDateStr(),
         permissions: defaultPermissions["Teknisyen"],
         salary: 18500,
       })

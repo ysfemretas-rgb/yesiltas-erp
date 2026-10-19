@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -61,7 +62,7 @@ export default function FixedAssetsPage() {
     category: "Alet/Ekipman",
     quantity: 1,
     purchaseCurrency: "TRY",
-    purchaseDate: new Date().toISOString().split("T")[0],
+    purchaseDate: localDateStr(),
   })
 
   useEffect(() => {
@@ -99,12 +100,12 @@ export default function FixedAssetsPage() {
         quantity: Number(newAsset.quantity) || 1,
         purchasePrice: Number(newAsset.purchasePrice) || 0,
         purchaseCurrency: newAsset.purchaseCurrency || "TRY",
-        purchaseDate: newAsset.purchaseDate || new Date().toISOString().split("T")[0],
+        purchaseDate: newAsset.purchaseDate || localDateStr(),
         location: newAsset.location || "",
         notes: newAsset.notes || "",
       })
       setAssets([asset, ...assets])
-      setNewAsset({ category: "Alet/Ekipman", quantity: 1, purchaseCurrency: "TRY", purchaseDate: new Date().toISOString().split("T")[0] })
+      setNewAsset({ category: "Alet/Ekipman", quantity: 1, purchaseCurrency: "TRY", purchaseDate: localDateStr() })
       setCustomCategory("")
       setIsDialogOpen(false)
       showToast("Demirbaş eklendi.", "success")

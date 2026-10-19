@@ -1,6 +1,11 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { useState, useEffect, useMemo } from "react"
+import { fetchRepairs } from "@/lib/repairs"
+import { fetchSales } from "@/lib/sales"
+import { fetchCustomers } from "@/lib/customers"
+import { fetchAppointments } from "@/lib/appointments"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,7 +22,7 @@ import {
 } from "lucide-react"
 
 interface Repair {
-  id: number
+  id: string
   customerName: string
   device: string
   brand: string
@@ -28,7 +33,8 @@ interface Repair {
 }
 
 interface Sale {
-  id: number
+  id: string
+  paid?: number
   customerName: string
   totalAmount: number
   status: "completed" | "cancelled"
@@ -36,13 +42,13 @@ interface Sale {
 }
 
 interface Customer {
-  id: number
+  id: string
   name: string
   phone: string
 }
 
 interface Appointment {
-  id: number
+  id: string
   customerName: string
   date: string
   time: string
@@ -67,24 +73,24 @@ export default function DashboardPage() {
         }
       }
 
-      const savedRepairs = localStorage.getItem("yt_repairs")
-      const savedSales = localStorage.getItem("yt_sales")
-      const savedCustomers = localStorage.getItem("yt_customers")
-      const savedAppointments = localStorage.getItem("yt_appointments")
-
-      if (savedRepairs) {
-        try { setRepairs(JSON.parse(savedRepairs)) } catch (e) {}
-      }
-      if (savedSales) {
-        try { setSales(JSON.parse(savedSales)) } catch (e) {}
-      }
-      if (savedCustomers) {
-        try { setCustomers(JSON.parse(savedCustomers)) } catch (e) {}
-      }
-      if (savedAppointments) {
-        try { setAppointments(JSON.parse(savedAppointments)) } catch (e) {}
-      }
     }
+
+    // Veriler artık Supabase'de; eskiden burada tarayıcıdaki eski (boş/güncel olmayan)
+    // localStorage kopyaları okunuyordu.
+    let cancelled = false
+    Promise.all([
+      fetchRepairs().catch(() => []),
+      fetchSales().catch(() => []),
+      fetchCustomers().catch(() => []),
+      fetchAppointments().catch(() => []),
+    ]).then(([r, sl, c, ap]) => {
+      if (cancelled) return
+      setRepairs(r as any)
+      setSales(sl as any)
+      setCustomers(c as any)
+      setAppointments(ap as any)
+    })
+    return () => { cancelled = true }
   }, [])
 
   const greeting = useMemo(() => {
@@ -99,11 +105,12 @@ export default function DashboardPage() {
     const totalCustomers = customers.length
     const activeRepairs = repairs.filter(r => r.status !== "completed").length
     const completedRepairs = repairs.filter(r => r.status === "completed").length
-    const totalRevenue = sales.filter(s => s.status === "completed").reduce((sum, s) => sum + (s.totalAmount || 0), 0)
-    const repairRevenue = repairs.filter(r => r.status === "completed").reduce((sum, r) => sum + (r.paid || r.cost || 0), 0)
+    // Gelir = fiilen tahsil edilen tutar (eşantiyon ve ödenmemiş kısımlar gelir sayılmaz)
+    const totalRevenue = sales.filter(s => s.status === "completed").reduce((sum, s) => sum + (s.paid || 0), 0)
+    const repairRevenue = repairs.reduce((sum, r) => sum + Math.max(0, r.paid || 0), 0)
     const totalIncome = totalRevenue + repairRevenue
     const pendingRepairs = repairs.filter(r => r.status === "waiting").length
-    const todayAppointments = appointments.filter(a => a.date === new Date().toISOString().split("T")[0]).length
+    const todayAppointments = appointments.filter(a => a.date === localDateStr()).length
 
     return {
       totalCustomers,
@@ -129,7 +136,7 @@ export default function DashboardPage() {
       })
     })
 
-    sales.slice(0, 5).forEach(s => {
+    sales.filter(s => s.status !== "cancelled").slice(0, 5).forEach(s => {
       activities.push({
         type: "sale",
         title: `Satis: ${s.customerName}`,

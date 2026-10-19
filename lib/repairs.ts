@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface Repair {
@@ -126,8 +126,7 @@ export async function fetchRepairPublic(id: string): Promise<PublicRepairView | 
 }
 
 export async function fetchRepairs(): Promise<Repair[]> {
-  const { data, error } = await supabase.from("devices").select("*").order("received_date", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("devices", "received_date", false)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_repairs")) {
     const legacyRaw = localStorage.getItem("yt_repairs")

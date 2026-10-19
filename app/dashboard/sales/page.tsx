@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect, useMemo } from "react"
@@ -11,14 +12,16 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode } from "lucide-react"
+import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode, Printer, Ban } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
 import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
-import { InventoryItem, fetchInventory, updateInventoryItem } from "@/lib/inventory"
+import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/inventory"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
+import { printSaleReceipt } from "@/lib/saleReceipt"
 import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
@@ -49,6 +52,7 @@ export default function SalesPage() {
   const router = useRouter()
   const { authorized, checking } = usePageAccess("Satış")
   const isManager = useIsManager()
+  const { rates } = useExchangeRates()
   const [products, setProducts] = useState<InventoryItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
@@ -146,34 +150,115 @@ export default function SalesPage() {
   const paid = isGiftSale ? 0 : (paymentMethod === "partial" ? Number(paidAmount) || 0 : (paymentMethod === "unpaid" ? 0 : cartTotal))
   const remaining = isGiftSale ? 0 : cartTotal - paid
 
-  const editPaid = editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
-  const editRemaining = editCartTotal - editPaid
+  const isEditGift = editPaymentMethod === "gift"
+  const editPaid = isEditGift ? 0 : editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
+  const editRemaining = isEditGift ? 0 : editCartTotal - editPaid
+
+  // Alış fiyatını TL'ye çevirir (dolar/euro ile alınan ürünlerde kâr hesabı doğru çıksın).
+  const purchaseInTRY = (product: InventoryItem) => {
+    const price = product.purchasePrice || 0
+    if (product.purchaseCurrency === "USD") return Math.round(price * rates.USD * 100) / 100
+    if (product.purchaseCurrency === "EUR") return Math.round(price * rates.EUR * 100) / 100
+    return price
+  }
+
+  // Düzenlemede, satışın zaten düştüğü adet de tekrar kullanılabilir sayılır.
+  const availableStock = (product: InventoryItem, originalItems?: SaleItem[]) => {
+    const original = originalItems?.find(i => i.productId === product.id)?.quantity || 0
+    return product.quantity + original
+  }
+
+  // Müşteri kimliğini bulur: önce satıştaki kayıtlı ID, sonra müşteri kodu, en son tam isim eşleşmesi.
+  const resolveCustomerId = (sale: Sale): string => {
+    if (sale.customerId && customers.some(c => c.id === sale.customerId)) return sale.customerId
+    if (sale.customerCode) {
+      const byCode = customers.find(c => c.customerCode === sale.customerCode)
+      if (byCode) return byCode.id
+    }
+    const byName = customers.filter(c => c.name.trim().toLowerCase() === (sale.customerName || "").trim().toLowerCase())
+    return byName.length === 1 ? byName[0].id : ""
+  }
+
+  const itemsCostTRY = (items: SaleItem[]) => items.reduce((sum, i) => sum + (i.purchasePrice || 0) * (i.quantity || 0), 0)
+
+  // Satışın kasa kaydını (yeniden) yazar. Eşantiyonda gider, ürünün ALIŞ maliyetidir (satış fiyatı değil);
+  // ödenmemiş satışta 0 TL'lik gelir kaydı oluşturulmaz.
+  const writeSaleFinance = async (saleId: string, customerName: string, items: SaleItem[], gift: boolean, paidAmount: number) => {
+    const names = items.map(i => i.name).join(", ")
+    try {
+      if (gift) {
+        const cost = itemsCostTRY(items)
+        if (cost > 0) {
+          await createTransaction({
+            type: "expense",
+            category: "Eşantiyon/Bedelsiz Verilen",
+            amount: Math.round(cost * 100) / 100,
+            description: `🎁 Eşantiyon: ${customerName} - ${names}`,
+            date: localDateStr(),
+            customer: customerName,
+            source: "sale",
+            sourceId: saleId,
+          })
+        }
+      } else if (paidAmount > 0) {
+        await createTransaction({
+          type: "income",
+          category: "Satış",
+          amount: paidAmount,
+          description: `🛒 Satış: ${customerName} - ${names}`,
+          date: localDateStr(),
+          customer: customerName,
+          source: "sale",
+          sourceId: saleId,
+        })
+      }
+    } catch (e) {
+      console.error("Finance save error:", e)
+    }
+  }
+
+  // Stok farklarını veritabanında atomik uygular ve ekrandaki listeyi günceller.
+  const applyStockDeltas = async (deltas: { productId: string; delta: number }[]) => {
+    const active = deltas.filter(d => d.delta !== 0)
+    if (active.length === 0) return
+    setProducts(prev => prev.map(p => {
+      const d = active.filter(x => x.productId === p.id).reduce((sum, x) => sum + x.delta, 0)
+      return d ? { ...p, quantity: Math.max(0, p.quantity + d) } : p
+    }))
+    await Promise.all(active.map(d => adjustInventoryQuantity(d.productId, d.delta).catch((e) => console.error("Stok güncellenemedi:", e))))
+  }
 
   const addToCart = (product: InventoryItem, quantity: number = 1) => {
     if (!product || quantity < 1) return
     const existing = cart.find(item => item.productId === product.id)
+    const nextQty = (existing?.quantity || 0) + quantity
+    if (nextQty > product.quantity) {
+      showToast(`${product.name} — stokta sadece ${product.quantity} adet var.`, "error")
+      return
+    }
     if (existing) {
       setCart(cart.map(item =>
-        item.productId === product.id
-          ? { ...item, quantity: item.quantity + quantity }
-          : item
+        item.productId === product.id ? { ...item, quantity: nextQty } : item
       ))
     } else {
-      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: product.purchasePrice, quantity }])
+      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: purchaseInTRY(product), quantity }])
     }
   }
 
   const addToEditCart = (product: InventoryItem, quantity: number = 1) => {
     if (!product || quantity < 1) return
     const existing = editCart.find(item => item.productId === product.id)
+    const nextQty = (existing?.quantity || 0) + quantity
+    if (nextQty > availableStock(product, editingSale?.items)) {
+      showToast(`${product.name} — yeterli stok yok.`, "error")
+      return
+    }
     if (existing) {
       setEditCart(editCart.map(item =>
-        item.productId === product.id
-          ? { ...item, quantity: item.quantity + quantity }
-          : item
+        item.productId === product.id ? { ...item, quantity: nextQty } : item
       ))
     } else {
-      setEditCart([...editCart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: product.purchasePrice, quantity }])
+      setEditCart([...editCart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: purchaseInTRY(product), quantity }])
     }
   }
 
@@ -203,7 +288,7 @@ export default function SalesPage() {
       return
     }
     const product = products.find(p => p.id === productId)
-    if (product && quantity > product.quantity) return
+    if (product && quantity > availableStock(product, editingSale?.items)) return
     setEditCart(editCart.map(item =>
       item.productId === productId ? { ...item, quantity } : item
     ))
@@ -225,13 +310,14 @@ export default function SalesPage() {
         email: newCustomerEmail.trim() || "",
         address: newCustomerAddress.trim() || "",
         status: "active",
-        lastVisit: new Date().toISOString().split("T")[0],
+        lastVisit: localDateStr(),
       })
       const newCustomer: Customer = {
         id: created.id,
         name: created.name,
         phone: created.phone,
         phone1: created.phone,
+        customerCode: created.customerCode,
         phone2: created.phone2 || undefined,
         balance: 0,
         totalDebt: 0,
@@ -286,6 +372,16 @@ export default function SalesPage() {
       return
     }
 
+    // Stok son kez kontrol edilir (sayfa açıkken başka biri satmış olabilir)
+    const shortage = cart.find(item => {
+      const p = products.find(prod => prod.id === item.productId)
+      return !p || item.quantity > p.quantity
+    })
+    if (shortage) {
+      showToast(`${shortage.name} için yeterli stok yok.`, "error")
+      return
+    }
+
     // Telefon numarası kontrolü
     const phone = customer.phone || customer.phone1 || ""
     if (!phone) {
@@ -305,7 +401,7 @@ export default function SalesPage() {
         paid: paid,
         remaining: remaining,
         paymentMethod,
-        date: new Date().toISOString().split("T")[0],
+        date: localDateStr(),
         status: "completed",
       })
 
@@ -315,53 +411,13 @@ export default function SalesPage() {
         await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`, sale.id)
       }
 
-      // Update product stock
-      const updatedProducts = products.map(p => {
-        const cartItem = cart.find(item => item.productId === p.id)
-        if (cartItem) {
-          return { ...p, quantity: Math.max(0, p.quantity - cartItem.quantity) }
-        }
-        return p
-      })
-      setProducts(updatedProducts)
-      cart.forEach((item) => {
-        const p = products.find((prod) => prod.id === item.productId)
-        if (p) {
-          updateInventoryItem(p.id, { quantity: Math.max(0, p.quantity - item.quantity) }).catch((e) => console.error("Stok güncellenemedi:", e))
-        }
-      })
+      // Stok (atomik)
+      await applyStockDeltas(cart.map(item => ({ productId: item.productId, delta: -item.quantity })))
 
-      // Save sale
       setSales([sale, ...sales])
 
-      // Add to finance
-      try {
-        if (isGiftSale && cartTotal > 0) {
-          await createTransaction({
-            type: "expense",
-            category: "Eşantiyon/Bedelsiz Verilen",
-            amount: cartTotal,
-            description: `🎁 Eşantiyon: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
-            date: new Date().toISOString().split("T")[0],
-            customer: customer.name,
-            source: "sale",
-            sourceId: sale.id,
-          })
-        } else if (!isGiftSale) {
-          await createTransaction({
-            type: "income",
-            category: "Satış",
-            amount: paid,
-            description: `🛒 Satış: ${customer.name} - ${cart.map(i => i.name).join(", ")}`,
-            date: new Date().toISOString().split("T")[0],
-            customer: customer.name,
-            source: "sale",
-            sourceId: sale.id,
-          })
-        }
-      } catch (e) {
-        console.error("Finance save error:", e)
-      }
+      // Kasa
+      await writeSaleFinance(sale.id, customer.name, cart, isGiftSale, paid)
 
       // Reset
       setCart([])
@@ -394,38 +450,51 @@ Bu işlem geri alınamaz!`)) return
       await deleteDebtsBySource("sale", saleId)
       await deleteTransactionsBySource("sale", saleId)
 
-      // Return stock
-      const updatedProducts = products.map(p => {
-        const saleItem = sale.items.find(item => item.productId === p.id)
-        if (saleItem) {
-          return { ...p, quantity: p.quantity + saleItem.quantity }
-        }
-        return p
-      })
-      setProducts(updatedProducts)
-      sale.items.forEach((item) => {
-        const p = products.find((prod) => prod.id === item.productId)
-        if (p) {
-          updateInventoryItem(p.id, { quantity: p.quantity + item.quantity }).catch((e) => console.error("Stok güncellenemedi:", e))
-        }
-      })
+      // İptal edilmiş satışın stoğu zaten iade edilmişti; tekrar ekleme
+      if (sale.status !== "cancelled") {
+        await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })))
+      }
 
-      // Subtract customer debt if there was remaining (görünümü hemen güncelle)
-      if (sale.remaining > 0) {
+      const custId = resolveCustomerId(sale)
+      if (sale.remaining > 0 && sale.status !== "cancelled" && custId) {
         setCustomers(customers.map((c: any) => {
-          if (c.id !== sale.customerId) return c
+          if (c.id !== custId) return c
           const currentDebt = c.totalDebt || c.balance || 0
           const newDebt = Math.max(0, currentDebt - sale.remaining)
           return { ...c, totalDebt: newDebt, balance: newDebt }
         }))
       }
 
-      // Remove sale
       setSales(sales.filter(s => s.id !== saleId))
       showToast("Satış silindi.", "success")
     } catch (e: any) {
       console.error(e)
       showToast(e?.message || "Satış silinirken bir sorun oluştu.", "error")
+    }
+  }
+
+  // İptal / iade: kayıt silinmez, "iptal" olarak kalır; stok geri eklenir,
+  // bağlı borç ve kasa kaydı kaldırılır.
+  const handleCancelSale = async (saleId: string) => {
+    const sale = sales.find(s => s.id === saleId)
+    if (!sale || sale.status === "cancelled") return
+
+    if (!confirm(`🚫 Bu satış iptal / iade edilsin mi?
+
+• Ürünler stoğa geri eklenir
+• Bu satışın borcu ve kasa kaydı kaldırılır
+• Satış kaydı "İptal" olarak listede kalır`)) return
+
+    try {
+      await updateSale(saleId, { status: "cancelled" })
+      await deleteDebtsBySource("sale", saleId)
+      await deleteTransactionsBySource("sale", saleId)
+      await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })))
+      setSales(sales.map(s => s.id === saleId ? { ...s, status: "cancelled" as const } : s))
+      showToast("Satış iptal edildi, stok geri eklendi.", "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Satış iptal edilirken bir sorun oluştu.", "error")
     }
   }
 
@@ -448,9 +517,16 @@ Bu işlem geri alınamaz!`)) return
     const oldSale = editingSale
     const oldRemaining = oldSale.remaining
     const newRemaining = editRemaining
+    const customerId = resolveCustomerId(oldSale)
+
+    if ((oldRemaining > 0 || newRemaining > 0) && !customerId) {
+      showToast("Bu satışın müşterisi kesin olarak bulunamadı; borç güncellenemiyor. Müşteri kaydını kontrol edin.", "error")
+      return
+    }
 
     try {
       const updatedSale = await updateSale(editingSale.id, {
+        customerId: customerId || undefined,
         items: [...editCart],
         totalAmount: editCartTotal,
         discount: Number(editSaleDiscount) || 0,
@@ -459,29 +535,19 @@ Bu işlem geri alınamaz!`)) return
         paymentMethod: editPaymentMethod,
       })
 
-      // Calculate stock differences
-      const updatedProducts = products.map(p => {
-        const oldItem = oldSale.items.find(item => item.productId === p.id)
-        const newItem = editCart.find(item => item.productId === p.id)
-        const oldQty = oldItem ? oldItem.quantity : 0
-        const newQty = newItem ? newItem.quantity : 0
-        const diff = oldQty - newQty
-        return { ...p, quantity: p.quantity + diff }
-      })
-      setProducts(updatedProducts)
-      updatedProducts.forEach((p, i) => {
-        if (p.quantity !== products[i]?.quantity) {
-          updateInventoryItem(p.id, { quantity: p.quantity }).catch((e) => console.error("Stok güncellenemedi:", e))
-        }
-      })
+      // Stok farkları (atomik)
+      const ids = Array.from(new Set([...oldSale.items.map(i => i.productId), ...editCart.map(i => i.productId)]))
+      await applyStockDeltas(ids.map(productId => {
+        const oldQty = oldSale.items.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
+        const newQty = editCart.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
+        return { productId, delta: oldQty - newQty }
+      }))
 
-      // Update customer debt: eski bağlı borcu temizle, yeni bakiye varsa yeniden oluştur
-      // (yeni bakiye negatifse — fazla ödeme — borç kaydı oluşturulmuyor, müşteri o
-      // satıştan alacaklı sayılıyor)
+      // Borç: eski bağlı borcu temizle, yeni bakiye varsa yeniden oluştur
       if (oldRemaining > 0 || newRemaining > 0) {
         await deleteDebtsBySource("sale", editingSale.id)
         if (newRemaining > 0) {
-          await addDebt(oldSale.customerId, {
+          await addDebt(customerId, {
             amount: newRemaining,
             description: `🛒 Satış bakiyesi (düzenlendi): ${editCart.map(i => i.name).join(", ")}`,
             sourceType: "sale",
@@ -489,12 +555,16 @@ Bu işlem geri alınamaz!`)) return
           })
         }
         setCustomers(customers.map((c: any) => {
-          if (c.id !== oldSale.customerId) return c
+          if (c.id !== customerId) return c
           const currentDebt = c.totalDebt || c.balance || 0
           const newDebt = currentDebt - Math.max(0, oldRemaining) + Math.max(0, newRemaining)
           return { ...c, totalDebt: newDebt, balance: newDebt }
         }))
       }
+
+      // Kasa: eski kayıt silinip yeni durumla yeniden yazılır (eskiden düzenleme kasaya yansımıyordu)
+      await deleteTransactionsBySource("sale", editingSale.id)
+      await writeSaleFinance(editingSale.id, oldSale.customerName, editCart, isEditGift, editPaid)
 
       setSales(sales.map(s => s.id === editingSale.id ? updatedSale : s))
       setShowEditSale(false)
@@ -548,7 +618,9 @@ Bu işlem geri alınamaz!`)) return
 
       const items = (sale.items || []).map(i => `\u{1F4E6} ${i.name} (${i.quantity}x ${i.price.toLocaleString("tr-TR")} TL)`).join("\n")
       const odemeSekli = paymentMethods.find(m => m.value === sale.paymentMethod)?.label || sale.paymentMethod
-      const odemeDurumu = sale.remaining > 0
+      const odemeDurumu = sale.paymentMethod === "gift"
+        ? `\u{1F381} *Bu ürün/ürünler firmamızdan hediyedir.*`
+        : sale.remaining > 0
         ? `\u{1F4B5} *Alınan:* ${(sale.paid || 0).toLocaleString("tr-TR")} TL\n\u{23F3} *Kalan Borç:* ${(sale.remaining || 0).toLocaleString("tr-TR")} TL\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
         : sale.remaining < 0
           ? `\u{2705} *Ödeme:* Tamamlandı\n\u{1F4B0} *Fazla Ödeme (Alacağınız):* ${(-sale.remaining).toLocaleString("tr-TR")} TL\n\u{1F4B3} *Ödeme Şekli:* ${odemeSekli}`
@@ -643,19 +715,19 @@ Bu işlem geri alınamaz!`)) return
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Toplam Satış</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-white">{sales.length}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-white">{sales.filter(s => s.status !== "cancelled").length}</div></CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Bugün</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-emerald-400">{sales.filter(s => s.date === new Date().toISOString().split("T")[0]).length}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-emerald-400">{sales.filter(s => s.status !== "cancelled" && s.date === localDateStr()).length}</div></CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Toplam Gelir</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-green-400">{formatCurrency(sales.reduce((sum, s) => sum + (s.paid || 0), 0))}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-green-400">{formatCurrency(sales.filter(s => s.status !== "cancelled").reduce((sum, s) => sum + (s.paid || 0), 0))}</div></CardContent>
         </Card>
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Bekleyen Tahsilat</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-amber-400">{formatCurrency(sales.reduce((sum, s) => sum + Math.max(0, s.remaining || 0), 0))}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-amber-400">{formatCurrency(sales.filter(s => s.status !== "cancelled").reduce((sum, s) => sum + Math.max(0, s.remaining || 0), 0))}</div></CardContent>
         </Card>
       </div>
 
@@ -707,8 +779,7 @@ Bu işlem geri alınamaz!`)) return
               )}
 
               {selectedCustomer && (() => {
-                const custName = customers.find(c => c.id === selectedCustomer)?.name
-                const pastSales = sales.filter(s => s.customerName === custName)
+                const pastSales = sales.filter(s => s.status !== "cancelled" && (s.customerId === selectedCustomer || (!s.customerId && s.customerName === customers.find(c => c.id === selectedCustomer)?.name)))
                 if (pastSales.length === 0) return null
                 return (
                   <div className="rounded-lg border border-indigo-700/50 bg-indigo-900/10 p-3 text-xs text-slate-400">
@@ -938,7 +1009,7 @@ Bu işlem geri alınamaz!`)) return
       {/* Edit Sale Dialog */}
       <Dialog open={showEditSale} onOpenChange={setShowEditSale}>
         <DialogContent className="max-w-4xl bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-xl">✏️ Satış Düzenle #{editingSale?.id || ""}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-xl">✏️ Satış Düzenle #{editingSale?.saleCode || ""}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="text-sm text-slate-400">
               👤 Müşteri: <span className="text-white font-medium">{editingSale?.customerName}</span>
@@ -1047,6 +1118,11 @@ Bu işlem geri alınamaz!`)) return
                   ))}
                 </SelectContent>
               </Select>
+              {isEditGift && (
+                <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 text-sm text-purple-300">
+                  🎁 Bu satış bedelsiz (eşantiyon) olarak işaretlenecek. Müşteriden ücret alınmayacak, borç oluşmayacak.
+                </div>
+              )}
               {editPaymentMethod === "partial" && (
                 <div className="space-y-2">
                   <Label className="text-slate-300">💵 Alınan Tutar (TL)</Label>
@@ -1107,8 +1183,8 @@ Bu işlem geri alınamaz!`)) return
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">{formatCurrency(sale.totalAmount)}</div>
-                      <Badge className={sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : (sale.remaining < 0 ? "bg-cyan-600/20 text-cyan-400" : (sale.paid === 0 && sale.totalAmount > 0 ? "bg-red-600/20 text-red-400" : "bg-emerald-600/20 text-emerald-400"))}>
-                        {sale.remaining > 0 ? `⏳ Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : (sale.remaining < 0 ? `💰 Alacaklı: ${formatCurrency(-sale.remaining)}` : (sale.paid === 0 && sale.totalAmount > 0 ? "❌ Ödenmedi" : "✅ Tamamlandı"))}
+                      <Badge className={sale.status === "cancelled" ? "bg-slate-600/30 text-slate-400" : sale.paymentMethod === "gift" ? "bg-purple-600/20 text-purple-300" : sale.remaining > 0 ? "bg-amber-600/20 text-amber-400" : (sale.remaining < 0 ? "bg-cyan-600/20 text-cyan-400" : (sale.paid === 0 && sale.totalAmount > 0 ? "bg-red-600/20 text-red-400" : "bg-emerald-600/20 text-emerald-400"))}>
+                        {sale.status === "cancelled" ? "🚫 İptal Edildi" : sale.paymentMethod === "gift" ? "🎁 Eşantiyon" : sale.remaining > 0 ? `⏳ Kısmi - Kalan: ${formatCurrency(sale.remaining)}` : (sale.remaining < 0 ? `💰 Alacaklı: ${formatCurrency(-sale.remaining)}` : (sale.paid === 0 && sale.totalAmount > 0 ? "❌ Ödenmedi" : "✅ Tamamlandı"))}
                       </Badge>
                     </div>
                   </div>
@@ -1126,9 +1202,28 @@ Bu işlem geri alınamaz!`)) return
                       variant="outline" 
                       className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10" 
                       onClick={() => openEditSale(sale)}
+                      disabled={sale.status === "cancelled"}
                     >
                       <Pencil className="w-3 h-3 mr-1" />Düzenle
                     </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-500/10" 
+                      onClick={() => printSaleReceipt(sale)}
+                    >
+                      <Printer className="w-3 h-3 mr-1" />Fiş
+                    </Button>
+                    {sale.status !== "cancelled" && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="border-amber-600 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10" 
+                      onClick={() => handleCancelSale(sale.id)}
+                    >
+                      <Ban className="w-3 h-3 mr-1" />İptal
+                    </Button>
+                    )}
                     {isManager && (
                     <Button 
                       size="sm" 

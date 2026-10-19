@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect } from "react"
@@ -9,12 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, Trash2, Edit3, X, ExternalLink, MessageCircle } from "lucide-react"
+import { Plus, Truck, Search, Phone, Mail, MapPin, Star, Package, Save, CreditCard, Trash2, Edit3, X, ExternalLink, MessageCircle } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 
-import { Supplier, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/suppliers"
+import { Supplier, SupplierPayment, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier, fetchSupplierPayments, createSupplierPayment } from "@/lib/suppliers"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
 const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
@@ -28,6 +29,7 @@ export default function SuppliersPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [payments, setPayments] = useState<SupplierPayment[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -61,24 +63,50 @@ export default function SuppliersPage() {
     fetchInventory()
       .then((data) => { if (!cancelled) setInventory(data) })
       .catch((err) => console.error("Envanter yüklenemedi:", err))
+    fetchSupplierPayments()
+      .then((data) => { if (!cancelled) setPayments(data) })
     return () => { cancelled = true }
   }, [])
 
   // Her tedarikçi için: kaç ürün alındı, ödenmemiş/kısmi ödenmiş alışlardan
   // doğan borcumuz ne kadar, ve fazla ödeme yaptıysak tedarikçiden alacağımız
   // ne kadar — hepsi envanterdeki gerçek verilerden hesaplanıyor.
+  // Borç artık "kalan stok" değil, bugüne kadar ALINAN toplam adet üzerinden hesaplanır
+  // (ürün satıldıkça borç kendiliğinden azalmaz). Ürün formundaki ödemeler ve
+  // "Ödeme Yap" ile girilen ödemeler borçtan düşülür.
   const supplierStats = (supplierName: string) => {
     const items = inventory.filter((i) => i.supplier === supplierName)
     const orderCount = items.length
-    const net = items.reduce((sum, i) => {
+    const purchasedTotal = items.reduce((sum, i) => {
       const priceInTRY = i.purchaseCurrency === "USD" ? i.purchasePrice * rates.USD
         : i.purchaseCurrency === "EUR" ? i.purchasePrice * rates.EUR
         : i.purchasePrice
-      const total = priceInTRY * i.quantity
+      const total = priceInTRY * (i.purchasedQuantity ?? i.quantity)
       const paid = i.paymentStatus === "paid" ? total : i.paymentStatus === "partial" ? (i.paidAmount || 0) : 0
       return sum + (total - paid)
     }, 0)
+    const extraPaid = payments.filter(p => p.supplierName === supplierName).reduce((sum, p) => sum + p.amount, 0)
+    const net = Math.round((purchasedTotal - extraPaid) * 100) / 100
     return { orderCount, debt: Math.max(0, net), credit: Math.max(0, -net) }
+  }
+
+  const handleSupplierPayment = async (supplier: Supplier) => {
+    const stats = supplierStats(supplier.name)
+    const input = window.prompt(`${supplier.name}\nMevcut borcumuz: ${new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(stats.debt)}\n\nÖdenen tutar (TL):`, String(Math.round(stats.debt * 100) / 100))
+    if (input === null) return
+    const amount = Number(String(input).replace(",", "."))
+    if (!amount || amount <= 0) {
+      showToast("Geçerli bir tutar girin.", "error")
+      return
+    }
+    try {
+      const payment = await createSupplierPayment({ supplierName: supplier.name, amount })
+      setPayments([payment, ...payments])
+      showToast("Ödeme kaydedildi ve kasaya gider olarak yazıldı.", "success")
+    } catch (err) {
+      console.error(err)
+      showToast("Ödeme kaydedilemedi (SQL migrasyonu çalıştırıldı mı?).", "error")
+    }
   }
 
   const getRatingStars = (rating: number) => {
@@ -98,7 +126,7 @@ export default function SuppliersPage() {
 
   const filteredSuppliers = suppliers.filter((s) => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())
+      (s.contactPerson || "").toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = filterCategory === "all" || s.category === filterCategory
     const matchesStatus = filterStatus === "all" || s.status === filterStatus
     return matchesSearch && matchesCategory && matchesStatus
@@ -110,14 +138,14 @@ export default function SuppliersPage() {
   const totalSupplierCredit = suppliers.reduce((sum, s) => sum + supplierStats(s.name).credit, 0)
 
   const handleAddSupplier = async () => {
-    if (!newSupplier.name?.trim() || !newSupplier.contactPerson?.trim()) {
-      showToast("Lütfen firma adı ve yetkili kişi alanlarını doldurun!", "error")
+    if (!newSupplier.name?.trim()) {
+      showToast("Lütfen firma adını girin!", "error")
       return
     }
     try {
       const supplier = await createSupplier({
         name: newSupplier.name.trim(),
-        contactPerson: newSupplier.contactPerson.trim(),
+        contactPerson: newSupplier.contactPerson?.trim() || "",
         phone: newSupplier.phone?.trim() || "",
         email: newSupplier.email?.trim() || "",
         address: newSupplier.address?.trim() || "",
@@ -125,7 +153,7 @@ export default function SuppliersPage() {
         rating: Number(newSupplier.rating) || 5,
         status: "active",
         totalOrders: 0,
-        lastOrderDate: new Date().toISOString().split("T")[0],
+        lastOrderDate: localDateStr(),
         balance: 0,
       })
       setSuppliers([supplier, ...suppliers])
@@ -141,9 +169,9 @@ export default function SuppliersPage() {
   const handleEditSupplier = async () => {
     if (!editingSupplier) return
     const name = newSupplier.name?.trim()
-    const contactPerson = newSupplier.contactPerson?.trim()
-    if (!name || !contactPerson) {
-      showToast("Lütfen firma adı ve yetkili kişi alanlarını doldurun!", "error")
+    const contactPerson = newSupplier.contactPerson?.trim() || ""
+    if (!name) {
+      showToast("Lütfen firma adını girin!", "error")
       return
     }
     try {
@@ -168,6 +196,13 @@ export default function SuppliersPage() {
   }
 
   const handleDeleteSupplier = async (id: string) => {
+    const target = suppliers.find(s => s.id === id)
+    const linked = target ? inventory.filter(i => i.supplier === target.name).length : 0
+    if (linked > 0) {
+      setShowDeleteConfirm(null)
+      showToast(`Bu tedarikçiye bağlı ${linked} ürün var. Önce ürünlerin tedarikçisini değiştirin.`, "error")
+      return
+    }
     try {
       await deleteSupplier(id)
       setSuppliers(suppliers.filter(s => s.id !== id))
@@ -268,7 +303,7 @@ export default function SuppliersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Yetkili Kişi <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-medium text-slate-300">Yetkili Kişi</label>
                   <Input
                     value={newSupplier.contactPerson || ""}
                     onChange={(e) => setNewSupplier({ ...newSupplier, contactPerson: e.target.value })}
@@ -509,10 +544,15 @@ export default function SuppliersPage() {
                       )}
                     </div>
                     <div className="flex gap-2 flex-wrap">
+                      {stats.debt > 0 && (
+                        <Button size="sm" variant="outline" className="border-amber-600 text-amber-400 hover:bg-amber-900/30" onClick={() => handleSupplierPayment(supplier)}>
+                          <CreditCard className="h-3 w-3 mr-1" />Ödeme Yap
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-600" onClick={() => handleCall(supplier.phone)}>
                         <Phone className="h-3 w-3 mr-1" />Ara
                       </Button>
-                      <Button size="sm" variant="outline" className="border-emerald-600 text-emerald-400 hover:bg-emerald-900/30" onClick={() => handleWhatsApp(supplier.phone, supplier.contactPerson)}>
+                      <Button size="sm" variant="outline" className="border-emerald-600 text-emerald-400 hover:bg-emerald-900/30" onClick={() => handleWhatsApp(supplier.phone, supplier.contactPerson || supplier.name)}>
                         <MessageCircle className="h-3 w-3 mr-1" />WhatsApp
                       </Button>
                       <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => handleMap(supplier.address)}>
@@ -549,7 +589,7 @@ export default function SuppliersPage() {
                 <Input value={newSupplier.name || ""} onChange={(e) => setNewSupplier({...newSupplier, name: e.target.value})} className="bg-slate-700 border-slate-600 text-white" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Yetkili Kişi <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-slate-300">Yetkili Kişi</label>
                 <Input value={newSupplier.contactPerson || ""} onChange={(e) => setNewSupplier({...newSupplier, contactPerson: e.target.value})} className="bg-slate-700 border-slate-600 text-white" />
               </div>
               <div className="grid grid-cols-2 gap-4">

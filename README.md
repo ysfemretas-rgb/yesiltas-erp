@@ -1,5 +1,7 @@
 # Yeşiltaş Teknoloji ERP
 
+> Son düzeltmeler için `DUZELTMELER.md` dosyasına bakın. Önce `supabase-fixes-v2-migration.sql` dosyasını çalıştırın.
+
 ## Kurulum
 
 1. ZIP'i açın, dosyaları proje klasörüne atın

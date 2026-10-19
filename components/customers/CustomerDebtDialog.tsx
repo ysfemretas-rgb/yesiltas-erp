@@ -24,6 +24,8 @@ interface RelatedDebtItem {
   label: string
   amount: number
   code?: string
+  kind?: "sale" | "repair"
+  id?: string
 }
 
 interface CustomerDebtDialogProps {
@@ -32,6 +34,7 @@ interface CustomerDebtDialogProps {
   customerName?: string
   debts: Debt[]
   relatedDebts?: RelatedDebtItem[]
+  onCollect?: (item: { kind: "sale" | "repair"; id: string; amount: number; label: string }) => void
   onPayDebt: (debtId: string) => void
   newDebt: NewDebtInput
   onNewDebtChange: (debt: NewDebtInput) => void
@@ -45,6 +48,7 @@ export function CustomerDebtDialog({
   customerName,
   debts,
   relatedDebts = [],
+  onCollect,
   onPayDebt,
   newDebt,
   onNewDebtChange,
@@ -69,14 +73,21 @@ export function CustomerDebtDialog({
                       {d.code && <div className="text-xs text-slate-500 font-mono">{d.code}</div>}
                     </div>
                     {d.amount >= 0 ? (
-                      <span className="text-amber-400 font-medium text-sm">{formatCurrency(d.amount)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400 font-medium text-sm">{formatCurrency(d.amount)}</span>
+                        {onCollect && d.kind && d.id && d.amount > 0 && (
+                          <Button size="sm" onClick={() => onCollect({ kind: d.kind!, id: d.id!, amount: d.amount, label: d.label })} className="bg-emerald-600 hover:bg-emerald-700 h-7 px-2">
+                            Tahsil Et
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-cyan-400 font-medium text-sm">Alacaklı: {formatCurrency(-d.amount)}</span>
                     )}
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-slate-500">Bu bakiyeler ilgili satış/tamir kaydı düzenlenerek kapatılır, buradan ödenemez.</p>
+              <p className="text-xs text-slate-500">Bakiyeyi "Tahsil Et" ile kapatabilirsiniz; tahsilat kasaya otomatik gelir olarak yazılır.</p>
             </div>
           )}
           <div className="space-y-2">

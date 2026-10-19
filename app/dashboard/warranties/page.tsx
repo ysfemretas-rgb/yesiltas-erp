@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect } from "react"
@@ -44,7 +45,7 @@ export default function WarrantiesPage() {
   const [newWarranty, setNewWarranty] = useState<Partial<Warranty>>({
     warrantyType: "Ekran Değişimi",
     status: "active",
-    startDate: new Date().toISOString().split("T")[0],
+    startDate: localDateStr(),
   })
 
   // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
@@ -100,13 +101,13 @@ export default function WarrantiesPage() {
         customerName: newWarranty.customerName,
         customerPhone: newWarranty.customerPhone || "",
         warrantyType: newWarranty.warrantyType || "Genel",
-        startDate: newWarranty.startDate || new Date().toISOString().split("T")[0],
-        endDate: newWarranty.endDate || new Date().toISOString().split("T")[0],
+        startDate: newWarranty.startDate || localDateStr(),
+        endDate: newWarranty.endDate || localDateStr(),
         status: "active",
         notes: newWarranty.notes || "",
       })
       setWarranties([warranty, ...warranties])
-      setNewWarranty({ warrantyType: "Ekran Değişimi", status: "active", startDate: new Date().toISOString().split("T")[0] })
+      setNewWarranty({ warrantyType: "Ekran Değişimi", status: "active", startDate: localDateStr() })
       setIsDialogOpen(false)
       showToast("Garanti kaydı eklendi.", "success")
     } catch (e) {
@@ -180,7 +181,7 @@ export default function WarrantiesPage() {
   const autoCalculateEndDate = (startDate: string, months: number) => {
     if (!startDate) return ""
     const end = addMonths(parseISO(startDate), months)
-    return end.toISOString().split("T")[0]
+    return localDateStr(end)
   }
 
 

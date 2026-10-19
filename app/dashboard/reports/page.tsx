@@ -31,6 +31,7 @@ interface FinanceRecord {
 
 interface RepairRecord {
   id: string
+  customerCode?: string
   customerName: string
   deviceModel: string
   serviceType: string
@@ -42,6 +43,7 @@ interface RepairRecord {
 
 interface SaleRecord {
   id: string
+  customerId?: string
   customerName: string
   productName: string
   quantity: number
@@ -152,6 +154,7 @@ export default function ReportsPage() {
           .filter(r => r.createdAt)
           .map(r => ({
             id: r.id,
+            customerCode: r.customerCode,
             customerName: r.customerName,
             deviceModel: `${r.brand} ${r.model}`.trim(),
             serviceType: r.issue || "Tamir",
@@ -161,23 +164,32 @@ export default function ReportsPage() {
             date: r.createdAt,
           }))
 
+        // İptal edilen satışlar rapora girmez. Eşantiyon (bedelsiz) satış ciro/kâr sayılmaz;
+        // kâr = net satış tutarı (iskonto düşülmüş) - alış maliyeti. Eşantiyonda maliyet zarar olarak görünür.
         const validSales: SaleRecord[] = sales
-          .filter(s => s.date)
-          .map(s => ({
-            id: s.id,
-            customerName: s.customerName,
-            productName: s.items.map(i => i.name).join(", ") || "—",
-            quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
-            totalPrice: s.totalAmount,
-            profit: s.items.reduce((sum, i) => sum + (i.price - (i.purchasePrice || 0)) * i.quantity, 0),
-            date: s.date,
-          }))
+          .filter(s => s.date && s.status !== "cancelled")
+          .map(s => {
+            const cost = s.items.reduce((sum, i) => sum + (i.purchasePrice || 0) * i.quantity, 0)
+            const gift = s.paymentMethod === "gift"
+            return {
+              id: s.id,
+              customerId: s.customerId,
+              customerName: s.customerName,
+              productName: s.items.map(i => i.name).join(", ") || "—",
+              quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
+              totalPrice: gift ? 0 : s.totalAmount,
+              profit: gift ? -cost : s.totalAmount - cost,
+              date: s.date,
+            }
+          })
 
         const validCustomers: CustomerRecord[] = customers
           .filter(c => c.id)
           .map(c => {
-            const custSales = validSales.filter(s => s.customerName === c.name)
-            const custRepairs = validRepairs.filter(r => r.customerName === c.name)
+            const sameName = customers.filter(x => (x.name || "").trim().toLowerCase() === (c.name || "").trim().toLowerCase()).length
+            const nameMatch = (n: string) => sameName === 1 && (n || "").trim().toLowerCase() === (c.name || "").trim().toLowerCase()
+            const custSales = validSales.filter(s => s.customerId ? s.customerId === c.id : nameMatch(s.customerName))
+            const custRepairs = validRepairs.filter(r => r.customerCode ? r.customerCode === c.customerCode : nameMatch(r.customerName))
             return {
               id: c.id,
               name: c.name,

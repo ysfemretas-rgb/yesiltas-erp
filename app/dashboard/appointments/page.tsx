@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
@@ -70,7 +71,7 @@ export default function AppointmentsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const [newAppointment, setNewAppointment] = useState<Partial<Appointment>>({
-    date: new Date().toISOString().split("T")[0],
+    date: localDateStr(),
     time: "09:00",
     status: "scheduled",
     service: services[0]
@@ -137,7 +138,7 @@ export default function AppointmentsPage() {
     return matchesSearch && matchesDate
   })
 
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = localDateStr()
   const todayAppointments = appointments.filter(a => a.date === todayStr && a.status === "scheduled").length
   const weekAppointments = appointments.filter(a => {
     const appDate = new Date(a.date)
@@ -163,7 +164,7 @@ export default function AppointmentsPage() {
         email: newCustomerEmail.trim() || "",
         address: newCustomerAddress.trim() || "",
         status: "active",
-        lastVisit: new Date().toISOString().split("T")[0],
+        lastVisit: localDateStr(),
       })
       setCustomers([{ id: customer.id, name: customer.name, phone: customer.phone, phone1: customer.phone, phone2: customer.phone2 }, ...customers])
       setNewCustomer({ name: "", phone: "" })
@@ -204,7 +205,7 @@ export default function AppointmentsPage() {
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone || customer.phone1 || "",
-        date: newAppointment.date || new Date().toISOString().split("T")[0],
+        date: newAppointment.date || localDateStr(),
         time: newAppointment.time || "09:00",
         service: newAppointment.service || services[0],
         status: "scheduled",
@@ -213,7 +214,7 @@ export default function AppointmentsPage() {
 
       setAppointments([appointment, ...appointments])
       setNewAppointment({
-        date: new Date().toISOString().split("T")[0],
+        date: localDateStr(),
         time: "09:00",
         status: "scheduled",
         service: services[0]

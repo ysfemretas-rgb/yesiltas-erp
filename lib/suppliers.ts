@@ -1,5 +1,7 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
+import { createTransaction } from "@/lib/finance"
+import { localDateStr } from "@/lib/dates"
 
 export interface Supplier {
   id: string
@@ -54,8 +56,7 @@ function toRow(s: Partial<Supplier>) {
 // tarayıcıda (eski localStorage sisteminden kalma) veri varsa, bunu BİR KEZ
 // Supabase'e aktarır ki kimse eski verisini kaybetmesin.
 export async function fetchSuppliers(): Promise<Supplier[]> {
-  const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("suppliers", "created_at", false)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_suppliers")) {
     const legacyRaw = localStorage.getItem("yt_suppliers")
@@ -99,9 +100,22 @@ export async function createSupplier(input: Omit<Supplier, "id">): Promise<Suppl
 }
 
 export async function updateSupplier(id: string, input: Partial<Omit<Supplier, "id">>): Promise<Supplier> {
+  // Ürünler tedarikçiye ad üzerinden bağlı; ad değişirse bağlantı kopmasın diye
+  // envanterdeki ve ödemelerdeki adı da güncelliyoruz.
+  let oldName = ""
+  if (input.name !== undefined) {
+    const { data: existing } = await supabase.from("suppliers").select("name").eq("id", id).single()
+    oldName = existing?.name ?? ""
+  }
   const { data, error } = await supabase.from("suppliers").update(toRow(input)).eq("id", id).select("*").single()
   if (error) throw error
   const updated = fromRow(data)
+  if (oldName && updated.name && oldName !== updated.name) {
+    const r1 = await supabase.from("inventory").update({ supplier: updated.name }).eq("supplier", oldName)
+    if (r1.error) console.error("Envanterdeki tedarikçi adı güncellenemedi:", r1.error)
+    const r2 = await supabase.from("supplier_payments").update({ supplier_name: updated.name }).eq("supplier_name", oldName)
+    if (r2.error) console.error("Ödemelerdeki tedarikçi adı güncellenemedi:", r2.error)
+  }
   logActivity("Tedarikçiler", "updated", `${updated.name} güncellendi`)
   return updated
 }
@@ -114,4 +128,60 @@ export async function deleteSupplier(id: string): Promise<void> {
     throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
   }
   logActivity("Tedarikçiler", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
+}
+
+// ---------------- Tedarikçiye yapılan ödemeler ----------------
+export interface SupplierPayment {
+  id: string
+  supplierName: string
+  amount: number
+  date: string
+  note: string
+}
+
+function paymentFromRow(row: any): SupplierPayment {
+  return {
+    id: row.id,
+    supplierName: row.supplier_name ?? "",
+    amount: Number(row.amount) || 0,
+    date: row.payment_date ? String(row.payment_date).slice(0, 10) : (row.created_at ? String(row.created_at).slice(0, 10) : ""),
+    note: row.note ?? "",
+  }
+}
+
+export async function fetchSupplierPayments(): Promise<SupplierPayment[]> {
+  try {
+    const rows = await fetchAllRows("supplier_payments", "created_at", false)
+    return rows.map(paymentFromRow)
+  } catch (e) {
+    console.error("Tedarikçi ödemeleri yüklenemedi (migrasyon çalıştırıldı mı?):", e)
+    return []
+  }
+}
+
+// Ödeme kaydeder ve kasaya "Tedarikçi Ödemesi" gideri olarak yazar.
+export async function createSupplierPayment(input: { supplierName: string; amount: number; note?: string; date?: string }): Promise<SupplierPayment> {
+  const date = input.date || localDateStr()
+  const { data, error } = await supabase.from("supplier_payments").insert({
+    supplier_name: input.supplierName,
+    amount: input.amount,
+    payment_date: date,
+    note: input.note || "",
+  }).select("*").single()
+  if (error) throw error
+  try {
+    await createTransaction({
+      type: "expense",
+      category: "Tedarikçi Ödemesi",
+      amount: input.amount,
+      description: `🚚 Tedarikçi ödemesi: ${input.supplierName}${input.note ? " - " + input.note : ""}`,
+      date,
+      customer: input.supplierName,
+      source: "manual",
+    })
+  } catch (e) {
+    console.error("Tedarikçi ödemesi kasaya yazılamadı:", e)
+  }
+  logActivity("Tedarikçiler", "updated", `${input.supplierName} — ${input.amount.toLocaleString("tr-TR")} TL ödeme yapıldı`)
+  return paymentFromRow(data)
 }

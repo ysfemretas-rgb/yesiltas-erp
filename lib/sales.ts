@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface SaleItem {
@@ -31,7 +31,7 @@ function fromRow(row: any): Sale {
     id: row.id,
     saleCode: row.sale_code ?? "",
     customerCode: row.customer_code ?? "",
-    customerId: "",
+    customerId: row.customer_id ?? "",
     customerName: row.customer_name ?? "",
     customerPhone: row.customer_phone ?? "",
     items: Array.isArray(row.items) ? row.items : [],
@@ -52,6 +52,7 @@ function toRow(s: Partial<Sale>) {
     row.item_name = s.items.map(i => `${i.name} x${i.quantity}`).join(", ").slice(0, 250) || "Satış"
     row.quantity = s.items.reduce((sum, i) => sum + i.quantity, 0)
   }
+  if (s.customerId) row.customer_id = s.customerId
   if (s.customerName !== undefined) row.customer_name = s.customerName
   if (s.customerCode !== undefined) row.customer_code = s.customerCode || null
   if (s.customerPhone !== undefined) row.customer_phone = s.customerPhone
@@ -66,8 +67,7 @@ function toRow(s: Partial<Sale>) {
 }
 
 export async function fetchSales(): Promise<Sale[]> {
-  const { data, error } = await supabase.from("sales").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("sales", "created_at", false)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_sales")) {
     const legacyRaw = localStorage.getItem("yt_sales")

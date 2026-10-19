@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
@@ -139,7 +140,7 @@ export default function ConsumablesPage() {
       purchasePrice: Number(r.purchasePrice) || 0,
       purchaseCurrency: validCurrency(r.purchaseCurrency),
       supplier: String(r.supplier || ""),
-      lastRestocked: new Date().toISOString().split("T")[0],
+      lastRestocked: localDateStr(),
     })).filter(r => r.name)
     const created = await createConsumablesBulk(inputs)
     setConsumables([...created, ...consumables])
@@ -160,7 +161,7 @@ export default function ConsumablesPage() {
         purchasePrice: Number(newItem.purchasePrice) || 0,
         purchaseCurrency: newItem.purchaseCurrency || "TRY",
         supplier: newItem.supplier || "",
-        lastRestocked: new Date().toISOString().split("T")[0],
+        lastRestocked: localDateStr(),
       })
       setConsumables([item, ...consumables])
       setNewItem({ category: "Temizlik", unit: "Adet", currentStock: 0, minStock: 10, purchasePrice: 0, purchaseCurrency: "TRY" })

@@ -1,9 +1,11 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { InventoryItem, fetchInventory, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory"
+import { InventoryItem, fetchInventory, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem, adjustInventoryQuantity } from "@/lib/inventory"
+import { createTransaction } from "@/lib/finance"
 
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,11 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 import { ImageUploadField } from "@/components/ImageUploadField"
-import { fetchSuppliers, Supplier } from "@/lib/suppliers"
+import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
 
 const INVENTORY_IMPORT_FIELDS: ImportField[] = [
@@ -75,6 +77,9 @@ export default function InventoryPage() {
   const [isSupplierBarcodeScannerOpen, setIsSupplierBarcodeScannerOpen] = useState(false)
   const [isNewSupplierBarcodeScannerOpen, setIsNewSupplierBarcodeScannerOpen] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [quickSupplierFor, setQuickSupplierFor] = useState<"new" | "edit" | null>(null)
+  const [quickSupplierName, setQuickSupplierName] = useState("")
+  const [quickSupplierPhone, setQuickSupplierPhone] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -169,14 +174,94 @@ export default function InventoryPage() {
     const item = inventory.find(i => i.id === id)
     if (!item) return
     const newQuantity = Math.max(0, item.quantity + delta)
+    if (newQuantity === item.quantity) return
+    const previous = inventory
     setInventory(inventory.map(i => i.id === id ? { ...i, quantity: newQuantity } : i))
     try {
-      await updateInventoryItem(id, { quantity: newQuantity })
+      // Stok atomik değiştirilir (aynı anda satış yapılıyorsa ezilmez)
+      await adjustInventoryQuantity(id, newQuantity - item.quantity)
+      // Stok artışı tedarikçiden alım sayılır; tedarikçi borcu bundan hesaplanır
+      if (newQuantity > item.quantity) {
+        const purchased = (item.purchasedQuantity ?? item.quantity) + (newQuantity - item.quantity)
+        await updateInventoryItem(id, { purchasedQuantity: purchased })
+        setInventory(prev => prev.map(i => i.id === id ? { ...i, purchasedQuantity: purchased } : i))
+      }
     } catch (e) {
       console.error(e)
-      setInventory(inventory)
+      setInventory(previous)
       showToast("Stok güncellenirken bir sorun oluştu.", "error")
     }
+  }
+
+  // Yeni tedarikçiyi ürün formundan çıkmadan ekler (sadece ad yeterli).
+  const handleQuickSupplier = async () => {
+    const name = quickSupplierName.trim()
+    if (!name) {
+      showToast("Tedarikçi adı girin.", "error")
+      return
+    }
+    if (suppliers.some(s => s.name.trim().toLowerCase() === name.toLowerCase())) {
+      showToast("Bu isimde bir tedarikçi zaten var, listeden seçin.", "error")
+      return
+    }
+    try {
+      const created = await createSupplier({
+        name,
+        contactPerson: "",
+        phone: quickSupplierPhone.trim(),
+        email: "",
+        address: "",
+        category: "Diğer",
+        rating: 5,
+        status: "active",
+        totalOrders: 0,
+        lastOrderDate: localDateStr(),
+        balance: 0,
+      })
+      setSuppliers([created, ...suppliers])
+      if (quickSupplierFor === "edit" && editingItem) setEditingItem({ ...editingItem, supplier: created.name })
+      else setNewItem({ ...newItem, supplier: created.name })
+      setQuickSupplierFor(null)
+      setQuickSupplierName("")
+      setQuickSupplierPhone("")
+      showToast("Tedarikçi eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Tedarikçi eklenirken bir sorun oluştu.", "error")
+    }
+  }
+
+  const renderQuickSupplier = (target: "new" | "edit") => (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setQuickSupplierFor(quickSupplierFor === target ? null : target)}
+        className="border-slate-600 text-slate-300 hover:bg-slate-800"
+      >
+        <UserPlus className="w-3 h-3 mr-1" />{quickSupplierFor === target ? "❌ İptal" : "➕ Yeni Tedarikçi"}
+      </Button>
+      {quickSupplierFor === target && (
+        <div className="space-y-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
+          <Input placeholder="Tedarikçi / Toptancı Adı *" value={quickSupplierName} onChange={(e) => setQuickSupplierName(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+          <Input placeholder="Telefon (opsiyonel)" value={quickSupplierPhone} onChange={(e) => setQuickSupplierPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+          <Button type="button" size="sm" onClick={handleQuickSupplier} className="bg-emerald-600 hover:bg-emerald-700">✅ Ekle</Button>
+        </div>
+      )}
+    </div>
+  )
+
+  // Kritik stoktaki ürün için tedarikçiye hazır sipariş mesajı açar.
+  const orderViaWhatsApp = (item: InventoryItem) => {
+    const supplier = suppliers.find(s => s.name === item.supplier)
+    const phone = (supplier?.phone || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
+    if (phone.length < 10) {
+      showToast("Bu tedarikçinin telefon numarası kayıtlı değil.", "error")
+      return
+    }
+    const message = `Merhaba ${supplier?.contactPerson || supplier?.name},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\n📦 *${item.name}* ürününden stoğumuz azaldı (Mevcut: ${item.quantity}).\nSipariş vermek istiyoruz, fiyat ve stok bilgisi paylaşabilir misiniz?`
+    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
   const handleExcelImport = async (rows: Record<string, any>[]) => {
@@ -191,7 +276,7 @@ export default function InventoryPage() {
         sku: String(r.sku || ""),
         category: String(r.category || "Diğer"),
         quantity: Number(r.quantity) || 0,
-        minQuantity: Number(r.minQuantity) || 5,
+        minQuantity: r.minQuantity === undefined || r.minQuantity === null || r.minQuantity === "" ? 5 : (Number(r.minQuantity) || 0),
         purchasePrice,
         purchaseCurrency,
         profitMargin,
@@ -208,7 +293,7 @@ export default function InventoryPage() {
 
   const handleAddItem = async () => {
     if (!newItem.name) {
-      showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
+      showToast("Lütfen ürün adını girin!", "error")
       return
     }
     const salePrice = calculateSalePrice(
@@ -223,7 +308,7 @@ export default function InventoryPage() {
         sku: "",
         category: newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"),
         quantity: Number(newItem.quantity) || 0,
-        minQuantity: Number(newItem.minQuantity) || 5,
+        minQuantity: newItem.minQuantity === undefined || newItem.minQuantity === null ? 5 : (Number(newItem.minQuantity) || 0),
         purchasePrice: Number(newItem.purchasePrice) || 0,
         purchaseCurrency: newItem.purchaseCurrency || "TRY",
         profitMargin: Number(newItem.profitMargin) || 0,
@@ -236,6 +321,23 @@ export default function InventoryPage() {
         paidAmount: newItem.paymentStatus === "partial" ? (Number(newItem.paidAmount) || 0) : 0,
       })
       setInventory([item, ...inventory])
+      // Tedarikçiye ödenen kısım kasaya gider olarak yazılır (eskiden hiç yazılmıyordu)
+      if (item.supplier && item.paymentStatus !== "unpaid") {
+        const rate = item.purchaseCurrency === "USD" ? rates.USD : item.purchaseCurrency === "EUR" ? rates.EUR : 1
+        const totalTRY = item.purchasePrice * rate * item.quantity
+        const paidTRY = item.paymentStatus === "paid" ? totalTRY : Math.min(item.paidAmount || 0, totalTRY || item.paidAmount || 0)
+        if (paidTRY > 0) {
+          createTransaction({
+            type: "expense",
+            category: "Stok Alımı",
+            amount: Math.round(paidTRY * 100) / 100,
+            description: `📦 Stok alımı: ${item.name} x${item.quantity} (${item.supplier})`,
+            date: localDateStr(),
+            customer: item.supplier,
+            source: "manual",
+          }).catch((e) => console.error("Stok alımı kasaya yazılamadı:", e))
+        }
+      }
       setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
       setCustomCategory("")
       setIsDialogOpen(false)
@@ -249,7 +351,7 @@ export default function InventoryPage() {
   const handleUpdateItem = async () => {
     if (!editingItem) return
     if (!editingItem.name) {
-      showToast("Lütfen ürün adı ve SKU kodu girin!", "error")
+      showToast("Lütfen ürün adını girin!", "error")
       return
     }
     const resolvedCategory = editingItem.category === "__new__" ? (editCustomCategory.trim() || "Diğer") : editingItem.category
@@ -260,7 +362,10 @@ export default function InventoryPage() {
       rates
     )
     try {
-      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice })
+      const original = inventory.find(i => i.id === editingItem.id)
+      const increase = original ? Math.max(0, editingItem.quantity - original.quantity) : 0
+      const purchasedQuantity = (original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity) + increase
+      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice, purchasedQuantity })
       setInventory(inventory.map(item => item.id === updated.id ? updated : item))
       setIsEditOpen(false)
       setEditingItem(null)
@@ -374,8 +479,8 @@ export default function InventoryPage() {
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>
                   <Input
                     type="number"
-                    value={newItem.minQuantity || ""}
-                    onChange={(e) => setNewItem({ ...newItem, minQuantity: Number(e.target.value) })}
+                    value={newItem.minQuantity ?? ""}
+                    onChange={(e) => setNewItem({ ...newItem, minQuantity: e.target.value === "" ? undefined : Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
@@ -495,8 +600,9 @@ export default function InventoryPage() {
                   </SelectContent>
                 </Select>
                 {suppliers.length === 0 && (
-                  <p className="text-xs text-slate-500">Kayıtlı tedarikçi yok — Tedarikçiler sayfasından ekleyebilirsiniz.</p>
+                  <p className="text-xs text-slate-500">Kayıtlı tedarikçi yok — aşağıdan hemen ekleyebilirsiniz.</p>
                 )}
+                {renderQuickSupplier("new")}
               </div>
               {newItem.supplier && (
                 <div className="space-y-2">
@@ -689,7 +795,14 @@ export default function InventoryPage() {
               {lowStockItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between text-sm">
                   <span className="font-medium text-white">{item.name}</span>
-                  <Badge className="bg-red-600">Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-red-600">Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
+                    {item.supplier && (
+                      <Button size="sm" variant="outline" onClick={() => orderViaWhatsApp(item)} className="h-7 px-2 border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10" title="Tedarikçiye WhatsApp ile sipariş">
+                        <MessageCircle className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -751,7 +864,7 @@ export default function InventoryPage() {
               </div>
             )}
             {filteredItems.map((item) => {
-              const stockPercent = Math.min(100, (item.quantity / item.minQuantity) * 100)
+              const stockPercent = item.minQuantity > 0 ? Math.min(100, (item.quantity / item.minQuantity) * 100) : 100
               const isLowStock = item.quantity <= item.minQuantity
               const purchaseInTRY = item.purchaseCurrency === "USD"
                 ? item.purchasePrice * rates.USD
@@ -1059,6 +1172,7 @@ export default function InventoryPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {renderQuickSupplier("edit")}
               </div>
               {editingItem.supplier && (
                 <div className="space-y-2">

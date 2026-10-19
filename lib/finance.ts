@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface Transaction {
@@ -47,8 +47,7 @@ export async function deleteTransactionsBySource(source: "repair" | "sale", sour
 }
 
 export async function fetchTransactions(): Promise<Transaction[]> {
-  const { data, error } = await supabase.from("transactions").select("*").order("transaction_date", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("transactions", "transaction_date", false)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_finance")) {
     const legacyRaw = localStorage.getItem("yt_finance")

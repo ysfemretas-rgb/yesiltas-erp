@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface InventoryItem {
@@ -22,6 +22,8 @@ export interface InventoryItem {
   // otomatik hesaplanıyor.
   paymentStatus: "paid" | "unpaid" | "partial"
   paidAmount: number
+  // Bugüne kadar tedarikçiden alınan toplam adet (satılsa bile düşmez) — tedarikçi borcu bundan hesaplanır.
+  purchasedQuantity?: number
 }
 
 function fromRow(row: any): InventoryItem {
@@ -43,6 +45,7 @@ function fromRow(row: any): InventoryItem {
     location: row.location ?? "",
     paymentStatus: (row.payment_status as InventoryItem["paymentStatus"]) ?? "unpaid",
     paidAmount: Number(row.paid_amount) || 0,
+    purchasedQuantity: row.total_purchased_qty != null ? Number(row.total_purchased_qty) : (row.quantity ?? 0),
   }
 }
 
@@ -63,12 +66,12 @@ function toRow(i: Partial<InventoryItem>) {
   if (i.location !== undefined) row.location = i.location
   if (i.paymentStatus !== undefined) row.payment_status = i.paymentStatus
   if (i.paidAmount !== undefined) row.paid_amount = i.paidAmount
+  if (i.purchasedQuantity !== undefined) row.total_purchased_qty = i.purchasedQuantity
   return row
 }
 
 export async function fetchInventory(): Promise<InventoryItem[]> {
-  const { data, error } = await supabase.from("inventory").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("inventory", "created_at", false)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_inventory")) {
     const legacyRaw = localStorage.getItem("yt_inventory")
@@ -97,7 +100,7 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
 }
 
 export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id" | "productCode">[]): Promise<InventoryItem[]> {
-  const { data, error } = await supabase.from("inventory").insert(inputs.map(toRow)).select("*")
+  const { data, error } = await supabase.from("inventory").insert(inputs.map(i => toRow({ ...i, purchasedQuantity: i.purchasedQuantity ?? i.quantity }))).select("*")
   if (error) throw error
   const created = (data || []).map(fromRow)
   logActivity("Envanter", "created", `Excel ile ${created.length} ürün toplu eklendi`)
@@ -105,7 +108,7 @@ export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id" 
 }
 
 export async function createInventoryItem(input: Omit<InventoryItem, "id" | "productCode">): Promise<InventoryItem> {
-  const { data, error } = await supabase.from("inventory").insert(toRow(input)).select("*").single()
+  const { data, error } = await supabase.from("inventory").insert(toRow({ ...input, purchasedQuantity: input.purchasedQuantity ?? input.quantity })).select("*").single()
   if (error) throw error
   const created = fromRow(data)
   logActivity("Envanter", "created", `${created.name} eklendi`)
@@ -128,4 +131,22 @@ export async function deleteInventoryItem(id: string): Promise<void> {
     throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
   }
   logActivity("Envanter", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
+}
+
+// Stoğu göreli (+/-) olarak, veritabanı tarafında atomik değiştirir. İki kişi aynı anda
+// satış yaparsa eski "oku, hesapla, yaz" yöntemi birinin düşüşünü eziyordu.
+// Önce supabase-fixes-v2-migration.sql ile gelen adjust_inventory_quantity fonksiyonu
+// kullanılır; o yoksa eski yönteme düşer.
+export async function adjustInventoryQuantity(id: string, delta: number): Promise<number | null> {
+  if (!delta) return null
+  const { data, error } = await supabase.rpc("adjust_inventory_quantity", { p_id: id, p_delta: delta })
+  if (!error && data !== null && data !== undefined) {
+    return Number(Array.isArray(data) ? data[0] : data)
+  }
+  const { data: row, error: readErr } = await supabase.from("inventory").select("quantity").eq("id", id).single()
+  if (readErr || !row) throw readErr || new Error("Ürün bulunamadı")
+  const next = Math.max(0, (row.quantity ?? 0) + delta)
+  const { error: upErr } = await supabase.from("inventory").update({ quantity: next }).eq("id", id)
+  if (upErr) throw upErr
+  return next
 }

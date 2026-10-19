@@ -1,5 +1,7 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
+import { createTransaction } from "@/lib/finance"
+import { localDateStr } from "@/lib/dates"
 
 export interface Debt {
   id: string
@@ -8,6 +10,7 @@ export interface Debt {
   date: string
   status: "paid" | "unpaid"
   source?: "repair" | "sale" | "manual"
+  sourceId?: string
 }
 
 export interface Customer {
@@ -49,11 +52,12 @@ function debtFromRow(row: any): Debt {
     date: row.created_at ? String(row.created_at).slice(0, 10) : "",
     status: statusMap[row.status] ?? "unpaid",
     source: row.source_type ? sourceMap[row.source_type] : "manual",
+    sourceId: row.source_id ?? undefined,
   }
 }
 
 function customerFromRow(row: any, debts: Debt[]): Customer {
-  const totalDebt = debts.filter(d => d.status === "unpaid").reduce((sum, d) => sum + d.amount, 0)
+  const totalDebt = debts.filter(d => d.status === "unpaid" && (d.source ?? "manual") === "manual").reduce((sum, d) => sum + d.amount, 0)
   return {
     id: row.id,
     customerCode: row.customer_code ?? "",
@@ -94,8 +98,7 @@ function customerToRow(c: Partial<Customer>) {
 }
 
 export async function fetchCustomers(): Promise<Customer[]> {
-  const { data: customerRows, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const customerRows = await fetchAllRows("customers", "created_at", false)
 
   if ((!customerRows || customerRows.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_customers")) {
     const legacyRaw = localStorage.getItem("yt_customers")
@@ -134,11 +137,18 @@ export async function fetchCustomers(): Promise<Customer[]> {
     }
   }
 
-  const ids = (customerRows || []).map((r: any) => r.id)
-  let debtsByCustomer: Record<string, Debt[]> = {}
-  if (ids.length > 0) {
-    const { data: debtRows } = await supabase.from("debts").select("*").in("customer_id", ids)
-    for (const row of debtRows || []) {
+  // Borçları .in(...) ile tek tek müşteri ID'siyle çekmek müşteri sayısı arttıkça
+  // URL'yi aşırı uzatıp isteği bozuyordu; tüm borçlar sayfalı çekilip gruplanıyor.
+  const debtsByCustomer: Record<string, Debt[]> = {}
+  if ((customerRows || []).length > 0) {
+    let debtRows: any[] = []
+    try {
+      debtRows = await fetchAllRows("debts", "created_at", false)
+    } catch (e) {
+      console.error("Borçlar yüklenemedi:", e)
+    }
+    for (const row of debtRows) {
+      if (!row.customer_id) continue
       const list = debtsByCustomer[row.customer_id] || (debtsByCustomer[row.customer_id] = [])
       list.push(debtFromRow(row))
     }
@@ -201,13 +211,88 @@ export async function deleteDebtsBySource(sourceType: "device" | "sale", sourceI
 }
 
 export async function payDebt(debtId: string): Promise<void> {
-  const { data: existing, error: fetchError } = await supabase.from("debts").select("total_amount").eq("id", debtId).single()
+  const { data: existing, error: fetchError } = await supabase.from("debts").select("total_amount, customer_id, description, status").eq("id", debtId).single()
   if (fetchError) throw fetchError
+  if (existing?.status === "Tamamlandı") return
   const { error } = await supabase.from("debts").update({
     status: "Tamamlandı",
     paid_amount: existing?.total_amount ?? 0,
     remaining_amount: 0,
   }).eq("id", debtId)
   if (error) throw error
-  logActivity("Müşteriler", "updated", `${(existing?.total_amount ?? 0).toLocaleString("tr-TR")} TL borç ödendi olarak işaretlendi`)
+  const amount = Number(existing?.total_amount) || 0
+  logActivity("Müşteriler", "updated", `${amount.toLocaleString("tr-TR")} TL borç ödendi olarak işaretlendi`)
+
+  // Tahsil edilen borç kasaya gelir olarak yazılır (eskiden hiç yazılmıyordu).
+  if (amount > 0) {
+    try {
+      let customerName = ""
+      if (existing?.customer_id) {
+        const { data: c } = await supabase.from("customers").select("name").eq("id", existing.customer_id).single()
+        customerName = c?.name ?? ""
+      }
+      await createTransaction({
+        type: "income",
+        category: "Borç Tahsilatı",
+        amount,
+        description: `💰 Borç tahsilatı: ${customerName} - ${existing?.description || ""}`.trim(),
+        date: localDateStr(),
+        customer: customerName,
+        source: "manual",
+      })
+    } catch (e) {
+      console.error("Tahsilat kasaya yazılamadı:", e)
+    }
+  }
+}
+
+// Satış veya tamirden doğan kalan bakiyeyi (kısmen ya da tamamen) tahsil eder:
+// kaydın ödenen/kalan tutarını günceller, bağlı borç kaydını senkronlar ve kasaya gelir yazar.
+export async function collectBalance(
+  kind: "sale" | "repair",
+  id: string,
+  amount?: number
+): Promise<{ paid: number; remaining: number; collected: number }> {
+  const table = kind === "sale" ? "sales" : "devices"
+  const nameCol = "customer_name"
+  const { data: row, error } = await supabase.from(table).select(`paid_amount, remaining_amount, ${nameCol}`).eq("id", id).single()
+  if (error || !row) throw error || new Error("Kayıt bulunamadı")
+  const currentRemaining = Number(row.remaining_amount) || 0
+  if (currentRemaining <= 0) throw new Error("Bu kayıtta tahsil edilecek bakiye yok.")
+  const collected = Math.min(currentRemaining, amount && amount > 0 ? amount : currentRemaining)
+  const newPaid = (Number(row.paid_amount) || 0) + collected
+  const newRemaining = Math.round((currentRemaining - collected) * 100) / 100
+
+  const { error: upErr } = await supabase.from(table).update({ paid_amount: newPaid, remaining_amount: newRemaining }).eq("id", id)
+  if (upErr) throw upErr
+
+  const sourceType = kind === "sale" ? "sale" : "device"
+  const debtUpdate = newRemaining <= 0
+    ? { status: "Tamamlandı", paid_amount: 0, remaining_amount: 0 }
+    : { total_amount: newRemaining, remaining_amount: newRemaining, status: "Beklemede" }
+  if (newRemaining <= 0) {
+    const { data: debtRows } = await supabase.from("debts").select("id, total_amount").eq("source_type", sourceType).eq("source_id", id)
+    for (const d of debtRows || []) {
+      await supabase.from("debts").update({ status: "Tamamlandı", paid_amount: d.total_amount, remaining_amount: 0 }).eq("id", d.id)
+    }
+  } else {
+    await supabase.from("debts").update(debtUpdate).eq("source_type", sourceType).eq("source_id", id)
+  }
+
+  try {
+    await createTransaction({
+      type: "income",
+      category: "Borç Tahsilatı",
+      amount: collected,
+      description: `💰 ${kind === "sale" ? "Satış" : "Tamir"} tahsilatı: ${row[nameCol] || ""}`,
+      date: localDateStr(),
+      customer: row[nameCol] || "",
+      source: kind,
+      sourceId: id,
+    })
+  } catch (e) {
+    console.error("Tahsilat kasaya yazılamadı:", e)
+  }
+  logActivity("Müşteriler", "updated", `${row[nameCol] || ""} — ${collected.toLocaleString("tr-TR")} TL tahsil edildi`)
+  return { paid: newPaid, remaining: newRemaining, collected }
 }

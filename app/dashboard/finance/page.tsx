@@ -1,5 +1,6 @@
 "use client"
 
+import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
@@ -46,7 +47,7 @@ export default function FinancePage() {
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
     type: "income",
     category: "Tamir Geliri",
-    date: new Date().toISOString().split("T")[0],
+    date: localDateStr(),
     source: "manual",
   })
 
@@ -85,7 +86,7 @@ export default function FinancePage() {
     return matchesType && matchesCategory && matchesSource && matchesSearch
   })
 
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = localDateStr()
   const todayIncome = transactions.filter(t => t.type === "income" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
   const todayExpense = transactions.filter(t => t.type === "expense" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
   const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
@@ -117,7 +118,7 @@ export default function FinancePage() {
         amount: Number(newTransaction.amount),
         type: newTransaction.type as "income" | "expense",
         category: newTransaction.category || "Diğer",
-        date: newTransaction.date || new Date().toISOString().split("T")[0],
+        date: newTransaction.date || localDateStr(),
         customer: newTransaction.customer,
         source: "manual",
       })
@@ -125,7 +126,7 @@ export default function FinancePage() {
       setNewTransaction({
         type: "income",
         category: "Tamir Geliri",
-        date: new Date().toISOString().split("T")[0],
+        date: localDateStr(),
         source: "manual",
       })
       setIsDialogOpen(false)
