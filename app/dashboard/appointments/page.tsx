@@ -1,5 +1,6 @@
 "use client"
 
+import { CustomerPicker } from "@/components/CustomerPicker"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -371,18 +372,14 @@ export default function AppointmentsPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Müşteri <span className="text-red-400">*</span></label>
                 <div className="flex gap-2">
-                  <Select value={String(newAppointment.customerId || "")} onValueChange={(v) => setNewAppointment({...newAppointment, customerId: v})}>
-                    <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-white">
-                      <SelectValue placeholder="Müşteri seçin" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      {customers.map(c => (
-                        <SelectItem key={c.id} value={String(c.id)} className="text-white">
-                          {c.name} - {c.phone || c.phone1 || "Telefon yok"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex-1 min-w-0">
+                    <CustomerPicker
+                      customers={customers as any}
+                      value={String(newAppointment.customerId || "")}
+                      onChange={(id) => setNewAppointment({...newAppointment, customerId: id})}
+                      placeholder="Müşteri ara veya listeden seç..."
+                    />
+                  </div>
                   <Button 
                     variant="outline" 
                     onClick={() => setIsNewCustomerOpen(true)}
@@ -595,23 +592,12 @@ export default function AppointmentsPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Müşteri</label>
-                <Select value={String(editingAppointment.customerId)} onValueChange={(v) => {
-                  const customer = customers.find(c => c.id === v)
-                  if (customer) {
-                    setEditingAppointment({...editingAppointment, customerId: customer.id, customerName: customer.name, customerPhone: customer.phone || customer.phone1 || ""})
-                  }
-                }}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    {customers.map(c => (
-                      <SelectItem key={c.id} value={String(c.id)} className="text-white">
-                        {c.name} - {c.phone || c.phone1 || "Telefon yok"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CustomerPicker
+                  customers={customers as any}
+                  value={String(editingAppointment.customerId || "")}
+                  onChange={(id, customer) => setEditingAppointment({...editingAppointment, customerId: customer.id, customerName: customer.name, customerPhone: customer.phone || customer.phone1 || ""})}
+                  placeholder={editingAppointment.customerName || "Müşteri ara veya listeden seç..."}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

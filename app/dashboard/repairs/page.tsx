@@ -10,6 +10,7 @@ import { fetchStaff, StaffMember } from "@/lib/staff"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { exportToExcel } from "@/lib/exportExcel"
 import { SignaturePad } from "@/components/SignaturePad"
+import { CustomerPicker } from "@/components/CustomerPicker"
 import { Pagination } from "@/components/Pagination"
 import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon } from "lucide-react"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
@@ -731,7 +732,7 @@ function RepairsPageContent() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🔧 Teknik Servis</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
         <Button onClick={exportRepairs} variant="outline" className="border-slate-600 text-slate-300">
           <DownloadIcon className="h-4 w-4 mr-2" />Excel
         </Button>
@@ -751,21 +752,13 @@ function RepairsPageContent() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label className="text-slate-300">Müşteri Seçimi</Label>
-                <Select value={customerId} onValueChange={handleCustomerSelect}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                    <SelectValue placeholder="Müşteri secin veya yeni ekleyin" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="new" className="text-emerald-400 font-semibold">
-                      + Yeni Müşteri Ekle
-                    </SelectItem>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id.toString()} className="text-white">
-                        {c.name} - {c.phone1 || "Telefon yok"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CustomerPicker
+                  customers={customers as any}
+                  value={customerId}
+                  onChange={(id) => handleCustomerSelect(id)}
+                  onNew={() => handleCustomerSelect("new")}
+                  placeholder="Müşteri ara, listeden seç veya yeni ekle..."
+                />
               </div>
 
               {isNewCustomer && (

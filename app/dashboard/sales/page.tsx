@@ -24,6 +24,7 @@ import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { printSaleReceipt } from "@/lib/saleReceipt"
 import { createWarranty } from "@/lib/warranties"
 import { printRecordLabel } from "@/lib/labels"
+import { CustomerPicker } from "@/components/CustomerPicker"
 import { exportToExcel } from "@/lib/exportExcel"
 import { Pagination } from "@/components/Pagination"
 import { addMonths } from "date-fns"
@@ -974,7 +975,7 @@ Bu işlem geri alınamaz!`)) return
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🛒 Satışlar</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={() => router.push("/dashboard/inventory")} variant="outline" className="border-slate-600 text-slate-300">
             <Package className="w-4 h-4 mr-2" />Envanteri Aç
           </Button>
@@ -1041,33 +1042,12 @@ Bu işlem geri alınamaz!`)) return
             {/* Customer Selection */}
             <div className="space-y-2">
               <Label className="text-slate-300">👤 Müşteri</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input
-                  placeholder="Müşteri ara (isim veya telefon)..."
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  className="pl-10 bg-slate-800 border-slate-600 text-white"
-                />
-              </div>
-
-              {customerSearch.length > 0 && (
-                <div className="bg-slate-800 border border-slate-600 rounded-lg max-h-40 overflow-y-auto">
-                  {filteredCustomers.length === 0 ? (
-                    <div className="p-3 text-sm text-slate-500">❌ Müşteri bulunamadı</div>
-                  ) : (
-                    filteredCustomers.map(c => (
-                      <button
-                        key={c.id}
-                        onClick={() => { setSelectedCustomer(String(c.id)); setCustomerSearch(""); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-700 transition-colors ${selectedCustomer === String(c.id) ? "bg-emerald-600/20 text-emerald-400" : "text-white"}`}
-                      >
-                        {c.name} - 📞 {c.phone || c.phone1}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+              <CustomerPicker
+                customers={customers}
+                value={selectedCustomer}
+                onChange={(id) => setSelectedCustomer(id)}
+                placeholder="Müşteri ara (isim, telefon, kod) veya listeden seç..."
+              />
 
               {selectedCustomer && (
                 <div className="flex items-center gap-2 text-sm text-emerald-400">

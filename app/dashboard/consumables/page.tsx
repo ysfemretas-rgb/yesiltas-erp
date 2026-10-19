@@ -27,7 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign, Upload } from "lucide-react"
+import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign, Upload, MessageCircle, Copy } from "lucide-react"
+import { fetchSuppliers, Supplier } from "@/lib/suppliers"
 import { Consumable, fetchConsumables, createConsumable, createConsumablesBulk, updateConsumable, deleteConsumable } from "@/lib/consumables"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 
@@ -70,7 +71,9 @@ export default function ConsumablesPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [customCategory, setCustomCategory] = useState("")
   const [editCustomCategory, setEditCustomCategory] = useState("")
-  const { rates, isLoadingRates, fetchRates } = useExchangeRates()
+  const { rates } = useExchangeRates()
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [quoteOpen, setQuoteOpen] = useState(false)
 
   const [newItem, setNewItem] = useState<Partial<Consumable>>({
     category: "Temizlik",
@@ -95,6 +98,9 @@ export default function ConsumablesPage() {
       .finally(() => {
         if (!cancelled) setIsLoaded(true)
       })
+    fetchSuppliers()
+      .then((data) => { if (!cancelled) setSuppliers(data) })
+      .catch((e) => console.error("Tedarikçiler yüklenemedi:", e))
     return () => { cancelled = true }
   }, [])
 
@@ -239,12 +245,54 @@ export default function ConsumablesPage() {
   if (!authorized) return null
 
 
+  // ---- Tedarikçiden fiyat/teklif isteme ----
+  const supplierOf = (item: Consumable) => suppliers.find(sp => sp.name.trim().toLowerCase() === (item.supplier || "").trim().toLowerCase())
+
+  const quoteMessage = (items: Consumable[], contact: string) =>
+    `Merhaba ${contact},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz. Aşağıdaki sarf malzemelerde stoğumuz azaldı; güncel birim fiyat ve teslim süresi için teklif rica ediyoruz:\n\n` +
+    items.map(i => `🧪 ${i.name} — mevcut ${i.currentStock} ${i.unit}, ihtiyaç yaklaşık ${Math.max(1, (i.minStock || 0) * 2 - i.currentStock)} ${i.unit}`).join("\n") +
+    `\n\nTeşekkür ederiz.`
+
+  // Aynı tedarikçinin ürünleri tek mesajda gider; tedarikçi telefonu kayıtlı değilse WhatsApp'ta kişi seçtirilir
+  const requestQuote = (items: Consumable[]) => {
+    if (items.length === 0) return
+    const sp = supplierOf(items[0])
+    const phone = (sp?.phone || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
+    const message = quoteMessage(items, sp?.contactPerson || sp?.name || items[0].supplier || "")
+    const url = phone.length >= 10
+      ? `https://wa.me/90${phone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`
+    window.open(url, "_blank")
+  }
+
+  const quoteGroups = () => {
+    const map = new Map<string, Consumable[]>()
+    lowStockItems.forEach(i => {
+      const key = i.supplier || "Tedarikçi belirtilmemiş"
+      map.set(key, [...(map.get(key) || []), i])
+    })
+    return Array.from(map.entries()).map(([name, items]) => ({ name, items }))
+  }
+
+  const copyQuote = async (items: Consumable[]) => {
+    try {
+      const sp = supplierOf(items[0])
+      await navigator.clipboard.writeText(quoteMessage(items, sp?.contactPerson || sp?.name || items[0].supplier || ""))
+      showToast("Mesaj kopyalandı.", "success")
+    } catch {
+      showToast("Kopyalanamadı.", "error")
+    }
+  }
+
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">🧪 Sarf Malzeme Takibi</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+        <Button onClick={() => setQuoteOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+          <MessageCircle className="mr-2 h-4 w-4" />Fiyat İste
+        </Button>
         <Button onClick={() => setIsImportOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
           <Upload className="mr-2 h-4 w-4" />Excel ile Yükle
         </Button>
@@ -403,42 +451,6 @@ export default function ConsumablesPage() {
         templateHint="Excel dosyanızda şu sütunlar olmalı: Malzeme Adı, Kategori, Mevcut Stok, Min. Stok, Birim, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Tedarikçi. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
       />
 
-      {/* Exchange Rates Card */}
-      <Card className="bg-slate-900 border-slate-700">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-emerald-400" />
-                <span className="text-white font-medium">Canlı Döviz Kurları</span>
-              </div>
-              <div className="flex gap-3 text-sm">
-                <Badge className="bg-blue-900/50 text-blue-300 border-blue-700">
-                  $1 = {formatCurrency(rates.USD)}
-                </Badge>
-                <Badge className="bg-purple-900/50 text-purple-300 border-purple-700">
-                  €1 = {formatCurrency(rates.EUR)}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {rates.lastUpdated && (
-                <span className="text-xs text-slate-500">Güncelleme: {rates.lastUpdated}</span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={fetchRates}
-                disabled={isLoadingRates}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800"
-              >
-                {isLoadingRates ? "Yükleniyor..." : "Kur Güncelle"}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -489,9 +501,14 @@ export default function ConsumablesPage() {
           <CardContent>
             <div className="space-y-2">
               {lowStockItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
+                <div key={item.id} className="flex items-center justify-between gap-2 flex-wrap text-sm">
                   <span className="font-medium text-white">{item.name}</span>
-                  <Badge className="bg-red-600">Stok: {item.currentStock} {item.unit} / Min: {item.minStock}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-red-600">Stok: {item.currentStock} {item.unit} / Min: {item.minStock}</Badge>
+                    <Button size="sm" variant="outline" onClick={() => requestQuote([item])} className="h-7 px-2 border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10" title="Tedarikçiden fiyat iste">
+                      <MessageCircle className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -541,15 +558,15 @@ export default function ConsumablesPage() {
               </div>
             )}
             {filteredItems.map((item) => {
-              const stockPercent = Math.min(100, (item.currentStock / item.minStock) * 100)
+              const stockPercent = item.minStock > 0 ? Math.min(100, (item.currentStock / item.minStock) * 100) : 100
               const isLowStock = item.currentStock <= item.minStock
               const unitCostTRY = priceInTRY(item.purchasePrice, item.purchaseCurrency, rates)
               const totalCost = unitCostTRY * item.currentStock
 
               return (
                 <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-700 bg-red-900/10" : "border-slate-700 bg-slate-800/50"}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
+                  <div className="flex items-start justify-between gap-2 flex-wrap mb-2">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-lg text-white">{item.name}</span>
                         <Badge variant="outline" className="border-slate-600 text-slate-400">{item.category}</Badge>
@@ -581,11 +598,11 @@ export default function ConsumablesPage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-sm text-slate-500">
                       Toplam Değer: <span className="font-semibold text-white">{formatCurrency(totalCost)}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button
                         size="sm"
                         variant="outline"
@@ -603,6 +620,17 @@ export default function ConsumablesPage() {
                       >
                         <PlusIcon className="h-4 w-4" />
                       </Button>
+                      {isLowStock && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => requestQuote([item])}
+                          className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                          title="Tedarikçiden fiyat iste"
+                        >
+                          <MessageCircle className="h-4 w-4 mr-1" />Fiyat İste
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -629,6 +657,38 @@ export default function ConsumablesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Tedarikçiden Fiyat İste */}
+      <Dialog open={quoteOpen} onOpenChange={setQuoteOpen}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-white">💬 Tedarikçiden Fiyat İste</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {quoteGroups().length === 0 && <p className="text-sm text-slate-400">Kritik stokta malzeme yok. 🎉</p>}
+            {quoteGroups().map((g) => (
+              <div key={g.name} className="p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
+                <div className="font-medium text-white">🚚 {g.name}</div>
+                <div className="space-y-1">
+                  {g.items.map((i) => (
+                    <div key={i.id} className="flex justify-between gap-2 text-sm">
+                      <span className="text-slate-300 truncate">{i.name}</span>
+                      <span className="text-amber-400 shrink-0">{i.currentStock}/{i.minStock} {i.unit}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="border-green-600 text-green-400" onClick={() => requestQuote(g.items)}>
+                    <MessageCircle className="h-3 w-3 mr-1" />WhatsApp ile iste
+                  </Button>
+                  <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => copyQuote(g.items)}>
+                    <Copy className="h-3 w-3 mr-1" />Kopyala
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500">Tedarikçi telefonu Tedarikçiler sayfasında kayıtlıysa mesaj doğrudan ona açılır; değilse WhatsApp'ta kişiyi siz seçersiniz.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

@@ -1145,7 +1145,7 @@ export default function InventoryPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -1169,7 +1169,7 @@ export default function InventoryPage() {
                     <div className="flex-1">
                       <Progress value={stockPercent} className={isLowStock ? "bg-red-900/50" : "bg-slate-700"} />
                     </div>
-                    <div className="text-sm text-slate-400 w-24 text-right">
+                    <div className="text-sm text-slate-400 sm:w-24 sm:text-right">
                       Stok: {item.quantity}/{item.minQuantity}
                     </div>
                     <div className="flex gap-1 flex-wrap">

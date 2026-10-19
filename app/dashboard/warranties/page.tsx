@@ -28,6 +28,8 @@ import { tr } from "date-fns/locale"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Warranty, fetchWarranties, createWarranty, updateWarranty, deleteWarranty } from "@/lib/warranties"
+import { Customer, fetchCustomers } from "@/lib/customers"
+import { CustomerPicker } from "@/components/CustomerPicker"
 
 export default function WarrantiesPage() {
   const { toast, showToast, hideToast } = useToast()
@@ -41,6 +43,7 @@ export default function WarrantiesPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [customers, setCustomers] = useState<Customer[]>([])
 
   const [newWarranty, setNewWarranty] = useState<Partial<Warranty>>({
     warrantyType: "Ekran Değişimi",
@@ -49,6 +52,10 @@ export default function WarrantiesPage() {
   })
 
   // Supabase'den yükle (eski localStorage verisi varsa bir kere otomatik aktarılır)
+  useEffect(() => {
+    fetchCustomers().then(setCustomers).catch((e) => console.error("Müşteriler yüklenemedi:", e))
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     fetchWarranties()
@@ -236,6 +243,15 @@ export default function WarrantiesPage() {
               <DialogTitle className="text-white">Yeni Garanti Kaydı</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Kayıtlı Müşteriden Seç</label>
+                <CustomerPicker
+                  customers={customers}
+                  value=""
+                  onChange={(_id, c) => setNewWarranty({ ...newWarranty, customerName: c.name, customerPhone: c.phone || c.phone1 || "" })}
+                  placeholder="Müşteri ara veya listeden seç (ad/telefon otomatik dolar)..."
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Cihaz Adı <span className="text-red-400">*</span></label>
@@ -491,6 +507,15 @@ export default function WarrantiesPage() {
           </DialogHeader>
           {editingWarranty && (
             <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Kayıtlı Müşteriden Seç</label>
+                <CustomerPicker
+                  customers={customers}
+                  value=""
+                  onChange={(_id, c) => setEditingWarranty({ ...editingWarranty, customerName: c.name, customerPhone: c.phone || c.phone1 || "" })}
+                  placeholder="Müşteri ara veya listeden seç..."
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Cihaz Adı <span className="text-red-400">*</span></label>

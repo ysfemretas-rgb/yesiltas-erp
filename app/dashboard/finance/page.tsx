@@ -233,9 +233,9 @@ export default function FinancePage() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">💰 Finans Yönetimi</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
         <Button variant="outline" onClick={() => printDayClose(todayStr, transactions)} className="border-slate-600 text-slate-300 hover:text-white">
           📊 Gün Sonu
         </Button>
