@@ -11,6 +11,10 @@ import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { exportToExcel } from "@/lib/exportExcel"
 import { SignaturePad } from "@/components/SignaturePad"
 import { CustomerPicker } from "@/components/CustomerPicker"
+import { RepairBoardDialog } from "@/components/repairs/RepairBoardDialog"
+import { REPAIR_STAGES, RepairStage, QC_ITEMS, RepairQuote, QUOTE_LABELS, stageOf, stageLabel, statusForStage, reconcileStage, qcProgress, deliveryState } from "@/lib/repairWorkflow"
+import { printRepairQuote } from "@/lib/repairQuote"
+import { logActivity } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
 import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon } from "lucide-react"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
@@ -95,6 +99,11 @@ function RepairsPageContent() {
   const [paidAmount, setPaidAmount] = useState("")
   const [notesInput, setNotesInput] = useState("")
   const [technicianInput, setTechnicianInput] = useState("")
+  const [estimatedInput, setEstimatedInput] = useState("")
+  const [newEstimated, setNewEstimated] = useState("")
+  const [boardOpen, setBoardOpen] = useState(false)
+  const [quoteAmount, setQuoteAmount] = useState("")
+  const [quoteNote, setQuoteNote] = useState("")
   const [staffList, setStaffList] = useState<StaffMember[]>([])
   const [stockItems, setStockItems] = useState<InventoryItem[]>([])
   const [partProductId, setPartProductId] = useState("")
@@ -200,6 +209,9 @@ function RepairsPageContent() {
     setPaidAmount(repair.paid.toString())
     setNotesInput(repair.notes)
     setTechnicianInput(repair.technician || "")
+    setEstimatedInput(repair.estimatedDelivery || "")
+    setQuoteAmount(String(repair.quote?.amount ?? (repair.cost + (repair.discount || 0))))
+    setQuoteNote(repair.quote?.note || "")
     setPartProductId("")
     setPartQty("1")
     setIsEditDialogOpen(true)
@@ -381,6 +393,8 @@ function RepairsPageContent() {
         remaining: remainingNum,
         paymentType: paymentType as Repair["paymentType"],
         notes: notesInput,
+        stage: "received",
+        estimatedDelivery: newEstimated || "",
         createdAt: localDateStr(),
       })
       setRepairs([newRepair, ...repairs])
@@ -461,6 +475,7 @@ function RepairsPageContent() {
         paymentType: paymentType as Repair["paymentType"],
         notes: notesInput,
         technician: technicianInput,
+        estimatedDelivery: estimatedInput || "",
       })
 
       setRepairs(repairs.map((r) => r.id === selectedRepair.id ? updatedRepair : r))
@@ -511,6 +526,7 @@ function RepairsPageContent() {
     try {
       const updatedRepair = await updateRepair(id, {
         status: newStatus,
+        stage: reconcileStage(repair.stage, newStatus),
         completedAt: newStatus === "completed" ? localDateStr() : repair.completedAt,
       })
 
@@ -532,10 +548,12 @@ function RepairsPageContent() {
           await adjustInventoryQuantity(part.productId, part.quantity, `Tamir silindi ${target?.repairCode || ""}`.trim(), part.name).catch((e) => console.error(e))
         }
         await deleteRepair(id)
-        await deleteTransactionsBySource("repair", id)
+        let financeFailed = false
+        await deleteTransactionsBySource("repair", id).catch((err) => { console.error(err); financeFailed = true })
         setRepairs(repairs.filter((r) => r.id !== id))
         setNotes(notes.filter((n) => n.repairId !== id))
-        showToast("Tamir kaydı silindi.", "success")
+        if (financeFailed) showToast("Tamir silindi ancak kasa kayıtları silinemedi; Finans sayfasından kontrol edin.", "error")
+        else showToast("Tamir kaydı silindi.", "success")
       } catch (e) {
         console.error(e)
         showToast("Tamir kaydı silinirken bir sorun oluştu.", "error")
@@ -602,6 +620,7 @@ function RepairsPageContent() {
     setPaymentType("unpaid")
     setPaidAmount("")
     setNotesInput("")
+    setNewEstimated("")
     setIsNewCustomer(false)
   }
 
@@ -681,12 +700,123 @@ function RepairsPageContent() {
       "Arıza": r.issue,
       "Durum": r.status === "completed" ? "Tamamlandı" : r.status === "in_progress" ? "Devam Ediyor" : "Bekliyor",
       "Teknisyen": r.technician || "",
+      "Aşama": stageLabel(stageOf(r)),
+      "Tahmini Teslim": r.estimatedDelivery || "",
       "Ücret": r.cost,
       "Parça Maliyeti": r.partsCost || 0,
       "Kâr": r.paymentType === "gift" ? -(r.partsCost || 0) : r.cost - (r.partsCost || 0),
       "Alınan": r.paid,
       "Kalan": r.remaining,
     })))
+  }
+
+  // ---- Servis iş akışı, kalite kontrol, teklif ----
+  const actorName = () => {
+    try { return JSON.parse(localStorage.getItem("yt_user") || "{}")?.name || "" } catch { return "" }
+  }
+
+  const applyUpdated = (updated: Repair) => {
+    setRepairs(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setSelectedRepair(prev => prev && prev.id === updated.id ? updated : prev)
+  }
+
+  const changeStage = async (repair: Repair, stage: RepairStage) => {
+    const current = stageOf(repair)
+    if (current === stage) return
+    const status = statusForStage(stage)
+    if ((stage === "ready" || stage === "delivered") && !qcProgress(repair.qc).complete) {
+      const q = qcProgress(repair.qc)
+      if (!confirm(`Kalite kontrol listesi tamamlanmadı (${q.done}/${q.total}).\n\n"${stageLabel(stage)}" aşamasına yine de geçilsin mi?`)) return
+    }
+    try {
+      const updated = await updateRepair(repair.id, {
+        stage,
+        status,
+        completedAt: status === "completed" ? (repair.completedAt || localDateStr()) : "",
+      })
+      applyUpdated(updated)
+      logActivity("Teknik Servis", "updated", `${repair.repairCode || ""} ${repair.customerName}: aşama ${stageLabel(current)} → ${stageLabel(stage)}`.trim())
+    } catch (e) {
+      console.error(e)
+      showToast("Aşama güncellenemedi (v8 SQL çalıştırıldı mı?).", "error")
+    }
+  }
+
+  const toggleQc = async (key: string, forceAll?: boolean) => {
+    if (!selectedRepair) return
+    const base = selectedRepair.qc?.checks || {}
+    const checks: Record<string, boolean> = forceAll
+      ? Object.fromEntries(QC_ITEMS.map(i => [i.key, true]))
+      : { ...base, [key]: !base[key] }
+    try {
+      const updated = await updateRepair(selectedRepair.id, { qc: { checks, by: actorName(), at: new Date().toLocaleString("tr-TR") } })
+      applyUpdated(updated)
+    } catch (e) {
+      console.error(e)
+      showToast("Kalite kontrol kaydedilemedi (v8 SQL çalıştırıldı mı?).", "error")
+    }
+  }
+
+  const saveQuote = async () => {
+    if (!selectedRepair) return
+    const amount = Number(quoteAmount)
+    if (!(amount > 0)) {
+      showToast("Teklif tutarını girin.", "error")
+      return
+    }
+    const quote: RepairQuote = { status: "pending", amount, note: quoteNote.trim(), createdAt: localDateStr() }
+    const cur = stageOf(selectedRepair)
+    const moveToApproval = cur === "received" || cur === "diagnosed"
+    try {
+      const updated = await updateRepair(selectedRepair.id, { quote, ...(moveToApproval ? { stage: "awaiting_approval", status: "waiting" as const } : {}) })
+      applyUpdated(updated)
+      logActivity("Teknik Servis", "updated", `${selectedRepair.repairCode || ""} ${selectedRepair.customerName}: teklif hazırlandı — ${amount.toLocaleString("tr-TR")} TL`.trim())
+      showToast("Teklif kaydedildi. WhatsApp ile gönderebilir veya yazdırabilirsiniz.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Teklif kaydedilemedi (v8 SQL çalıştırıldı mı?).", "error")
+    }
+  }
+
+  const sendQuoteWhatsApp = () => {
+    if (!selectedRepair?.quote) return
+    const phone = (selectedRepair.phone1 || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
+    if (phone.length < 10) {
+      showToast("Müşterinin telefon numarası geçersiz.", "error")
+      return
+    }
+    const q = selectedRepair.quote
+    const device = [selectedRepair.brand, selectedRepair.model].filter(Boolean).join(" ")
+    const message = `Merhaba *${selectedRepair.customerName}*,\n\n*${device}* cihazınızın incelemesi tamamlandı.\n\n🔍 *Teşhis / yapılacak işlem:* ${q.note || selectedRepair.issue}\n💰 *Tamir ücreti:* ${formatCurrency(q.amount)}${selectedRepair.estimatedDelivery ? `\n📅 *Tahmini teslim:* ${selectedRepair.estimatedDelivery}` : ""}\n\nOnay verirseniz işleme başlayacağız. Onay için bu mesaja *EVET*, vazgeçmek için *HAYIR* yazmanız yeterlidir.\n\n🏪 *Yeşiltaş Teknoloji*`
+    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(message)}`, "_blank")
+  }
+
+  const decideQuote = async (decision: "approved" | "rejected") => {
+    if (!selectedRepair?.quote) return
+    const q: RepairQuote = { ...selectedRepair.quote, status: decision, decidedAt: localDateStr(), decidedBy: actorName() }
+    const patch: Partial<Repair> = { quote: q }
+    const cur = stageOf(selectedRepair)
+    if (decision === "approved") {
+      if (cur === "received" || cur === "diagnosed" || cur === "awaiting_approval") {
+        patch.stage = "in_repair"
+        patch.status = "in_progress"
+      }
+      const currentGross = selectedRepair.cost + (selectedRepair.discount || 0)
+      if (Math.abs(currentGross - q.amount) > 0.01 && confirm(`Tamir ücreti şu an ${formatCurrency(currentGross)}. Onaylanan teklif tutarına (${formatCurrency(q.amount)}) güncellensin mi?`)) {
+        const net = Math.max(0, q.amount - (selectedRepair.discount || 0))
+        patch.cost = net
+        patch.remaining = selectedRepair.paymentType === "gift" ? 0 : net - selectedRepair.paid
+      }
+    }
+    try {
+      const updated = await updateRepair(selectedRepair.id, patch)
+      applyUpdated(updated)
+      logActivity("Teknik Servis", "updated", `${selectedRepair.repairCode || ""} ${selectedRepair.customerName}: teklif ${decision === "approved" ? "ONAYLANDI" : "REDDEDİLDİ"} (${q.amount.toLocaleString("tr-TR")} TL)`.trim())
+      showToast(decision === "approved" ? "Teklif onaylandı; tamir aşamasına geçildi." : "Teklif reddedildi olarak kaydedildi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Karar kaydedilemedi.", "error")
+    }
   }
 
   // İmza kayda hemen yazılır (Güncelle'ye basmayı beklemez)
@@ -733,6 +863,9 @@ function RepairsPageContent() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🔧 Teknik Servis</h1>
         <div className="flex gap-2 flex-wrap">
+        <Button onClick={() => setBoardOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+          📋 Pano
+        </Button>
         <Button onClick={exportRepairs} variant="outline" className="border-slate-600 text-slate-300">
           <DownloadIcon className="h-4 w-4 mr-2" />Excel
         </Button>
@@ -952,6 +1085,10 @@ function RepairsPageContent() {
                 <Label className="text-slate-300">Notlar</Label>
                 <Textarea value={notesInput} onChange={(e) => setNotesInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ekstra notlar..." />
               </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Tahmini Teslim Tarihi (opsiyonel)</Label>
+              <Input type="date" value={newEstimated} onChange={(e) => setNewEstimated(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+            </div>
 
               <Button onClick={handleAddRepair} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4 mr-2" />Kaydet
@@ -1090,6 +1227,13 @@ function RepairsPageContent() {
                       <div className="flex gap-1 justify-end mt-1">
                         {getStatusBadge(repair.status)}
                         {getPaymentBadge(repair.paymentType, repair.remaining)}
+                      </div>
+                      <div className="text-[11px] text-slate-400 text-right mt-1">
+                        {REPAIR_STAGES.find(x => x.key === stageOf(repair))?.icon} {stageLabel(stageOf(repair))}
+                        {repair.estimatedDelivery && (() => {
+                          const d = deliveryState(repair.estimatedDelivery, repair.status, localDateStr())
+                          return <span className={d === "late" ? "text-red-400" : d === "soon" ? "text-amber-400" : ""}> • ⏰ {repair.estimatedDelivery}{d === "late" ? " (geçti)" : ""}</span>
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1307,6 +1451,67 @@ function RepairsPageContent() {
               </div>
             )}
 
+            <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+              <Label className="text-slate-300">🧭 Servis Aşaması</Label>
+              <Select value={selectedRepair ? stageOf(selectedRepair) : "received"} onValueChange={(v) => selectedRepair && changeStage(selectedRepair, v as RepairStage)}>
+                <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-600">
+                  {REPAIR_STAGES.map(st => <SelectItem key={st.key} value={st.key} className="text-white">{st.icon} {st.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Label className="text-slate-300">Tahmini Teslim Tarihi</Label>
+              <Input type="date" value={estimatedInput} onChange={(e) => setEstimatedInput(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+              <p className="text-xs text-slate-500">Tarih "Güncelle" ile kaydedilir; aşama seçilince hemen kaydedilir.</p>
+            </div>
+
+            <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+              <Label className="text-slate-300">📝 Müşteri Onaylı Teklif</Label>
+              {selectedRepair?.quote && (
+                <div className={`text-xs px-2 py-1 rounded border ${selectedRepair.quote.status === "approved" ? "border-emerald-700 text-emerald-300 bg-emerald-900/20" : selectedRepair.quote.status === "rejected" ? "border-red-700 text-red-300 bg-red-900/20" : "border-amber-700 text-amber-300 bg-amber-900/20"}`}>
+                  {QUOTE_LABELS[selectedRepair.quote.status]} — {formatCurrency(selectedRepair.quote.amount)} ({selectedRepair.quote.createdAt}{selectedRepair.quote.decidedAt ? ` → ${selectedRepair.quote.decidedAt}${selectedRepair.quote.decidedBy ? `, ${selectedRepair.quote.decidedBy}` : ""}` : ""})
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <Input type="number" inputMode="decimal" placeholder="Tutar (TL)" value={quoteAmount} onChange={(e) => setQuoteAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                <Input placeholder="Teşhis / yapılacak işlem" value={quoteNote} onChange={(e) => setQuoteNote(e.target.value)} className="bg-slate-800 border-slate-600 text-white col-span-2" />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button type="button" size="sm" variant="outline" className="border-blue-600 text-blue-400" onClick={saveQuote}>Teklifi Kaydet</Button>
+                {selectedRepair?.quote && (
+                  <>
+                    <Button type="button" size="sm" variant="outline" className="border-green-600 text-green-400" onClick={sendQuoteWhatsApp}>WhatsApp ile Gönder</Button>
+                    <Button type="button" size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => selectedRepair.quote && printRepairQuote(selectedRepair, selectedRepair.quote)}>Yazdır</Button>
+                  </>
+                )}
+              </div>
+              {selectedRepair?.quote && selectedRepair.quote.status === "pending" && (
+                <div className="flex gap-2 pt-1">
+                  <Button type="button" size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => decideQuote("approved")}>✅ Müşteri Onayladı</Button>
+                  <Button type="button" size="sm" variant="outline" className="border-red-600 text-red-400" onClick={() => decideQuote("rejected")}>❌ Reddetti</Button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+              <Label className="text-slate-300 flex items-center justify-between">
+                <span>✅ Kalite Kontrol Listesi</span>
+                <span className="text-xs text-slate-400">{qcProgress(selectedRepair?.qc).done}/{qcProgress(selectedRepair?.qc).total}</span>
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                {QC_ITEMS.map(item => (
+                  <label key={item.key} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer py-1">
+                    <input type="checkbox" checked={!!selectedRepair?.qc?.checks?.[item.key]} onChange={() => toggleQc(item.key)} className="h-4 w-4" />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button type="button" size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => toggleQc("", true)}>Hepsi tamam</Button>
+                {selectedRepair?.qc?.by && <span className="text-xs text-slate-500">Son: {selectedRepair.qc.by}{selectedRepair.qc.at ? `, ${selectedRepair.qc.at}` : ""}</span>}
+              </div>
+              <p className="text-xs text-slate-500">Liste tamamlanmadan "Teslime Hazır / Teslim Edildi" aşamasına geçilirse uyarı çıkar.</p>
+            </div>
+
             <div className="space-y-2">
               <Label className="text-slate-300">Teknisyen</Label>
               <Select value={technicianInput || "__none__"} onValueChange={(v) => setTechnicianInput(v === "__none__" ? "" : v)}>
@@ -1393,6 +1598,13 @@ function RepairsPageContent() {
         onAddNote={handleAddNote}
       />
 
+      <RepairBoardDialog
+        open={boardOpen}
+        onOpenChange={setBoardOpen}
+        repairs={repairs}
+        onOpenRepair={(id) => { const r = repairs.find(x => x.id === id); if (r) { setBoardOpen(false); openEditDialog(r) } }}
+        onMove={(id, stage) => { const r = repairs.find(x => x.id === id); if (r) changeStage(r, stage) }}
+      />
       <QrDialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen} repair={selectedRepair} />
 
       <BarcodeScannerDialog

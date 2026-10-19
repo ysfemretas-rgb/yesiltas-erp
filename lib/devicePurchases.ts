@@ -3,7 +3,7 @@
 import { supabase } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 import { createTransaction } from "@/lib/finance"
-import { createInventoryItem, InventoryItem } from "@/lib/inventory"
+import { createInventoryItem, findActiveImeiConflict, InventoryItem } from "@/lib/inventory"
 import { localDateStr } from "@/lib/dates"
 import { esc, money, readCompany, docStyles, toolbarHtml, letterheadHtml, footerHtml, openPrintWindow } from "@/lib/printTheme"
 
@@ -38,13 +38,17 @@ function newDocCode(): string {
 }
 
 export async function createDevicePurchase(input: DevicePurchaseInput): Promise<{ purchase: DevicePurchase; item: InventoryItem | null }> {
+  // Aynı IMEI iki aktif stok kaydında olamaz: belge ve gider oluşmadan önce kontrol edilir
+  if (input.addToStock && input.imei.trim()) {
+    const conflict = await findActiveImeiConflict(input.imei)
+    if (conflict) throw new Error(`Bu IMEI zaten stokta kayıtlı: ${conflict.name}${conflict.productCode ? ` (${conflict.productCode})` : ""}.`)
+  }
   const docCode = newDocCode()
   const date = localDateStr()
   const { data, error } = await supabase.from("device_purchases").insert({
     doc_code: docCode,
     seller_name: input.sellerName,
     seller_phone: input.sellerPhone,
-    seller_id_no: "", // T.C. kimlik no veritabanına yazılmaz; sadece basılı belgede görünür
     device_name: input.deviceName,
     imei: input.imei,
     condition_note: input.conditionNote,
@@ -136,4 +140,21 @@ export function printPurchaseDocument(p: DevicePurchase) {
   ${footerHtml("İkinci el cihaz alım belgesi — iki nüsha düzenlenir.", company)}
 </body></html>`
   openPrintWindow(html)
+}
+
+export async function fetchDevicePurchases(): Promise<DevicePurchase[]> {
+  const { data, error } = await supabase.from("device_purchases").select("*").order("created_at", { ascending: false }).limit(1000)
+  if (error) throw error
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    docCode: r.doc_code ?? "",
+    sellerName: r.seller_name ?? "",
+    sellerPhone: r.seller_phone ?? "",
+    sellerIdNo: "",
+    deviceName: r.device_name ?? "",
+    imei: r.imei ?? "",
+    conditionNote: r.condition_note ?? "",
+    price: Number(r.price) || 0,
+    date: r.purchase_date ? String(r.purchase_date).slice(0, 10) : "",
+  }))
 }

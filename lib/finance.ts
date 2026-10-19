@@ -43,7 +43,7 @@ function toRow(t: Partial<Transaction>) {
 // Bir satış/tamir silinirken, ondan otomatik oluşturulmuş gelir kaydını da temizler.
 export async function deleteTransactionsBySource(source: "repair" | "sale", sourceId: string): Promise<void> {
   const { error } = await supabase.from("transactions").delete().eq("related_table", source).eq("related_id", sourceId)
-  if (error) console.error("Bağlı finans kaydı silinemedi:", error)
+  if (error) throw error
 }
 
 export async function fetchTransactions(): Promise<Transaction[]> {
@@ -70,7 +70,8 @@ export async function fetchTransactions(): Promise<Transaction[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_finance", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_finance")) localStorage.setItem("yt_migrated_finance", "true")
   return (data || []).map(fromRow)
 }
 
@@ -98,4 +99,57 @@ export async function deleteTransaction(id: string): Promise<void> {
     throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
   }
   logActivity("Finans", "deleted", `${existing?.description || "Bir kayıt"} silindi`)
+}
+
+// Bir satışın/tamirin kasa etkisini SİLMEDEN, ters kayıtla sıfırlar (iptal gibi durumlarda geçmiş korunur).
+// Kayıtlarda gelir - gider farkı alınır: net gelir varsa aynı tutarda "iptal gideri", net gider varsa
+// aynı tutarda "iptal geliri" yazılır. Net sıfırsa kayıt eklenmez.
+export async function reverseTransactionsBySource(
+  source: "repair" | "sale",
+  sourceId: string,
+  info: { label: string; customer: string; date: string }
+): Promise<number> {
+  const { data, error } = await supabase.from("transactions").select("type, amount").eq("related_table", source).eq("related_id", sourceId)
+  if (error) throw error
+  const net = Math.round(((data || []).reduce((sum: number, r: any) => sum + (r.type === "income" ? 1 : -1) * (Number(r.amount) || 0), 0)) * 100) / 100
+  if (Math.abs(net) < 0.01) return 0
+  await createTransaction({
+    type: net > 0 ? "expense" : "income",
+    category: net > 0 ? "Satış İptali" : "Eşantiyon İptali",
+    amount: Math.abs(net),
+    description: `↩️ ${info.label}`,
+    date: info.date,
+    customer: info.customer,
+    source,
+    sourceId,
+  })
+  return net
+}
+
+// Bir kaydın kasadaki NET etkisini (gelir - gider) istenen değere getirir; farkı düzeltme kaydı olarak yazar.
+// Eski kayıtlar silinmez: bu yüzden sadece Yönetici değil herkes (satış düzenleyen personel de) kullanabilir
+// ve geçmiş izlenebilir kalır. (Eskiden düzenlemede silme yetkisi olmayan personelde eski kayıt kalıp yenisi
+// eklendiği için gelir ikiye katlanabiliyordu.)
+export async function syncTransactionsToNet(
+  source: "repair" | "sale",
+  sourceId: string,
+  desiredNet: number,
+  info: { label: string; customer: string; date: string }
+): Promise<number> {
+  const { data, error } = await supabase.from("transactions").select("type, amount").eq("related_table", source).eq("related_id", sourceId)
+  if (error) throw error
+  const existing = (data || []).reduce((sum: number, r: any) => sum + (r.type === "income" ? 1 : -1) * (Number(r.amount) || 0), 0)
+  const diff = Math.round((desiredNet - existing) * 100) / 100
+  if (Math.abs(diff) < 0.01) return 0
+  await createTransaction({
+    type: diff > 0 ? "income" : "expense",
+    category: source === "repair" ? "Tamir Düzeltmesi" : "Satış Düzeltmesi",
+    amount: Math.abs(diff),
+    description: `✏️ ${info.label}`,
+    date: info.date,
+    customer: info.customer,
+    source,
+    sourceId,
+  })
+  return diff
 }

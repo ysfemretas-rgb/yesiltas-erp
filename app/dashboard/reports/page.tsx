@@ -38,6 +38,8 @@ interface RepairRecord {
   status: string
   cost: number
   price: number
+  partsCost: number
+  gift: boolean
   date: string
 }
 
@@ -49,6 +51,9 @@ interface SaleRecord {
   quantity: number
   totalPrice: number
   profit: number
+  cost: number
+  extraCost: number
+  gift: boolean
   date: string
 }
 
@@ -161,6 +166,8 @@ export default function ReportsPage() {
             status: r.status,
             cost: r.cost,
             price: r.cost,
+            partsCost: r.partsCost || 0,
+            gift: r.paymentType === "gift",
             date: r.createdAt,
           }))
 
@@ -178,7 +185,10 @@ export default function ReportsPage() {
               productName: s.items.map(i => i.name).join(", ") || "—",
               quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
               totalPrice: gift ? 0 : s.totalAmount,
-              profit: gift ? -cost : s.totalAmount - cost,
+              profit: gift ? -cost : Math.round((s.totalAmount - cost - (s.extraCost || 0)) * 100) / 100,
+              cost,
+              extraCost: gift ? 0 : (s.extraCost || 0),
+              gift,
               date: s.date,
             }
           })
@@ -269,6 +279,23 @@ export default function ReportsPage() {
   }, [financeData, repairsData, salesData])
   const totalRepairs = filteredRepairs.length
   const totalSales = filteredSales.length
+
+  // Gerçek kâr analizi (seçili tarih aralığı): ciro değil, maliyetler düşüldükten sonra kalan tutar
+  const realProfit = (() => {
+    const r2 = (n: number) => Math.round(n * 100) / 100
+    const salesRevenue = filteredSales.reduce((sum, x) => sum + x.totalPrice, 0)
+    const salesCost = filteredSales.reduce((sum, x) => sum + x.cost, 0)
+    const salesExtra = filteredSales.reduce((sum, x) => sum + x.extraCost, 0)
+    const salesProfit = filteredSales.reduce((sum, x) => sum + x.profit, 0)
+    const repairRevenue = filteredRepairs.reduce((sum, x) => sum + (x.gift ? 0 : x.price), 0)
+    const repairParts = filteredRepairs.reduce((sum, x) => sum + x.partsCost, 0)
+    const repairProfit = filteredRepairs.reduce((sum, x) => sum + (x.gift ? -x.partsCost : x.price - x.partsCost), 0)
+    return {
+      salesRevenue: r2(salesRevenue), salesCost: r2(salesCost), salesExtra: r2(salesExtra), salesProfit: r2(salesProfit),
+      repairRevenue: r2(repairRevenue), repairParts: r2(repairParts), repairProfit: r2(repairProfit),
+      total: r2(salesProfit + repairProfit),
+    }
+  })()
   const totalCustomers = customersData.length
 
   // Aylık veriler
@@ -698,6 +725,35 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Gerçek Kâr Analizi */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white text-base">💎 Gerçek Kâr (ciro değil, maliyetler düşülmüş)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="space-y-1">
+                <p className="text-slate-400 font-medium">🛒 Satışlar</p>
+                <div className="flex justify-between"><span className="text-slate-400">Satış cirosu</span><span className="text-white">₺{realProfit.salesRevenue.toLocaleString("tr-TR")}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Mal maliyeti</span><span className="text-red-300">-₺{realProfit.salesCost.toLocaleString("tr-TR")}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Ek maliyet (komisyon, kargo)</span><span className="text-red-300">-₺{realProfit.salesExtra.toLocaleString("tr-TR")}</span></div>
+                <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-slate-300">Satış kârı</span><span className={realProfit.salesProfit >= 0 ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>₺{realProfit.salesProfit.toLocaleString("tr-TR")}</span></div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-slate-400 font-medium">🔧 Teknik Servis</p>
+                <div className="flex justify-between"><span className="text-slate-400">Tamir geliri (anlaşılan ücret)</span><span className="text-white">₺{realProfit.repairRevenue.toLocaleString("tr-TR")}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Parça maliyeti</span><span className="text-red-300">-₺{realProfit.repairParts.toLocaleString("tr-TR")}</span></div>
+                <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-slate-300">Tamir kârı</span><span className={realProfit.repairProfit >= 0 ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>₺{realProfit.repairProfit.toLocaleString("tr-TR")}</span></div>
+              </div>
+              <div className="space-y-1 md:border-l md:border-slate-700 md:pl-4">
+                <p className="text-slate-400 font-medium">Toplam</p>
+                <p className={`text-2xl font-bold ${realProfit.total >= 0 ? "text-emerald-400" : "text-red-400"}`}>₺{realProfit.total.toLocaleString("tr-TR")}</p>
+                <p className="text-xs text-slate-500">Satış kârı + tamir kârı. Kira, maaş gibi sabit giderler dahil değildir. Eski satışlarda maliyet kaydı yoksa kâr olduğundan yüksek görünebilir.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Tab'lar */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

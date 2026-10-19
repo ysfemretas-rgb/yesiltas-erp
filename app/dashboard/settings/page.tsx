@@ -30,6 +30,8 @@ interface CompanySettings {
   iban: string
   accountName: string
   maxDiscountPercent: number
+  minMarginPercent: number
+  cardCommissionPercent: number
 }
 
 interface AppUser {
@@ -61,6 +63,8 @@ const getInitialCompany = (): CompanySettings => ({
   iban: "TR00 1234 5678 9012 3456 7890 12",
   accountName: "Yeşiltaş Teknik Servis",
   maxDiscountPercent: 20,
+  minMarginPercent: 0,
+  cardCommissionPercent: 0,
 })
 
 const getInitialUsers = (): AppUser[] => [
@@ -427,6 +431,29 @@ export default function SettingsPage() {
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                   <p className="text-xs text-slate-500">Teknik Servis ve Satışlar'da bu oranı aşan indirim yapılamaz — sizi zarara sokacak indirimleri otomatik engeller.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Minimum Kâr Oranı (%) — maliyet üzerine</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={company.minMarginPercent ?? 0}
+                    onChange={(e) => setCompany({ ...company, minMarginPercent: Math.max(0, Number(e.target.value) || 0) })}
+                    className="bg-slate-700 border-slate-600 text-white"
+                  />
+                  <p className="text-xs text-slate-500">0 = kontrol yok. Satış bu orandan düşük kârla (ya da maliyetin altında) yapılırsa sadece Yönetici onaylayabilir.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Kredi Kartı Komisyonu (%)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={company.cardCommissionPercent ?? 0}
+                    onChange={(e) => setCompany({ ...company, cardCommissionPercent: Math.max(0, Number(e.target.value) || 0) })}
+                    className="bg-slate-700 border-slate-600 text-white"
+                  />
+                  <p className="text-xs text-slate-500">Kartla alınan tutarın bu oranı satışın "ek maliyeti" olarak otomatik hesaplanır (sadece gerçek kâr hesabında; kasayı etkilemez).</p>
                 </div>
               </CardContent>
             </Card>

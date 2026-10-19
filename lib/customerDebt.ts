@@ -7,6 +7,8 @@
 // borç kayıtları kalan tutarın aynası olduğu için tekrar toplanmaz; eşantiyon ve iptal sayılmaz.
 
 interface Rec {
+  date?: string
+  createdAt?: string
   customerId?: string
   customerCode?: string
   customerName?: string
@@ -20,7 +22,7 @@ interface CustomerLike {
   id: string
   name: string
   customerCode?: string
-  debts?: { amount: number; status: string; source?: string }[]
+  debts?: { amount: number; status: string; source?: string; date?: string }[]
 }
 
 export function makeMatcher(customers: CustomerLike[]) {
@@ -53,4 +55,39 @@ export function computeCustomerDebts(customers: CustomerLike[], repairs: Rec[], 
     result.set(c.id, repairDebt + saleDebt + manualDebt)
   })
   return result
+}
+
+// Müşterinin açık borcu ve en eski açık borcun tarihi/yaşı (satışta risk uyarısı için).
+// today: "YYYY-MM-DD" (test edilebilirlik için dışarıdan verilir)
+export function openDebtInfo(
+  customer: CustomerLike,
+  repairs: Rec[],
+  sales: Rec[],
+  all: CustomerLike[],
+  today: string
+): { debt: number; oldestDate: string | null; ageDays: number } {
+  const matches = makeMatcher(all.length ? all : [customer])
+  const dates: string[] = []
+  let debt = 0
+  repairs.forEach((r) => {
+    if (r.paymentType === "gift" || !matches(customer, r)) return
+    const rem = r.remaining || 0
+    debt += rem
+    if (rem > 0 && r.createdAt) dates.push(r.createdAt)
+  })
+  sales.forEach((s) => {
+    if (s.status === "cancelled" || s.paymentMethod === "gift" || !matches(customer, s)) return
+    const rem = s.remaining || 0
+    debt += rem
+    if (rem > 0 && s.date) dates.push(s.date)
+  })
+  ;(customer.debts || []).forEach((d) => {
+    if (d.status === "unpaid" && (d.source ?? "manual") === "manual") {
+      debt += d.amount
+      if (d.amount > 0 && d.date) dates.push(d.date)
+    }
+  })
+  const oldest = dates.length ? [...dates].sort()[0] : null
+  const ageDays = oldest ? Math.max(0, Math.floor((new Date(`${today}T12:00:00`).getTime() - new Date(`${oldest}T12:00:00`).getTime()) / 86400000)) : 0
+  return { debt: Math.round(debt * 100) / 100, oldestDate: oldest, ageDays }
 }

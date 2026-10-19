@@ -7,6 +7,7 @@ import { fetchCustomers } from '@/lib/customers'
 import { fetchRepairs } from '@/lib/repairs'
 import { fetchSales } from '@/lib/sales'
 import { computeCustomerDebts } from '@/lib/customerDebt'
+import { fetchScheduledPayments } from '@/lib/scheduledPayments'
 
 export interface AppNotification {
   id: string
@@ -23,36 +24,26 @@ function daysUntil(dateStr: string): number {
   return Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-// Artık gerçek verileri (envanter, garanti, müşteri borcu, bekleyen tamir)
-// doğrudan Supabase'den okuyup aksiyon alınması gereken durumları tek bir
-// bildirim listesinde toplar.
+// Gerçek verileri (envanter, garanti, müşteri borcu, bekleyen tamir) Supabase'den
+// BİR KEZ okuyup aksiyon alınması gereken durumları tek bir bildirim listesinde toplar.
+// (Eskiden tamir ve satış listeleri aynı turda iki kez indiriliyordu.)
 const SEEN_KEY = 'yt_seen_notifications'
 const DISMISSED_KEY = 'yt_dismissed_notifications'
 
-function getSeenIds(): Set<string> {
+function readSet(key: string): Set<string> {
   if (typeof window === 'undefined') return new Set()
   try {
-    const raw = localStorage.getItem(SEEN_KEY)
-    return new Set(raw ? JSON.parse(raw) : [])
+    const raw = localStorage.getItem(key)
+    return new Set<string>(raw ? JSON.parse(raw) : [])
   } catch {
-    return new Set()
+    return new Set<string>()
   }
 }
 
-function getDismissedIds(): Set<string> {
-  if (typeof window === 'undefined') return new Set()
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    return new Set()
-  }
-}
-
-function saveDismissedIds(ids: Set<string>) {
+function writeSet(key: string, ids: Set<string>) {
   if (typeof window === 'undefined') return
   try {
-    localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+    localStorage.setItem(key, JSON.stringify(Array.from(ids)))
   } catch {
     // yoksay
   }
@@ -60,15 +51,23 @@ function saveDismissedIds(ids: Set<string>) {
 
 export function useNotifications() {
   const [allNotifications, setAllNotifications] = useState<AppNotification[]>([])
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedIds())
-  const [seenIds, setSeenIds] = useState<Set<string>>(() => getSeenIds())
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => readSet(DISMISSED_KEY))
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => readSet(SEEN_KEY))
 
   const refresh = useCallback(async () => {
     const list: AppNotification[] = []
 
-    try {
-      const inventory = await fetchInventory()
-      inventory.forEach((item) => {
+    const [invR, warR, custR, repR, salR, payR] = await Promise.allSettled([
+      fetchInventory(),
+      fetchWarranties(),
+      fetchCustomers(),
+      fetchRepairs(),
+      fetchSales(),
+      fetchScheduledPayments(),
+    ])
+
+    if (invR.status === 'fulfilled') {
+      invR.value.forEach((item) => {
         if (item.quantity <= item.minQuantity) {
           list.push({
             id: `inv-${item.id}`,
@@ -78,13 +77,10 @@ export function useNotifications() {
           })
         }
       })
-    } catch (e) {
-      console.error('Envanter bildirimleri yüklenemedi:', e)
     }
 
-    try {
-      const warranties = await fetchWarranties()
-      warranties.forEach((w) => {
+    if (warR.status === 'fulfilled') {
+      warR.value.forEach((w) => {
         if (!w.endDate) return
         const d = daysUntil(w.endDate)
         if (d < 0) {
@@ -103,19 +99,15 @@ export function useNotifications() {
           })
         }
       })
-    } catch (e) {
-      console.error('Garanti bildirimleri yüklenemedi:', e)
     }
 
-    try {
-      const [customers, allRepairs, allSales] = await Promise.all([
-        fetchCustomers(),
-        fetchRepairs().catch(() => []),
-        fetchSales().catch(() => []),
-      ])
+    const repairs = repR.status === 'fulfilled' ? repR.value : []
+    const sales = salR.status === 'fulfilled' ? salR.value : []
+
+    if (custR.status === 'fulfilled') {
       // Borç = tamir + satış kalanı + elle girilen borçlar (ortak hesaplama)
-      const debts = computeCustomerDebts(customers, allRepairs as any, allSales as any)
-      customers.forEach((c) => {
+      const debts = computeCustomerDebts(custR.value, repairs as any, sales as any)
+      custR.value.forEach((c) => {
         const debt = debts.get(c.id) || 0
         if (debt > 0) {
           list.push({
@@ -126,12 +118,21 @@ export function useNotifications() {
           })
         }
       })
-    } catch (e) {
-      console.error('Müşteri bildirimleri yüklenemedi:', e)
     }
 
-    try {
-      const repairs = await fetchRepairs()
+    if (repR.status === 'fulfilled') {
+      // Tahmini teslim tarihi geçen / yaklaşan tamirler
+      repairs.forEach((r) => {
+        if (!r.estimatedDelivery || r.status === 'completed') return
+        const d = daysUntil(r.estimatedDelivery)
+        if (d > 1) return
+        list.push({
+          id: `eta-${r.id}`,
+          message: d < 0 ? `⏰ Teslim tarihi geçti (${-d} gün): ${r.customerName} — ${r.brand} ${r.model}` : d === 0 ? `⏰ Bugün teslim edilecek: ${r.customerName} — ${r.brand} ${r.model}` : `⏰ Yarın teslim edilecek: ${r.customerName} — ${r.brand} ${r.model}`,
+          link: '/dashboard/repairs',
+          severity: d < 0 ? 'danger' : 'warning',
+        })
+      })
       repairs.forEach((r) => {
         if (r.status !== 'waiting' || !r.createdAt) return
         const waitingDays = -daysUntil(r.createdAt)
@@ -144,19 +145,36 @@ export function useNotifications() {
           })
         }
       })
-    } catch (e) {
-      console.error('Tamir bildirimleri yüklenemedi:', e)
+    }
+
+    // Ödeme takvimi: gecikmiş veya 3 gün içinde vadesi gelen ödemeler
+    if (payR.status === 'fulfilled') {
+      payR.value.forEach((p) => {
+        if (p.status !== 'pending') return
+        const d = daysUntil(p.dueDate)
+        if (d > 3) return
+        list.push({
+          id: `pay-${p.id}`,
+          message: d < 0 ? `📅 Ödeme gecikti (${-d} gün): ${p.title} — ${p.amount.toLocaleString('tr-TR')} TL` : d === 0 ? `📅 Bugün ödeme günü: ${p.title} — ${p.amount.toLocaleString('tr-TR')} TL` : `📅 ${d} gün sonra ödeme: ${p.title} — ${p.amount.toLocaleString('tr-TR')} TL`,
+          link: '/dashboard/finance',
+          severity: d < 0 ? 'danger' : 'warning',
+        })
+      })
     }
 
     setAllNotifications(list)
-    // Sorunu çözülen (artık listede olmayan) bildirimlerin "silindi" işareti temizlenir;
-    // aynı sorun ileride tekrar çıkarsa yeniden bildirilir.
-    setDismissedIds((prev) => {
-      const currentIds = new Set(list.map((n) => n.id))
-      const next = new Set<string>((Array.from(prev) as string[]).filter((id) => currentIds.has(id)))
-      if (next.size !== prev.size) saveDismissedIds(next)
-      return next.size !== prev.size ? next : prev
-    })
+
+    // Sorunu çözülen (artık listede olmayan) bildirimlerin "silindi" işareti temizlenir; aynı sorun
+    // ileride tekrar çıkarsa yeniden bildirilir. Bir veri kaynağı yüklenemediyse (ağ hatası) temizlik
+    // yapılmaz, yoksa silinen bildirimler geri gelirdi.
+    const allOk = [invR, warR, custR, repR, salR].every((r) => r.status === 'fulfilled')
+    if (allOk) {
+      const currentIds = new Set<string>(list.map((n) => n.id))
+      setDismissedIds((prev) => {
+        const next = new Set<string>((Array.from(prev) as string[]).filter((id) => currentIds.has(id)))
+        return next.size !== prev.size ? next : prev
+      })
+    }
   }, [])
 
   useEffect(() => {
@@ -166,19 +184,15 @@ export function useNotifications() {
     return () => clearInterval(interval)
   }, [refresh])
 
-  // Bildirimleri "görüldü" olarak işaretler — bunları bir daha kırmızı
-  // rozette saymaz, ama aynı sorun devam ettiği sürece listede görünmeye
-  // devam eder (sorun çözülene kadar tamamen kaybolmaz).
+  // Kalıcı kayıt (state güncelleyicisinin içinde değil, ayrı efektte yapılır)
+  useEffect(() => { writeSet(DISMISSED_KEY, dismissedIds) }, [dismissedIds])
+  useEffect(() => { writeSet(SEEN_KEY, seenIds) }, [seenIds])
+
   const notifications = allNotifications.filter((n) => !dismissedIds.has(n.id))
 
   // Tek bildirimi sil (sorun çözülene kadar tekrar gösterilmez)
   const dismissNotification = useCallback((id: string) => {
-    setDismissedIds((prev) => {
-      const next = new Set<string>(prev)
-      next.add(id)
-      saveDismissedIds(next)
-      return next
-    })
+    setDismissedIds((prev) => new Set<string>(prev).add(id))
   }, [])
 
   // Hepsini sil
@@ -186,18 +200,15 @@ export function useNotifications() {
     setDismissedIds((prev) => {
       const next = new Set<string>(prev)
       allNotifications.forEach((n) => next.add(n.id))
-      saveDismissedIds(next)
       return next
     })
   }, [allNotifications])
 
+  // Bildirimleri "görüldü" olarak işaretler — rozet sayısına bir daha girmez
   const markAllSeen = useCallback(() => {
     setSeenIds((prev) => {
-      const next = new Set(prev)
+      const next = new Set<string>(prev)
       notifications.forEach((n) => next.add(n.id))
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(next)))
-      }
       return next
     })
   }, [notifications])

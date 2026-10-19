@@ -4,7 +4,7 @@ import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { InventoryItem, fetchInventory, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem, adjustInventoryQuantity } from "@/lib/inventory"
+import { InventoryItem, fetchInventory, findActiveImeiConflict, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem, adjustInventoryQuantity } from "@/lib/inventory"
 import { createTransaction } from "@/lib/finance"
 
 import { useState, useEffect, useRef } from "react"
@@ -34,6 +34,8 @@ import { ImageUploadField } from "@/components/ImageUploadField"
 import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
+import { diffFields } from "@/lib/diff"
+import { logChange } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
 import { StockMovement, fetchStockMovements, logStockMovement } from "@/lib/stockMovements"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
@@ -104,7 +106,7 @@ export default function InventoryPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [customCategory, setCustomCategory] = useState("")
   const [editCustomCategory, setEditCustomCategory] = useState("")
-  const { rates, isLoadingRates, fetchRates } = useExchangeRates()
+  const { rates, isLoadingRates, fetchRates, isFallback } = useExchangeRates()
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Ekran",
     quantity: 0,
@@ -341,6 +343,10 @@ export default function InventoryPage() {
 
   // Dolar/euro ile alınan ürünlerin satış fiyatını güncel kura göre yeniden hesaplar
   const refreshPricesByRate = async () => {
+    if (isFallback) {
+      showToast("Güncel döviz kuru alınamadı; fiyatlar güncellenemez.", "error")
+      return
+    }
     const targets = inventory.filter(i => i.purchaseCurrency !== "TRY" && i.purchasePrice > 0)
     if (targets.length === 0) {
       showToast("Dövizle alınmış ürün yok.", "error")
@@ -487,9 +493,20 @@ export default function InventoryPage() {
   }
 
   const handleAddItem = async () => {
+    if (isFallback && (newItem.purchaseCurrency === "USD" || newItem.purchaseCurrency === "EUR")) {
+      showToast("Güncel döviz kuru alınamadı; dövizli ürün şu an kaydedilemez. Bağlantıyı kontrol edip tekrar deneyin.", "error")
+      return
+    }
     if (!newItem.name) {
       showToast("Lütfen ürün adını girin!", "error")
       return
+    }
+    if (newItem.imei && (Number(newItem.quantity) || 0) > 0) {
+      const conflict = await findActiveImeiConflict(newItem.imei)
+      if (conflict) {
+        showToast(`Bu IMEI zaten stokta kayıtlı: ${conflict.name}${conflict.productCode ? ` (${conflict.productCode})` : ""}.`, "error")
+        return
+      }
     }
     const salePrice = calculateSalePrice(
       Number(newItem.purchasePrice) || 0,
@@ -512,6 +529,7 @@ export default function InventoryPage() {
         location: newItem.location || "",
         imageUrl: newItem.imageUrl || "",
         supplierBarcode: newItem.supplierBarcode || "",
+        imei: newItem.imei || "",
         paymentStatus: newItem.paymentStatus || "unpaid",
         paidAmount: newItem.paymentStatus === "partial" ? (Number(newItem.paidAmount) || 0) : 0,
       })
@@ -545,9 +563,20 @@ export default function InventoryPage() {
 
   const handleUpdateItem = async () => {
     if (!editingItem) return
+    if (isFallback && (editingItem.purchaseCurrency === "USD" || editingItem.purchaseCurrency === "EUR")) {
+      showToast("Güncel döviz kuru alınamadı; dövizli ürün şu an güncellenemez. Bağlantıyı kontrol edip tekrar deneyin.", "error")
+      return
+    }
     if (!editingItem.name) {
       showToast("Lütfen ürün adını girin!", "error")
       return
+    }
+    if (editingItem.imei && editingItem.quantity > 0) {
+      const conflict = await findActiveImeiConflict(editingItem.imei, editingItem.id)
+      if (conflict) {
+        showToast(`Bu IMEI başka bir stok kaydında zaten var: ${conflict.name}${conflict.productCode ? ` (${conflict.productCode})` : ""}.`, "error")
+        return
+      }
     }
     const resolvedCategory = editingItem.category === "__new__" ? (editCustomCategory.trim() || "Diğer") : editingItem.category
     const salePrice = calculateSalePrice(
@@ -561,6 +590,13 @@ export default function InventoryPage() {
       const increase = original ? Math.max(0, editingItem.quantity - original.quantity) : 0
       const purchasedQuantity = (original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity) + increase
       const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice, purchasedQuantity })
+      if (original) {
+        logChange("Envanter", "updated", `Ürün düzenlendi: ${original.name}${original.productCode ? ` (${original.productCode})` : ""}`, diffFields(
+          original as any,
+          updated as any,
+          [{ key: "name", label: "Ad" }, { key: "salePrice", label: "Satış fiyatı" }, { key: "purchasePrice", label: "Alış fiyatı" }, { key: "purchaseCurrency", label: "Para birimi" }, { key: "profitMargin", label: "Kâr marjı %" }, { key: "quantity", label: "Stok" }, { key: "minQuantity", label: "Min. stok" }, { key: "supplier", label: "Tedarikçi" }, { key: "imei", label: "IMEI" }]
+        ))
+      }
       if (original && editingItem.quantity !== original.quantity) {
         logStockMovement(editingItem.id, editingItem.name, editingItem.quantity - original.quantity, "Ürün düzenleme")
       }
@@ -706,6 +742,16 @@ export default function InventoryPage() {
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">IMEI / Seri No (telefon vb. için, opsiyonel)</label>
+                <Input
+                  value={newItem.imei || ""}
+                  onChange={(e) => setNewItem({ ...newItem, imei: e.target.value })}
+                  placeholder="Aynı IMEI iki kez stoğa girilemez"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
               </div>
 
               <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
@@ -1375,6 +1421,15 @@ export default function InventoryPage() {
                 <Input
                   value={editingItem.name}
                   onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">IMEI / Seri No (opsiyonel)</label>
+                <Input
+                  value={editingItem.imei || ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, imei: e.target.value })}
+                  placeholder="Aynı IMEI iki kez stoğa girilemez"
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>

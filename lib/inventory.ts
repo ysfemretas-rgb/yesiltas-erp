@@ -99,7 +99,8 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_inventory", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_inventory")) localStorage.setItem("yt_migrated_inventory", "true")
   return (data || []).map(fromRow)
 }
 
@@ -137,19 +138,49 @@ export async function deleteInventoryItem(id: string): Promise<void> {
   logActivity("Envanter", "deleted", `${existing?.name || "Bir kayıt"} silindi`)
 }
 
-// Stoğu göreli (+/-) olarak, veritabanı tarafında atomik değiştirir. İki kişi aynı anda
-// satış yaparsa eski "oku, hesapla, yaz" yöntemi birinin düşüşünü eziyordu.
-// Önce supabase-fixes-v2-migration.sql ile gelen adjust_inventory_quantity fonksiyonu
-// kullanılır; o yoksa eski yönteme düşer.
-export async function adjustInventoryQuantity(id: string, delta: number, reason: string = "Stok değişimi", productName: string = ""): Promise<number | null> {
+export class InsufficientStockError extends Error {
+  constructor(message = "Yetersiz stok") {
+    super(message)
+    this.name = "InsufficientStockError"
+  }
+}
+
+// "Fonksiyon veritabanında yok" hatası mı? (Migrasyon henüz çalıştırılmamışsa eski yönteme düşülür;
+// başka her hata yukarıya iletilir — eskiden her hatada sessizce eski yönteme düşülüyordu.)
+function isMissingFunction(err: any): boolean {
+  const msg = String(err?.message || "")
+  return err?.code === "PGRST202" || err?.code === "42883" || msg.includes("Could not find the function") || msg.includes("does not exist")
+}
+
+// Stoğu göreli (+/-) olarak, veritabanı tarafında atomik değiştirir.
+// strict=true ve delta<0 ise stok yetersizse işlem REDDEDİLİR (InsufficientStockError); satış gibi
+// stoktan düşen işlemler bunu kullanır. Böylece iki kişi aynı son ürünü satamaz.
+// supabase-fixes-v2/v6 migrasyonlarındaki fonksiyonlar kullanılır; yoksa istemci tarafı kontrole düşer.
+export async function adjustInventoryQuantity(
+  id: string,
+  delta: number,
+  reason: string = "Stok değişimi",
+  productName: string = "",
+  strict: boolean = false
+): Promise<number | null> {
   if (!delta) return null
   let result: number | null = null
-  const { data, error } = await supabase.rpc("adjust_inventory_quantity", { p_id: id, p_delta: delta })
+
+  const useStrict = strict && delta < 0
+  const fnName = useStrict ? "adjust_inventory_quantity_strict" : "adjust_inventory_quantity"
+  const { data, error } = await supabase.rpc(fnName, { p_id: id, p_delta: delta })
+
   if (!error && data !== null && data !== undefined) {
     result = Number(Array.isArray(data) ? data[0] : data)
+  } else if (error && String(error.message || "").includes("INSUFFICIENT_STOCK")) {
+    throw new InsufficientStockError(`${productName || "Ürün"} için yeterli stok yok.`)
+  } else if (error && !isMissingFunction(error)) {
+    throw error
   } else {
+    // Fonksiyon yok (migrasyon çalıştırılmamış): okuyup yazma yöntemi
     const { data: row, error: readErr } = await supabase.from("inventory").select("quantity, name").eq("id", id).single()
     if (readErr || !row) throw readErr || new Error("Ürün bulunamadı")
+    if (useStrict && (row.quantity ?? 0) + delta < 0) throw new InsufficientStockError(`${productName || row.name || "Ürün"} için yeterli stok yok.`)
     const next = Math.max(0, (row.quantity ?? 0) + delta)
     const { error: upErr } = await supabase.from("inventory").update({ quantity: next }).eq("id", id)
     if (upErr) throw upErr
@@ -159,4 +190,19 @@ export async function adjustInventoryQuantity(id: string, delta: number, reason:
   // Geçmiş kaydı (hata verirse ana işlemi bozmaz)
   logStockMovement(id, productName, delta, reason)
   return result
+}
+
+// Aynı IMEI'ye sahip, hâlâ stokta (adedi > 0) olan başka bir kayıt var mı? Varsa döndürür.
+export async function findActiveImeiConflict(imei: string, excludeId?: string): Promise<{ id: string; name: string; productCode: string } | null> {
+  const value = (imei || "").trim()
+  if (!value) return null
+  let q = supabase.from("inventory").select("id, name, product_code").eq("imei", value).gt("quantity", 0).limit(1)
+  if (excludeId) q = q.neq("id", excludeId)
+  const { data, error } = await q
+  if (error) {
+    // imei kolonu yoksa (migrasyon çalışmadıysa) kontrol atlanır
+    console.error("IMEI kontrolü yapılamadı:", error)
+    return null
+  }
+  return data && data[0] ? { id: data[0].id, name: data[0].name, productCode: data[0].product_code ?? "" } : null
 }

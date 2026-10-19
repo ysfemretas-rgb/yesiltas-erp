@@ -57,6 +57,8 @@ export interface Sale {
   installments?: Installment[]
   refunds?: SaleRefund[]
   tradeIn?: TradeIn | null
+  extraCost?: number // kart komisyonu, kargo vb. (sadece kâr hesabında)
+  extraCostNote?: string
 }
 
 function fromRow(row: any): Sale {
@@ -79,6 +81,8 @@ function fromRow(row: any): Sale {
     installments: Array.isArray(row.installments) ? row.installments : [],
     refunds: Array.isArray(row.refunds) ? row.refunds : [],
     tradeIn: row.trade_in ?? null,
+    extraCost: Number(row.extra_cost) || 0,
+    extraCostNote: row.extra_cost_note ?? "",
   }
 }
 
@@ -104,6 +108,8 @@ function toRow(s: Partial<Sale>) {
   if (s.installments !== undefined) row.installments = s.installments
   if (s.refunds !== undefined) row.refunds = s.refunds
   if (s.tradeIn !== undefined) row.trade_in = s.tradeIn
+  if (s.extraCost !== undefined) row.extra_cost = s.extraCost
+  if (s.extraCostNote !== undefined) row.extra_cost_note = s.extraCostNote
   return row
 }
 
@@ -132,7 +138,8 @@ export async function fetchSales(): Promise<Sale[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_sales", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_sales")) localStorage.setItem("yt_migrated_sales", "true")
   return (data || []).map(fromRow)
 }
 

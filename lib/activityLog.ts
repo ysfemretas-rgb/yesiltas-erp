@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { FieldChange, formatChanges } from "@/lib/diff"
 
 export interface ActivityLogEntry {
   id: string
@@ -39,6 +40,22 @@ export async function logActivity(
   } catch (e) {
     console.error("Aktivite kaydı oluşturulamadı:", e)
   }
+}
+
+// Kritik değişikliği "kim, neyi, eski → yeni" olarak kaydeder (fiyat, iskonto, borç, stok, iptal vb.).
+// Değişiklik yoksa ve not da yoksa hiçbir şey yazılmaz.
+export async function logChange(
+  module: string,
+  action: "created" | "updated" | "deleted",
+  subject: string,
+  changes: FieldChange[],
+  note?: string
+): Promise<void> {
+  if (changes.length === 0 && !note) return
+  const parts = [subject]
+  if (changes.length > 0) parts.push(formatChanges(changes))
+  if (note) parts.push(`Not: ${note}`)
+  await logActivity(module, action, parts.join(" — ").slice(0, 1000))
 }
 
 function fromRow(row: any): ActivityLogEntry {

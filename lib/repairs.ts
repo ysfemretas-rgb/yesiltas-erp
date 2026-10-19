@@ -1,6 +1,8 @@
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
+import type { RepairQc, RepairQuote } from "@/lib/repairWorkflow"
+
 export interface RepairPart {
   productId: string
   name: string
@@ -33,6 +35,10 @@ export interface Repair {
   parts?: RepairPart[]
   partsCost?: number
   signature?: string
+  stage?: string // servis aşaması (bkz. lib/repairWorkflow.ts); boşsa durumdan türetilir
+  estimatedDelivery?: string
+  qc?: RepairQc | null
+  quote?: RepairQuote | null
 }
 
 function fromRow(row: any): Repair {
@@ -61,6 +67,10 @@ function fromRow(row: any): Repair {
     parts: Array.isArray(row.parts) ? row.parts : [],
     partsCost: Number(row.parts_cost) || 0,
     signature: row.signature ?? "",
+    stage: row.stage ?? "",
+    estimatedDelivery: row.estimated_delivery ? String(row.estimated_delivery).slice(0, 10) : "",
+    qc: row.qc && typeof row.qc === "object" && row.qc.checks ? row.qc : null,
+    quote: row.quote && typeof row.quote === "object" && row.quote.status ? row.quote : null,
   }
 }
 
@@ -87,6 +97,10 @@ function toRow(r: Partial<Repair>) {
   if (r.parts !== undefined) row.parts = r.parts
   if (r.partsCost !== undefined) row.parts_cost = r.partsCost
   if (r.signature !== undefined) row.signature = r.signature || null
+  if (r.stage !== undefined) row.stage = r.stage || null
+  if (r.estimatedDelivery !== undefined) row.estimated_delivery = r.estimatedDelivery || null
+  if (r.qc !== undefined) row.qc = r.qc
+  if (r.quote !== undefined) row.quote = r.quote
   return row
 }
 
@@ -170,7 +184,8 @@ export async function fetchRepairs(): Promise<Repair[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_repairs", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_repairs")) localStorage.setItem("yt_migrated_repairs", "true")
   return (data || []).map(fromRow)
 }
 

@@ -28,6 +28,11 @@ import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, Sho
 import { exportToExcel } from "@/lib/exportExcel"
 import { Pagination } from "@/components/Pagination"
 import { printDayClose } from "@/lib/dayClose"
+import { diffFields } from "@/lib/diff"
+import { logChange } from "@/lib/activityLog"
+import { ReconcileDialog } from "@/components/finance/ReconcileDialog"
+import { CashCountDialog } from "@/components/finance/CashCountDialog"
+import { PaymentCalendarDialog } from "@/components/finance/PaymentCalendarDialog"
 import { Transaction, fetchTransactions, createTransaction, updateTransaction, deleteTransaction } from "@/lib/finance"
 
 const categories = ["Tamir Geliri", "Satış Geliri", "Parça Maliyeti", "Kira", "Fatura", "Maaş", "Diğer"]
@@ -47,6 +52,9 @@ export default function FinancePage() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [listPage, setListPage] = useState(1)
+  const [reconcileOpen, setReconcileOpen] = useState(false)
+  const [cashOpen, setCashOpen] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const PAGE_SIZE = 30
 
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
@@ -156,7 +164,15 @@ export default function FinancePage() {
       return
     }
     try {
+      const before = transactions.find(t => t.id === editingTransaction.id)
       const updated = await updateTransaction(editingTransaction.id, editingTransaction)
+      if (before) {
+        logChange("Finans", "updated", `Kasa kaydı düzenlendi: ${before.description}`, diffFields(
+          before as any,
+          updated as any,
+          [{ key: "amount", label: "Tutar" }, { key: "type", label: "Tür" }, { key: "category", label: "Kategori" }, { key: "description", label: "Açıklama" }, { key: "date", label: "Tarih" }, { key: "customer", label: "Müşteri/Tedarikçi" }]
+        ))
+      }
       setTransactions(transactions.map(t => t.id === updated.id ? updated : t))
       setIsEditOpen(false)
       setEditingTransaction(null)
@@ -173,6 +189,7 @@ export default function FinancePage() {
     if (!confirm(`\u{26A0} *${t.description}* işlemini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`)) return
     try {
       await deleteTransaction(id)
+      logChange("Finans", "deleted", `Kasa kaydı SİLİNDİ: ${t.description} — ${t.type === "income" ? "gelir" : "gider"} ${t.amount.toLocaleString("tr-TR")} TL (${t.date})`, [])
       setTransactions(transactions.filter(t => t.id !== id))
       showToast("İşlem silindi.", "success")
     } catch (e) {
@@ -334,6 +351,15 @@ export default function FinancePage() {
         </Dialog>
         </div>
       </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <Button variant="outline" onClick={() => setReconcileOpen(true)} className="border-slate-600 text-slate-300 hover:text-white">🔎 Mutabakat</Button>
+        <Button variant="outline" onClick={() => setCashOpen(true)} className="border-slate-600 text-slate-300 hover:text-white">💵 Kasa Sayımı</Button>
+        <Button variant="outline" onClick={() => setCalendarOpen(true)} className="border-slate-600 text-slate-300 hover:text-white">📅 Ödeme Takvimi</Button>
+      </div>
+      <ReconcileDialog open={reconcileOpen} onOpenChange={setReconcileOpen} notify={showToast} onChanged={() => fetchTransactions().then(setTransactions).catch(() => undefined)} />
+      <CashCountDialog open={cashOpen} onOpenChange={setCashOpen} transactions={transactions} notify={showToast} />
+      <PaymentCalendarDialog open={calendarOpen} onOpenChange={setCalendarOpen} isManager={isManager} notify={showToast} onChanged={() => fetchTransactions().then(setTransactions).catch(() => undefined)} />
 
       {/* Today's summary */}
       <Card className="bg-slate-900 border-slate-700">

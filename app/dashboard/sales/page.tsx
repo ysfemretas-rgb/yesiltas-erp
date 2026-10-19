@@ -17,12 +17,17 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, SalePayment, Installment, TradeIn, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
 import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/lib/customers"
+import { fetchRepairs, Repair } from "@/lib/repairs"
+import { openDebtInfo } from "@/lib/customerDebt"
+import { diffFields } from "@/lib/diff"
+import { logChange } from "@/lib/activityLog"
 import { validatePhone } from "@/lib/validation"
-import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
-import { InventoryItem, fetchInventory, adjustInventoryQuantity, createInventoryItem } from "@/lib/inventory"
+import { createTransaction, deleteTransactionsBySource, reverseTransactionsBySource, syncTransactionsToNet } from "@/lib/finance"
+import { InventoryItem, fetchInventory, adjustInventoryQuantity, createInventoryItem, findActiveImeiConflict, InsufficientStockError } from "@/lib/inventory"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { printSaleReceipt } from "@/lib/saleReceipt"
 import { createWarranty } from "@/lib/warranties"
+import { round2, buildInstallments, computeRefund } from "@/lib/money"
 import { printRecordLabel } from "@/lib/labels"
 import { CustomerPicker } from "@/components/CustomerPicker"
 import { exportToExcel } from "@/lib/exportExcel"
@@ -55,24 +60,6 @@ const paymentMethods = [
   { value: "gift", label: "🎁 Eşantiyon (Bedelsiz)" },
 ]
 
-const round2 = (n: number) => Math.round(n * 100) / 100
-
-// Aylık eşit taksit planı: son taksit yuvarlama farkını alır
-function buildInstallments(total: number, count: number, firstDate: string): Installment[] {
-  if (total <= 0 || count < 1) return []
-  const base = Math.floor((total / count) * 100) / 100
-  const list: Installment[] = []
-  const start = new Date(`${firstDate}T12:00:00`)
-  let allocated = 0
-  for (let i = 0; i < count; i++) {
-    const due = new Date(start.getFullYear(), start.getMonth() + i, start.getDate(), 12)
-    const amount = i === count - 1 ? round2(total - allocated) : base
-    allocated = round2(allocated + amount)
-    list.push({ no: i + 1, dueDate: localDateStr(due), amount, paidAmount: 0 })
-  }
-  return list
-}
-
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
   const router = useRouter()
@@ -90,6 +77,11 @@ export default function SalesPage() {
   const [saleDiscount, setSaleDiscount] = useState("")
   const [editSaleDiscount, setEditSaleDiscount] = useState("")
   const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
+  const [minMarginPercent, setMinMarginPercent] = useState(0)
+  const [cardCommissionPercent, setCardCommissionPercent] = useState(0)
+  const [extraCostInput, setExtraCostInput] = useState("")
+  const [extraCostNoteInput, setExtraCostNoteInput] = useState("")
+  const [repairsForRisk, setRepairsForRisk] = useState<Repair[]>([])
   const [paidAmount, setPaidAmount] = useState("")
   const [showNewSale, setShowNewSale] = useState(false)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
@@ -133,10 +125,14 @@ export default function SalesPage() {
       if (companyRaw) {
         const parsed = JSON.parse(companyRaw)
         if (typeof parsed?.maxDiscountPercent === "number") setMaxDiscountPercent(parsed.maxDiscountPercent)
+        if (typeof parsed?.minMarginPercent === "number") setMinMarginPercent(parsed.minMarginPercent)
+        if (typeof parsed?.cardCommissionPercent === "number") setCardCommissionPercent(parsed.cardCommissionPercent)
       }
     } catch (e) {
       console.error("Şirket ayarları okunamadı:", e)
     }
+
+    fetchRepairs().then(setRepairsForRisk).catch((e) => console.error("Tamirler yüklenemedi (risk kontrolü için):", e))
 
     fetchInventory()
       .then((data) => setProducts(data))
@@ -182,6 +178,9 @@ export default function SalesPage() {
       "Ara Toplam": s.items.reduce((sum, i) => sum + i.price * i.quantity, 0),
       "İskonto": s.discount,
       "Toplam": s.totalAmount,
+      "Mal Maliyeti": round2(s.items.reduce((sum, i) => sum + (i.purchasePrice || 0) * i.quantity, 0)),
+      "Ek Maliyet": s.extraCost || 0,
+      "Gerçek Kâr": s.paymentMethod === "gift" ? -round2(s.items.reduce((sum, i) => sum + (i.purchasePrice || 0) * i.quantity, 0)) : round2(s.totalAmount - s.items.reduce((sum, i) => sum + (i.purchasePrice || 0) * i.quantity, 0) - (s.extraCost || 0)),
       "Alınan": s.paid,
       "Kalan": s.remaining,
       "Ödeme Şekli": paymentMethods.find(m => m.value === s.paymentMethod)?.label || s.paymentMethod,
@@ -238,6 +237,25 @@ export default function SalesPage() {
     : Math.max(0, cartTotal - tradeVal)
   const paid = isGiftSale ? 0 : cashPaid + tradeVal
   const remaining = isGiftSale ? 0 : round2(cartTotal - paid)
+  // Maliyet, ek maliyet (komisyon + kargo vb.) ve gerçek kâr
+  const cartCost = round2(cart.reduce((sum, i) => sum + (i.purchasePrice || 0) * (i.quantity || 0), 0))
+  const cardPortion = paymentMethod === "card" ? cashPaid : isSplit ? Number(splitCard) || 0 : 0
+  const commissionAmount = cardCommissionPercent > 0 ? round2((cardPortion * cardCommissionPercent) / 100) : 0
+  const extraCostTotal = isGiftSale ? 0 : round2(commissionAmount + (Number(extraCostInput) || 0))
+  const realProfit = isGiftSale ? -cartCost : round2(cartTotal - cartCost - extraCostTotal)
+  // Düşük marj kontrolü (maliyeti bilinmeyen sepette yapılmaz)
+  const marginStatus: "loss" | "low" | null =
+    isGiftSale || cartCost <= 0 ? null
+    : cartTotal < cartCost ? "loss"
+    : minMarginPercent > 0 && ((cartTotal - cartCost) / cartCost) * 100 < minMarginPercent ? "low"
+    : null
+  // Seçili müşterinin açık borç / vade bilgisi
+  const riskInfo = (() => {
+    const c: any = customers.find(x => x.id === selectedCustomer)
+    if (!c) return null
+    const info = openDebtInfo(c, repairsForRisk as any, sales as any, customers as any, localDateStr())
+    return info.debt > 0 ? info : null
+  })()
   const installmentPlan = isInstallment && remaining > 0 ? buildInstallments(remaining, Math.max(1, Math.min(24, Math.floor(Number(instCount) || 1))), instFirstDate || localDateStr(new Date(Date.now() + 30 * 86400000))) : []
 
   const isEditGift = editPaymentMethod === "gift"
@@ -279,47 +297,71 @@ export default function SalesPage() {
   // ödenmemiş satışta 0 TL'lik gelir kaydı oluşturulmaz.
   const writeSaleFinance = async (saleId: string, customerName: string, items: SaleItem[], gift: boolean, paidAmount: number, breakdown: string = "") => {
     const names = items.map(i => i.name).join(", ")
-    try {
-      if (gift) {
-        const cost = itemsCostTRY(items)
-        if (cost > 0) {
-          await createTransaction({
-            type: "expense",
-            category: "Eşantiyon/Bedelsiz Verilen",
-            amount: Math.round(cost * 100) / 100,
-            description: `🎁 Eşantiyon: ${customerName} - ${names}`,
-            date: localDateStr(),
-            customer: customerName,
-            source: "sale",
-            sourceId: saleId,
-          })
-        }
-      } else if (paidAmount > 0) {
+    // Hata olursa yukarıya iletilir (sessizce yutulmaz); çağıran adım başarısızlığı kullanıcıya bildirir.
+    if (gift) {
+      const cost = itemsCostTRY(items)
+      if (cost > 0) {
         await createTransaction({
-          type: "income",
-          category: "Satış",
-          amount: paidAmount,
-          description: `🛒 Satış: ${customerName} - ${names}${breakdown ? ` (${breakdown})` : ""}`,
+          type: "expense",
+          category: "Eşantiyon/Bedelsiz Verilen",
+          amount: Math.round(cost * 100) / 100,
+          description: `🎁 Eşantiyon: ${customerName} - ${names}`,
           date: localDateStr(),
           customer: customerName,
           source: "sale",
           sourceId: saleId,
         })
       }
-    } catch (e) {
-      console.error("Finance save error:", e)
+    } else if (paidAmount > 0) {
+      await createTransaction({
+        type: "income",
+        category: "Satış",
+        amount: paidAmount,
+        description: `🛒 Satış: ${customerName} - ${names}${breakdown ? ` (${breakdown})` : ""}`,
+        date: localDateStr(),
+        customer: customerName,
+        source: "sale",
+        sourceId: saleId,
+      })
     }
+  }
+
+  // Çok adımlı işlemlerde adımları sırayla çalıştırır, hata veren adımların adlarını döndürür.
+  // (Eskiden başarısız adımlar sessizce yutuluyor, kullanıcıya "tamamlandı" deniyordu.)
+  const runSteps = async (steps: { label: string; run: () => Promise<unknown> }[]): Promise<string[]> => {
+    const failed: string[] = []
+    for (const st of steps) {
+      try {
+        await st.run()
+      } catch (e) {
+        console.error(`${st.label} adımı başarısız:`, e)
+        failed.push(st.label)
+      }
+    }
+    return failed
+  }
+
+  const reportSteps = (failed: string[], doneMessage: string) => {
+    if (failed.length === 0) showToast(doneMessage, "success")
+    else showToast(`İşlem kaydedildi ancak şu adımlar TAMAMLANAMADI: ${failed.join(", ")}. Lütfen ilgili sayfadan kontrol edip düzeltin.`, "error")
   }
 
   // Stok farklarını veritabanında atomik uygular ve ekrandaki listeyi günceller.
   const applyStockDeltas = async (deltas: { productId: string; delta: number }[], reason: string = "Satış") => {
     const active = deltas.filter(d => d.delta !== 0)
     if (active.length === 0) return
-    setProducts(prev => prev.map(p => {
-      const d = active.filter(x => x.productId === p.id).reduce((sum, x) => sum + x.delta, 0)
-      return d ? { ...p, quantity: Math.max(0, p.quantity + d) } : p
-    }))
-    await Promise.all(active.map(d => adjustInventoryQuantity(d.productId, d.delta, reason, products.find(p => p.id === d.productId)?.name || "").catch((e) => console.error("Stok güncellenemedi:", e))))
+    const failedNames: string[] = []
+    for (const d of active) {
+      const name = products.find(p => p.id === d.productId)?.name || "Ürün"
+      try {
+        await adjustInventoryQuantity(d.productId, d.delta, reason, name, d.delta < 0)
+        setProducts(prev => prev.map(p => p.id === d.productId ? { ...p, quantity: Math.max(0, p.quantity + d.delta) } : p))
+      } catch (e) {
+        console.error("Stok güncellenemedi:", e)
+        failedNames.push(name)
+      }
+    }
+    if (failedNames.length > 0) throw new Error(`Stok güncellenemedi: ${failedNames.join(", ")}`)
   }
 
   const addToCart = (product: InventoryItem, quantity: number = 1) => {
@@ -442,11 +484,7 @@ export default function SalesPage() {
   // olarak güncelliyoruz; gerekirse borcu Müşteriler sayfasından elle düzelt.
   const updateCustomerDebt = async (customerId: string, amount: number, operation: "add" | "subtract", description?: string, saleId?: string) => {
     if (operation === "add" && amount > 0) {
-      try {
-        await addDebt(customerId, { amount, description: description || "Satış bakiyesi", sourceType: "sale", sourceId: saleId })
-      } catch (e) {
-        console.error("Borç kaydı oluşturulamadı:", e)
-      }
+      await addDebt(customerId, { amount, description: description || "Satış bakiyesi", sourceType: "sale", sourceId: saleId })
     }
     setCustomers(customers.map((c: any) => {
       if (c.id !== customerId) return c
@@ -500,8 +538,62 @@ export default function SalesPage() {
       return
     }
 
+    // Aynı IMEI'li bir cihaz zaten stoktaysa takasla tekrar alınamaz
+    if (tradeVal > 0 && tradeImei.trim()) {
+      const conflict = await findActiveImeiConflict(tradeImei)
+      if (conflict) {
+        showToast(`Takas IMEI'si zaten stokta kayıtlı: ${conflict.name}${conflict.productCode ? ` (${conflict.productCode})` : ""}.`, "error")
+        return
+      }
+    }
+
+    // Minimum kâr / maliyet altı satış: sadece yönetici onaylayabilir
+    let lowMarginNote = ""
+    if (marginStatus) {
+      const msg = marginStatus === "loss"
+        ? `Satış fiyatı (${formatCurrency(cartTotal)}) maliyetin (${formatCurrency(cartCost)}) ALTINDA.`
+        : `Kâr oranı belirlenen minimum %${minMarginPercent}'in altında (satış ${formatCurrency(cartTotal)}, maliyet ${formatCurrency(cartCost)}).`
+      if (!isManager) {
+        showToast(`${msg} Bu satışı yalnızca yönetici hesabıyla yapabilirsiniz.`, "error")
+        return
+      }
+      if (!confirm(`⚠️ ${msg}\n\nYönetici onayıyla yine de kaydedilsin mi?`)) return
+      lowMarginNote = msg
+    }
+
+    // Vadesi geçmiş borcu olan müşteriye yeni borç eklenecekse uyarı
+    if (!isGiftSale && remaining > 0 && riskInfo && riskInfo.ageDays >= 30) {
+      if (!confirm(`⚠️ ${customer.name} adlı müşterinin ${formatCurrency(riskInfo.debt)} açık borcu var (en eski ${riskInfo.ageDays} gün önce).\n\nBu satışla ${formatCurrency(remaining)} yeni borç eklenecek. Yine de devam edilsin mi?`)) return
+    }
+
+    // 1) Stok ÖNCE, veritabanında kontrollü ayrılır: yetersizse işlem reddedilir ve hiçbir kayıt oluşmaz.
+    //    (İki kişi aynı anda son ürünü satamaz; satış kaydı oluşmadan stok düşmüş olmaz.)
+    const reserved: { productId: string; qty: number; name: string }[] = []
+    const rollbackStock = async () => {
+      for (const r of reserved) {
+        await adjustInventoryQuantity(r.productId, r.qty, "Satış başarısız — stok iadesi", r.name).catch((err) => console.error("Stok iadesi yapılamadı:", err))
+      }
+      fetchInventory().then(setProducts).catch(() => undefined)
+    }
     try {
-      const sale = await createSale({
+      for (const item of cart) {
+        await adjustInventoryQuantity(item.productId, -item.quantity, "Satış", item.name, true)
+        reserved.push({ productId: item.productId, qty: item.quantity, name: item.name })
+      }
+    } catch (e) {
+      await rollbackStock()
+      showToast(e instanceof InsufficientStockError ? e.message : "Stok ayrılırken bir sorun oluştu; satış yapılmadı.", "error")
+      return
+    }
+    setProducts(prev => prev.map(p => {
+      const r = reserved.find(x => x.productId === p.id)
+      return r ? { ...p, quantity: Math.max(0, p.quantity - r.qty) } : p
+    }))
+
+    // 2) Satış kaydı. Başarısız olursa ayrılan stok geri verilir.
+    let sale: Sale
+    try {
+      sale = await createSale({
         customerId: customer.id,
         customerName: customer.name,
         customerCode: customer.customerCode,
@@ -523,22 +615,36 @@ export default function SalesPage() {
           : [],
         installments: installmentPlan,
         tradeIn: tradeVal > 0 ? { name: tradeName.trim(), imei: tradeImei.trim() || undefined, value: tradeVal } : null,
+        extraCost: extraCostTotal,
+        extraCostNote: [commissionAmount > 0 ? `Kart komisyonu ${formatCurrency(commissionAmount)}` : "", extraCostNoteInput.trim() ? `${extraCostNoteInput.trim()} ${formatCurrency(Number(extraCostInput) || 0)}` : ""].filter(Boolean).join("; "),
       })
+    } catch (e) {
+      console.error(e)
+      await rollbackStock()
+      showToast("Satış kaydedilemedi; stok geri verildi. Lütfen tekrar deneyin.", "error")
+      return
+    }
 
-      // Update customer debt (fazla ödeme varsa — remaining negatifse — borç
-      // eklenmiyor; müşteri o satıştan alacaklı sayılıyor, bkz. relatedDebts)
-      if (!isGiftSale && remaining > 0) {
-        await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`, sale.id)
-      }
+    let savedSale = sale
+    if (lowMarginNote) {
+      logChange("Satışlar", "created", `Düşük marjlı satış yönetici onayıyla yapıldı: ${sale.saleCode || ""} — ${customer.name}`, [], lowMarginNote)
+    }
 
-      // Stok (atomik)
-      await applyStockDeltas(cart.map(item => ({ productId: item.productId, delta: -item.quantity })), `Satış ${sale.saleCode || ""}`.trim())
-
-      let savedSale = sale
-
-      // Takas: alınan cihaz ikinci el stoğa girer (alış maliyeti = takas değeri)
-      if (tradeVal > 0) {
-        try {
+    // 3) Satışa bağlı diğer adımlar: borç, takas stoğu, kasa. Hangisi başarısız olursa kullanıcıya bildirilir.
+    const failed = await runSteps([
+      {
+        label: "müşteri borç kaydı",
+        run: async () => {
+          // fazla ödeme (remaining<0) borç oluşturmaz; müşteri o satıştan alacaklı sayılır
+          if (!isGiftSale && remaining > 0) {
+            await updateCustomerDebt(customer.id, remaining, "add", `🛒 Satış bakiyesi: ${cart.map(i => i.name).join(", ")}`, sale.id)
+          }
+        },
+      },
+      {
+        label: "takas cihazının stoğa eklenmesi",
+        run: async () => {
+          if (tradeVal <= 0) return
           const tradeItem = await createInventoryItem({
             name: `${tradeName.trim()} (Takas)`,
             sku: "",
@@ -558,32 +664,28 @@ export default function SalesPage() {
           const tradeIn: TradeIn = { name: tradeName.trim(), imei: tradeImei.trim() || undefined, value: tradeVal, productId: tradeItem.id }
           savedSale = await updateSale(sale.id, { tradeIn })
           setProducts(prev => [tradeItem, ...prev])
-        } catch (e) {
-          console.error("Takas cihazı stoğa eklenemedi:", e)
-          showToast("Satış kaydedildi ancak takas cihazı stoğa eklenemedi; Envanter'den elle ekleyin.", "error")
-        }
-      }
+        },
+      },
+      {
+        label: "kasa kaydı",
+        run: () => writeSaleFinance(sale.id, customer.name, cart, isGiftSale, cashPaid, isSplit ? splitBreakdown(Number(splitCash) || 0, Number(splitCard) || 0, Number(splitTransfer) || 0) : (tradeVal > 0 ? `takas ${formatCurrency(tradeVal)} düşüldü` : "")),
+      },
+    ])
 
-      setSales([savedSale, ...sales])
+    setSales([savedSale, ...sales])
 
-      // Kasa: sadece fiilen alınan nakit/kart/havale yazılır (takas değeri kasaya girmez)
-      await writeSaleFinance(sale.id, customer.name, cart, isGiftSale, cashPaid, isSplit ? splitBreakdown(Number(splitCash) || 0, Number(splitCard) || 0, Number(splitTransfer) || 0) : (tradeVal > 0 ? `takas ${formatCurrency(tradeVal)} düşüldü` : ""))
-
-      // Reset
-      setCart([])
-      setSelectedCustomer("")
-      setPaymentMethod("cash")
-      setPaidAmount("")
-      setSaleDiscount("")
-      setSplitCash(""); setSplitCard(""); setSplitTransfer("")
-      setInstDown(""); setInstCount("3"); setInstFirstDate("")
-      setTradeName(""); setTradeImei(""); setTradeValue("")
-      setShowNewSale(false)
-      showToast("Satış tamamlandı.", "success")
-    } catch (e) {
-      console.error(e)
-      showToast("Satış kaydedilirken bir sorun oluştu.", "error")
-    }
+    // Reset
+    setCart([])
+    setSelectedCustomer("")
+    setPaymentMethod("cash")
+    setPaidAmount("")
+    setSaleDiscount("")
+    setSplitCash(""); setSplitCard(""); setSplitTransfer("")
+    setInstDown(""); setInstCount("3"); setInstFirstDate("")
+    setTradeName(""); setTradeImei(""); setTradeValue("")
+    setExtraCostInput(""); setExtraCostNoteInput("")
+    setShowNewSale(false)
+    reportSteps(failed, "Satış tamamlandı.")
   }
 
   const handleDeleteSale = async (saleId: string) => {
@@ -600,31 +702,28 @@ Bu işlem geri alınamaz!`)) return
 
     try {
       await deleteSale(saleId)
-      if (sale.status !== "cancelled") await removeTradeInStock(sale)
-      await deleteDebtsBySource("sale", saleId)
-      await deleteTransactionsBySource("sale", saleId)
-
-      // İptal edilmiş satışın stoğu zaten iade edilmişti; tekrar ekleme
-      if (sale.status !== "cancelled") {
-        await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış silindi ${sale.saleCode || ""}`.trim())
-      }
-
-      const custId = resolveCustomerId(sale)
-      if (sale.remaining > 0 && sale.status !== "cancelled" && custId) {
-        setCustomers(customers.map((c: any) => {
-          if (c.id !== custId) return c
-          const currentDebt = c.totalDebt || c.balance || 0
-          const newDebt = Math.max(0, currentDebt - sale.remaining)
-          return { ...c, totalDebt: newDebt, balance: newDebt }
-        }))
-      }
-
-      setSales(sales.filter(s => s.id !== saleId))
-      showToast("Satış silindi.", "success")
     } catch (e: any) {
       console.error(e)
       showToast(e?.message || "Satış silinirken bir sorun oluştu.", "error")
+      return
     }
+    setSales(sales.filter(s => s.id !== saleId))
+
+    const failed = await runSteps([
+      { label: "takas cihazı stoğu", run: async () => { if (sale.status !== "cancelled") await removeTradeInStock(sale) } },
+      { label: "müşteri borç kaydı", run: () => deleteDebtsBySource("sale", saleId) },
+      { label: "kasa kayıtları", run: () => deleteTransactionsBySource("sale", saleId) },
+      {
+        // İptal edilmiş satışın stoğu zaten iade edilmişti; tekrar ekleme
+        label: "stok iadesi",
+        run: async () => {
+          if (sale.status !== "cancelled") {
+            await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış silindi ${sale.saleCode || ""}`.trim())
+          }
+        },
+      },
+    ])
+    reportSteps(failed, "Satış silindi.")
   }
 
   // Takaslı satış iptal/silinirse, takasla alınan cihaz hâlâ stoktaysa stoktan düşülür
@@ -633,7 +732,7 @@ Bu işlem geri alınamaz!`)) return
     if (!productId) return
     const p = products.find(x => x.id === productId)
     if (p && p.quantity > 0) {
-      await adjustInventoryQuantity(productId, -p.quantity, `Takas iptali ${sale.saleCode || ""}`.trim(), p.name).catch((e) => console.error(e))
+      await adjustInventoryQuantity(productId, -p.quantity, `Takas iptali ${sale.saleCode || ""}`.trim(), p.name)
       setProducts(prev => prev.map(x => x.id === productId ? { ...x, quantity: 0 } : x))
     }
   }
@@ -643,32 +742,25 @@ Bu işlem geri alınamaz!`)) return
   const handleRefund = async () => {
     const sale = viewSale
     if (!sale) return
+    const calc = computeRefund({
+      items: sale.items,
+      discount: sale.discount,
+      totalAmount: sale.totalAmount,
+      paid: sale.paid,
+      returnQty: sale.items.map((_, i) => Number(refundQty[i]) || 0),
+      mode: refundMode,
+    })
+    if (!calc.ok) {
+      showToast(calc.reason === "none" ? "İade edilecek ürün adedi girin." : "Tüm ürünler iade ediliyorsa satışı \"İptal\" edin.", "error")
+      return
+    }
+    const { newDiscount, newTotal, refundValue, cashRefund, newPaid, newRemaining } = calc
     const lines = sale.items
-      .map((it, i) => ({ it, i, q: Math.min(it.quantity, Math.max(0, Math.floor(Number(refundQty[i]) || 0))) }))
+      .map((it, i) => ({ it, i, q: sale.items[i].quantity - calc.remainingQty[i] }))
       .filter(x => x.q > 0)
-    if (lines.length === 0) {
-      showToast("İade edilecek ürün adedi girin.", "error")
-      return
-    }
-    const subtotal = sale.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
     const newItems = sale.items
-      .map((it, i) => ({ ...it, quantity: it.quantity - (lines.find(l => l.i === i)?.q || 0) }))
+      .map((it, i) => ({ ...it, quantity: calc.remainingQty[i] }))
       .filter(it => it.quantity > 0)
-    if (newItems.length === 0) {
-      showToast("Tüm ürünler iade ediliyorsa satışı \"İptal\" edin.", "error")
-      return
-    }
-    const newSubtotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
-    const newDiscount = subtotal > 0 ? round2(sale.discount * newSubtotal / subtotal) : 0
-    const newTotal = round2(Math.max(0, newSubtotal - newDiscount))
-    const refundValue = round2(sale.totalAmount - newTotal)
-    let newPaid = sale.paid
-    let cashRefund = 0
-    if (refundMode === "cash") {
-      cashRefund = Math.max(0, round2(sale.paid - newTotal))
-      newPaid = round2(sale.paid - cashRefund)
-    }
-    const newRemaining = round2(newTotal - newPaid)
     const customerId = resolveCustomerId(sale)
     if ((sale.remaining > 0 || newRemaining > 0) && !customerId) {
       showToast("Bu satışın müşterisi kesin olarak bulunamadı; iade yapılamıyor.", "error")
@@ -676,9 +768,10 @@ Bu işlem geri alınamaz!`)) return
     }
     if (!confirm(`İade edilecek tutar: ${formatCurrency(refundValue)}\n${refundMode === "cash" ? `Müşteriye nakit iade: ${formatCurrency(cashRefund)}` : "Fark müşteri bakiyesine yazılır"}\n\nOnaylıyor musunuz?`)) return
 
+    const refund = { date: localDateStr(), mode: refundMode, amount: refundValue, items: lines.map(l => ({ name: l.it.name, quantity: l.q })) }
+    let updated: Sale
     try {
-      const refund = { date: localDateStr(), mode: refundMode, amount: refundValue, items: lines.map(l => ({ name: l.it.name, quantity: l.q })) }
-      const updated = await updateSale(sale.id, {
+      updated = await updateSale(sale.id, {
         items: newItems,
         totalAmount: newTotal,
         discount: newDiscount,
@@ -686,38 +779,55 @@ Bu işlem geri alınamaz!`)) return
         remaining: newRemaining,
         refunds: [...(sale.refunds || []), refund],
       })
-      await applyStockDeltas(lines.map(l => ({ productId: l.it.productId, delta: l.q })), `Satış iadesi ${sale.saleCode || ""}`.trim())
-      if (sale.remaining > 0 || newRemaining > 0) {
-        await deleteDebtsBySource("sale", sale.id)
-        if (newRemaining > 0) {
-          await addDebt(customerId, {
-            amount: newRemaining,
-            description: `🛒 Satış bakiyesi (iade sonrası): ${newItems.map(i => i.name).join(", ")}`,
-            sourceType: "sale",
-            sourceId: sale.id,
-          })
-        }
-      }
-      if (cashRefund > 0) {
-        await createTransaction({
-          type: "expense",
-          category: "Satış İadesi",
-          amount: cashRefund,
-          description: `↩️ Satış iadesi: ${sale.customerName} - ${lines.map(l => `${l.it.name} x${l.q}`).join(", ")}`,
-          date: localDateStr(),
-          customer: sale.customerName,
-          source: "sale",
-          sourceId: sale.id,
-        }).catch((e) => console.error("İade kasaya yazılamadı:", e))
-      }
-      setSales(sales.map(s => s.id === sale.id ? updated : s))
-      setViewSale(updated)
-      setRefundQty({})
-      showToast("İade yapıldı, ürünler stoğa geri eklendi.", "success")
     } catch (e: any) {
       console.error(e)
-      showToast(e?.message || "İade yapılırken bir sorun oluştu.", "error")
+      showToast(e?.message || "İade yapılamadı; hiçbir kayıt değişmedi.", "error")
+      return
     }
+    setSales(sales.map(s => s.id === sale.id ? updated : s))
+    setViewSale(updated)
+    setRefundQty({})
+    logChange("Satışlar", "updated", `Satış ${sale.saleCode || ""} İADE (${sale.customerName}): ${lines.map(l => `${l.it.name} x${l.q}`).join(", ")}`, diffFields(
+      { total: sale.totalAmount, paid: sale.paid, remaining: sale.remaining },
+      { total: newTotal, paid: newPaid, remaining: newRemaining },
+      [{ key: "total", label: "Toplam" }, { key: "paid", label: "Ödenen" }, { key: "remaining", label: "Kalan" }]
+    ), refundMode === "cash" ? "nakit iade" : "bakiyeye mahsup")
+
+    const failed = await runSteps([
+      { label: "stok iadesi", run: () => applyStockDeltas(lines.map(l => ({ productId: l.it.productId, delta: l.q })), `Satış iadesi ${sale.saleCode || ""}`.trim()) },
+      {
+        label: "müşteri borç kaydı",
+        run: async () => {
+          if (!(sale.remaining > 0 || newRemaining > 0)) return
+          await deleteDebtsBySource("sale", sale.id)
+          if (newRemaining > 0) {
+            await addDebt(customerId, {
+              amount: newRemaining,
+              description: `🛒 Satış bakiyesi (iade sonrası): ${newItems.map(i => i.name).join(", ")}`,
+              sourceType: "sale",
+              sourceId: sale.id,
+            })
+          }
+        },
+      },
+      {
+        label: "nakit iade kasa kaydı",
+        run: async () => {
+          if (cashRefund <= 0) return
+          await createTransaction({
+            type: "expense",
+            category: "Satış İadesi",
+            amount: cashRefund,
+            description: `↩️ Satış iadesi: ${sale.customerName} - ${lines.map(l => `${l.it.name} x${l.q}`).join(", ")}`,
+            date: localDateStr(),
+            customer: sale.customerName,
+            source: "sale",
+            sourceId: sale.id,
+          })
+        },
+      },
+    ])
+    reportSteps(failed, "İade yapıldı, ürünler stoğa geri eklendi.")
   }
 
   // İptal / iade: kayıt silinmez, "iptal" olarak kalır; stok geri eklenir,
@@ -758,21 +868,30 @@ Bu işlem geri alınamaz!`)) return
     if (!confirm(`🚫 Bu satış iptal / iade edilsin mi?
 
 • Ürünler stoğa geri eklenir
-• Bu satışın borcu ve kasa kaydı kaldırılır
+• Bu satışın borcu kapatılır
+• Kasaya ters kayıt yazılır (geçmiş kayıtlar silinmez)
 • Satış kaydı "İptal" olarak listede kalır`)) return
+
+    const reason = window.prompt("İptal nedeni (opsiyonel, kayda geçer):", "")
+    if (reason === null) return
 
     try {
       await updateSale(saleId, { status: "cancelled" })
-      await removeTradeInStock(sale)
-      await deleteDebtsBySource("sale", saleId)
-      await deleteTransactionsBySource("sale", saleId)
-      await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış iptali ${sale.saleCode || ""}`.trim())
-      setSales(sales.map(s => s.id === saleId ? { ...s, status: "cancelled" as const } : s))
-      showToast("Satış iptal edildi, stok geri eklendi.", "success")
     } catch (e: any) {
       console.error(e)
-      showToast(e?.message || "Satış iptal edilirken bir sorun oluştu.", "error")
+      showToast(e?.message || "Satış iptal edilemedi.", "error")
+      return
     }
+    logChange("Satışlar", "updated", `Satış ${sale.saleCode || ""} İPTAL EDİLDİ (${sale.customerName}, ${sale.totalAmount.toLocaleString("tr-TR")} TL)`, [], reason.trim() || undefined)
+    setSales(sales.map(s => s.id === saleId ? { ...s, status: "cancelled" as const } : s))
+
+    const failed = await runSteps([
+      { label: "stok iadesi", run: () => applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış iptali ${sale.saleCode || ""}`.trim()) },
+      { label: "takas cihazı stoğu", run: () => removeTradeInStock(sale) },
+      { label: "müşteri borç kaydı", run: () => deleteDebtsBySource("sale", saleId) },
+      { label: "kasa ters kaydı", run: () => reverseTransactionsBySource("sale", saleId, { label: `Satış iptali ${sale.saleCode || ""}: ${sale.customerName}`.trim(), customer: sale.customerName, date: localDateStr() }) },
+    ])
+    reportSteps(failed, "Satış iptal edildi, stok geri eklendi.")
   }
 
   const openEditSale = (sale: Sale) => {
@@ -835,36 +954,58 @@ Bu işlem geri alınamaz!`)) return
           : [],
       })
 
-      // Stok farkları (atomik)
-      const ids = Array.from(new Set([...oldSale.items.map(i => i.productId), ...editCart.map(i => i.productId)]))
-      await applyStockDeltas(ids.map(productId => {
-        const oldQty = oldSale.items.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
-        const newQty = editCart.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
-        return { productId, delta: oldQty - newQty }
-      }), `Satış düzenleme ${oldSale.saleCode || ""}`.trim())
+      const labelOf = (v: string) => paymentMethods.find(m => m.value === v)?.label || v
+      const itemsText = (items: SaleItem[]) => items.map(i => `${i.name} x${i.quantity} @${i.price}`).join(", ")
+      logChange("Satışlar", "updated", `Satış ${oldSale.saleCode || ""} düzenlendi (${oldSale.customerName})`, diffFields(
+        { total: oldSale.totalAmount, discount: oldSale.discount, paid: oldSale.paid, remaining: oldSale.remaining, method: labelOf(oldSale.paymentMethod), items: itemsText(oldSale.items) },
+        { total: updatedSale.totalAmount, discount: updatedSale.discount, paid: updatedSale.paid, remaining: updatedSale.remaining, method: labelOf(updatedSale.paymentMethod), items: itemsText(updatedSale.items) },
+        [{ key: "total", label: "Toplam" }, { key: "discount", label: "İskonto" }, { key: "paid", label: "Ödenen" }, { key: "remaining", label: "Kalan" }, { key: "method", label: "Ödeme" }, { key: "items", label: "Ürünler" }]
+      ))
 
-      // Borç: eski bağlı borcu temizle, yeni bakiye varsa yeniden oluştur
-      if (oldRemaining > 0 || newRemaining > 0) {
-        await deleteDebtsBySource("sale", editingSale.id)
-        if (newRemaining > 0) {
-          await addDebt(customerId, {
-            amount: newRemaining,
-            description: `🛒 Satış bakiyesi (düzenlendi): ${editCart.map(i => i.name).join(", ")}`,
-            sourceType: "sale",
-            sourceId: editingSale.id,
-          })
-        }
-        setCustomers(customers.map((c: any) => {
-          if (c.id !== customerId) return c
-          const currentDebt = c.totalDebt || c.balance || 0
-          const newDebt = currentDebt - Math.max(0, oldRemaining) + Math.max(0, newRemaining)
-          return { ...c, totalDebt: newDebt, balance: newDebt }
-        }))
-      }
-
-      // Kasa: eski kayıt silinip yeni durumla yeniden yazılır (eskiden düzenleme kasaya yansımıyordu)
-      await deleteTransactionsBySource("sale", editingSale.id)
-      await writeSaleFinance(editingSale.id, oldSale.customerName, editCart, isEditGift, editPaid, editPaymentMethod === "split" ? splitBreakdown(Number(editSplitCash) || 0, Number(editSplitCard) || 0, Number(editSplitTransfer) || 0) : "")
+      const failed = await runSteps([
+        {
+          label: "stok güncellemesi",
+          run: async () => {
+            const ids = Array.from(new Set([...oldSale.items.map(i => i.productId), ...editCart.map(i => i.productId)]))
+            await applyStockDeltas(ids.map(productId => {
+              const oldQty = oldSale.items.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
+              const newQty = editCart.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
+              return { productId, delta: oldQty - newQty }
+            }), `Satış düzenleme ${oldSale.saleCode || ""}`.trim())
+          },
+        },
+        {
+          label: "müşteri borç kaydı",
+          run: async () => {
+            if (!(oldRemaining > 0 || newRemaining > 0)) return
+            await deleteDebtsBySource("sale", editingSale.id)
+            if (newRemaining > 0) {
+              await addDebt(customerId, {
+                amount: newRemaining,
+                description: `🛒 Satış bakiyesi (düzenlendi): ${editCart.map(i => i.name).join(", ")}`,
+                sourceType: "sale",
+                sourceId: editingSale.id,
+              })
+            }
+            setCustomers(customers.map((c: any) => {
+              if (c.id !== customerId) return c
+              const currentDebt = c.totalDebt || c.balance || 0
+              const newDebt = currentDebt - Math.max(0, oldRemaining) + Math.max(0, newRemaining)
+              return { ...c, totalDebt: newDebt, balance: newDebt }
+            }))
+          },
+        },
+        {
+          // Eski kasa kayıtları silinmez; net etki yeni duruma getirilir (fark, düzeltme kaydı olarak yazılır)
+          label: "kasa kaydı",
+          run: () => syncTransactionsToNet(
+            "sale",
+            editingSale.id,
+            isEditGift ? -Math.round(itemsCostTRY(editCart) * 100) / 100 : editPaid,
+            { label: `Satış düzenlendi ${oldSale.saleCode || ""}: ${oldSale.customerName}`.trim(), customer: oldSale.customerName, date: localDateStr() }
+          ),
+        },
+      ])
 
       setSales(sales.map(s => s.id === editingSale.id ? updatedSale : s))
       setShowEditSale(false)
@@ -872,7 +1013,7 @@ Bu işlem geri alınamaz!`)) return
       setEditCart([])
       setEditPaymentMethod("cash")
       setEditPaidAmount("")
-      showToast("Satış güncellendi.", "success")
+      reportSteps(failed, "Satış güncellendi.")
     } catch (e) {
       console.error(e)
       showToast("Satış güncellenirken bir sorun oluştu.", "error")
@@ -1070,6 +1211,14 @@ Bu işlem geri alınamaz!`)) return
                 )
               })()}
 
+              {selectedCustomer && riskInfo && (
+                <div className={`rounded-lg border p-3 text-xs ${riskInfo.ageDays >= 30 ? "border-red-700/60 bg-red-900/20 text-red-300" : "border-amber-700/60 bg-amber-900/20 text-amber-300"}`}>
+                  ⚠️ Bu müşterinin açık borcu var: <strong>{formatCurrency(riskInfo.debt)}</strong>
+                  {riskInfo.oldestDate ? ` (en eski borç ${riskInfo.oldestDate}, ${riskInfo.ageDays} gün önce)` : ""}.
+                  {riskInfo.ageDays >= 30 ? " Vadesi geçmiş borç var; yeni vadeli satış yapmadan önce tahsilatı değerlendirin." : ""}
+                </div>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -1240,6 +1389,14 @@ Bu işlem geri alınamaz!`)) return
                     <span>💰 Toplam Tutar:</span>
                     <span>{formatCurrency(cartTotal)}</span>
                   </div>
+                  {marginStatus && (
+                    <p className="text-xs text-red-400">
+                      {marginStatus === "loss"
+                        ? `⚠️ Satış fiyatı maliyetin (${formatCurrency(cartCost)}) altında!`
+                        : `⚠️ Kâr oranı minimum %${minMarginPercent}'in altında.`}
+                      {isManager ? " Kaydetmek için onay istenecek." : " Bu satışı yalnızca yönetici onaylayabilir."}
+                    </p>
+                  )}
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                     <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                       <SelectValue placeholder="Ödeme şekli" />
@@ -1327,6 +1484,17 @@ Bu işlem geri alınamaz!`)) return
                       {tradeVal > 0 && <p className="text-xs text-purple-300">Takas değeri {formatCurrency(tradeVal)} ödemeden düşülür; cihaz "İkinci El" olarak stoğa girer.</p>}
                     </div>
                   )}
+                  {!isGiftSale && (
+                    <div className="space-y-1 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                      <Label className="text-slate-300 text-xs">Ek maliyet (kargo vb., TL) — sadece kâr hesabında</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input type="number" inputMode="decimal" placeholder="0" value={extraCostInput} onChange={(e) => setExtraCostInput(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                        <Input placeholder="Not (ops.)" value={extraCostNoteInput} onChange={(e) => setExtraCostNoteInput(e.target.value)} className="bg-slate-900 border-slate-600 text-white col-span-2" />
+                      </div>
+                      {commissionAmount > 0 && <p className="text-xs text-slate-500">Kart komisyonu (%{cardCommissionPercent}): {formatCurrency(commissionAmount)} otomatik eklenir.</p>}
+                      {cartCost > 0 && <p className="text-xs text-slate-400">Tahmini gerçek kâr: <span className={realProfit >= 0 ? "text-emerald-400" : "text-red-400"}>{formatCurrency(realProfit)}</span> (maliyet {formatCurrency(cartCost)}{extraCostTotal > 0 ? ` + ek maliyet ${formatCurrency(extraCostTotal)}` : ""})</p>}
+                    </div>
+                  )}
                   {remaining > 0 && paymentMethod !== "partial" && !isSplit && (
                     <div className="text-sm text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</div>
                   )}
@@ -1373,6 +1541,20 @@ Bu işlem geri alınamaz!`)) return
                 {viewSale.paymentMethod === "gift" && <div className="text-purple-300">🎁 Eşantiyon (bedelsiz)</div>}
                 {viewSale.status === "cancelled" && <div className="text-slate-400">🚫 İptal edildi</div>}
               </div>
+
+              {viewSale.status !== "cancelled" && (() => {
+                const cost = round2(viewSale.items.reduce((sum, i) => sum + (i.purchasePrice || 0) * i.quantity, 0))
+                if (cost <= 0 && !(viewSale.extraCost || 0)) return null
+                const extra = viewSale.extraCost || 0
+                const profit = viewSale.paymentMethod === "gift" ? -cost : round2(viewSale.totalAmount - cost - extra)
+                return (
+                  <div className="text-xs p-2 rounded bg-slate-800 border border-slate-700 space-y-0.5">
+                    <div className="flex justify-between text-slate-400"><span>Mal maliyeti</span><span>{formatCurrency(cost)}</span></div>
+                    {extra > 0 && <div className="flex justify-between text-slate-400"><span>Ek maliyet{viewSale.extraCostNote ? ` (${viewSale.extraCostNote})` : ""}</span><span>{formatCurrency(extra)}</span></div>}
+                    <div className="flex justify-between font-medium"><span className="text-slate-300">Gerçek kâr</span><span className={profit >= 0 ? "text-emerald-400" : "text-red-400"}>{formatCurrency(profit)}</span></div>
+                  </div>
+                )
+              })()}
 
               {(viewSale.payments || []).length > 0 && (
                 <div className="text-xs text-slate-400">
