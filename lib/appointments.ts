@@ -71,7 +71,8 @@ export async function fetchAppointments(): Promise<Appointment[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_appointments", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_appointments")) localStorage.setItem("yt_migrated_appointments", "true")
   return (data || []).map(fromRow)
 }
 

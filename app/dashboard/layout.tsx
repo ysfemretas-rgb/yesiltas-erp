@@ -74,7 +74,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // envanter ve sarf malzeme sayfalarıyla AYNI kaynağı kullanır, böylece
   // her yerde aynı USD/TRY değeri gösterilir.
   const { rates, isLoadingRates: isLoading, fetchRates: fetchCurrency } = useExchangeRates()
-  const usdRate = rates.USD || null
+  // Gerçek kur alınamadıysa varsayılan (eski) değeri göstermek yanıltıcı olur
+  const usdRate = rates.lastUpdated ? (rates.USD || null) : null
   const lastUpdate = rates.lastUpdated
 
   // Firma ayarlarını (IBAN, iskonto limiti...) sunucudan alıp bu cihaza yansıt
@@ -180,6 +181,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     }
 
+    // Açılışta hemen kontrol: pasife alınan kullanıcı 3 dakika beklemeden çıkarılır
+    refreshProfile()
     const interval = setInterval(refreshProfile, 3 * 60 * 1000)
     const onVisible = () => {
       if (document.visibilityState === "visible") refreshProfile()
@@ -275,7 +278,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 variant="ghost"
                 size="sm"
                 onClick={() => setMobileOpen(false)}
-                className="lg:hidden h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+                className="lg:hidden h-10 w-10 p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -345,7 +348,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 variant="ghost"
                 size="sm"
                 onClick={() => setMobileOpen(true)}
-                className="h-8 w-8 p-0"
+                className="h-10 w-10 p-0"
               >
                 <Menu className="h-5 w-5" />
               </Button>

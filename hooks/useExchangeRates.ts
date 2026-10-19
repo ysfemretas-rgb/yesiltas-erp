@@ -65,5 +65,8 @@ export function useExchangeRates() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { rates, isLoadingRates, fetchRates }
+  // lastUpdated boşsa hiç gerçek kur alınamamış demektir; yukarıdaki varsayılan değerler gösterim içindir ve
+  // fiyat hesaplarında güvenilmemelidir.
+  const isFallback = !rates.lastUpdated
+  return { rates, isLoadingRates, fetchRates, isFallback }
 }

@@ -67,7 +67,8 @@ export async function fetchStaff(): Promise<StaffMember[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_staff", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_staff")) localStorage.setItem("yt_migrated_staff", "true")
   return (data || []).map(fromRow)
 }
 

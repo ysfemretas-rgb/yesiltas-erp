@@ -20,12 +20,13 @@ export async function fetchAllRows(
       .from(table)
       .select("*")
       .order(orderColumn, { ascending })
+      .order("id", { ascending }) // aynı tarihli kayıtlar sayfa geçişinde kaybolmasın/tekrarlanmasın
       .range(from, from + pageSize - 1)
     if (error) throw error
     const rows = data || []
     all.push(...rows)
     if (rows.length < pageSize) break
-    if (from > 200000) break
+    if (from >= 200000) throw new Error(`${table} tablosu 200.000 kayıt sınırını aştı; liste tamamlanamadı.`)
   }
   return all
 }

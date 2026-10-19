@@ -70,7 +70,8 @@ export async function fetchWarranties(): Promise<Warranty[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_warranties", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_warranties")) localStorage.setItem("yt_migrated_warranties", "true")
   return (data || []).map(fromRow)
 }
 

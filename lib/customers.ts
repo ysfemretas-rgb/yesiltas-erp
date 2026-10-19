@@ -2,6 +2,7 @@ import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 import { createTransaction } from "@/lib/finance"
 import { localDateStr } from "@/lib/dates"
+import { allocateInstallments } from "@/lib/money"
 
 export interface Debt {
   id: string
@@ -157,7 +158,8 @@ export async function fetchCustomers(): Promise<Customer[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_customers", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_customers")) localStorage.setItem("yt_migrated_customers", "true")
   return (customerRows || []).map((row: any) => customerFromRow(row, debtsByCustomer[row.id] || []))
 }
 
@@ -209,8 +211,18 @@ export async function addDebt(
 
 // Bir satış/tamir kaydı silinirken, ona bağlı (henüz ödenmemiş) borç kaydını da temizler.
 export async function deleteDebtsBySource(sourceType: "device" | "sale", sourceId: string): Promise<void> {
-  const { error } = await supabase.from("debts").delete().eq("source_type", sourceType).eq("source_id", sourceId)
-  if (error) console.error("Bağlı borç kaydı silinemedi:", error)
+  const { data, error } = await supabase.from("debts").delete().eq("source_type", sourceType).eq("source_id", sourceId).select("id")
+  if (error) throw error
+  // Silme yetkisi yoksa (sadece Yönetici silebilir) satır sessizce silinmez; bu durumda kayıt sıfırlanıp kapatılır
+  // ki iptal/düzenleme sonrası eski borç tutarı açık kalmasın.
+  if (!data || data.length === 0) {
+    const { error: upErr } = await supabase
+      .from("debts")
+      .update({ total_amount: 0, paid_amount: 0, remaining_amount: 0, status: "Tamamlandı" })
+      .eq("source_type", sourceType)
+      .eq("source_id", sourceId)
+    if (upErr) throw upErr
+  }
 }
 
 export async function payDebt(debtId: string): Promise<void> {
@@ -270,14 +282,7 @@ export async function collectBalance(
   const updatePayload: Record<string, unknown> = { paid_amount: newPaid, remaining_amount: newRemaining }
   // Taksitli satışta tahsilat en eski taksitten başlayarak taksitlere dağıtılır
   if (kind === "sale" && Array.isArray(row.installments) && row.installments.length > 0) {
-    let left = collected
-    updatePayload.installments = row.installments.map((inst: any) => {
-      if (left <= 0) return inst
-      const need = Math.max(0, (Number(inst.amount) || 0) - (Number(inst.paidAmount) || 0))
-      const pay = Math.min(need, left)
-      left = Math.round((left - pay) * 100) / 100
-      return { ...inst, paidAmount: Math.round(((Number(inst.paidAmount) || 0) + pay) * 100) / 100 }
-    })
+    updatePayload.installments = allocateInstallments(row.installments, collected)
   }
   const { error: upErr } = await supabase.from(table).update(updatePayload).eq("id", id)
   if (upErr) throw upErr

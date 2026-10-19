@@ -34,7 +34,7 @@ export function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={handleToggle}
-        className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="relative flex h-10 w-10 lg:h-8 lg:w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
         title="Bildirimler"
       >
         <Bell className="h-4 w-4" />

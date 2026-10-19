@@ -87,7 +87,8 @@ export async function fetchSuppliers(): Promise<Supplier[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_suppliers", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_suppliers")) localStorage.setItem("yt_migrated_suppliers", "true")
   return (data || []).map(fromRow)
 }
 

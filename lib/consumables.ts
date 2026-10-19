@@ -68,7 +68,8 @@ export async function fetchConsumables(): Promise<Consumable[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_consumables", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_consumables")) localStorage.setItem("yt_migrated_consumables", "true")
   return (data || []).map(fromRow)
 }
 

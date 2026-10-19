@@ -52,7 +52,8 @@ export async function fetchProducts(): Promise<Product[]> {
     }
   }
 
-  if (typeof window !== "undefined") localStorage.setItem("yt_migrated_products", "true")
+  // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
+  if (typeof window !== "undefined" && !localStorage.getItem("yt_products")) localStorage.setItem("yt_migrated_products", "true")
   return (data || []).map(fromRow)
 }
 
