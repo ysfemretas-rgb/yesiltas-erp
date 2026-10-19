@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar } from "lucide-react"
+import { printDayClose } from "@/lib/dayClose"
 import { Transaction, fetchTransactions, createTransaction, updateTransaction, deleteTransaction } from "@/lib/finance"
 
 const categories = ["Tamir Geliri", "Satış Geliri", "Parça Maliyeti", "Kira", "Fatura", "Maaş", "Diğer"]
@@ -223,6 +224,10 @@ export default function FinancePage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">💰 Finans Yönetimi</h1>
+        <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={() => printDayClose(todayStr, transactions)} className="border-slate-600 text-slate-300 hover:text-white">
+          📊 Gün Sonu
+        </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -313,6 +318,7 @@ export default function FinancePage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Today's summary */}

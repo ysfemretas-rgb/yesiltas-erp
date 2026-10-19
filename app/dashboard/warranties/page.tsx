@@ -66,8 +66,18 @@ export default function WarrantiesPage() {
   }, [])
 
   const getDaysRemaining = (endDate: string) => {
+    if (!endDate) return 0
     const days = differenceInDays(parseISO(endDate), new Date())
-    return days
+    return Number.isNaN(days) ? 0 : days
+  }
+
+  // Durum her zaman bitiş tarihinden hesaplanır. Veritabanındaki "status" alanı hiç
+  // güncellenmediği için (hep "active" kalıyordu) sayaçlar ve filtre yanlış çalışıyordu.
+  const getStatusKey = (w: Warranty): "active" | "expiring" | "expired" => {
+    const days = getDaysRemaining(w.endDate)
+    if (days < 0) return "expired"
+    if (days <= 30) return "expiring"
+    return "active"
   }
 
   const getStatusBadge = (warranty: Warranty) => {
@@ -82,13 +92,13 @@ export default function WarrantiesPage() {
     const matchesSearch = w.deviceName.toLowerCase().includes(search) ||
       w.customerName.toLowerCase().includes(search) ||
       w.customerPhone.includes(search)
-    const matchesStatus = filterStatus === "all" || w.status === filterStatus
+    const matchesStatus = filterStatus === "all" || getStatusKey(w) === filterStatus
     return matchesSearch && matchesStatus
   })
 
-  const activeCount = warranties.filter(w => w.status === "active").length
-  const expiringCount = warranties.filter(w => w.status === "expiring").length
-  const expiredCount = warranties.filter(w => w.status === "expired").length
+  const activeCount = warranties.filter(w => getStatusKey(w) === "active").length
+  const expiringCount = warranties.filter(w => getStatusKey(w) === "expiring").length
+  const expiredCount = warranties.filter(w => getStatusKey(w) === "expired").length
 
   const handleAddWarranty = async () => {
     if (!newWarranty.deviceName || !newWarranty.customerName) {

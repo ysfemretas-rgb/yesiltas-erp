@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface Consumable {
@@ -44,8 +44,7 @@ function toRow(c: Partial<Consumable>) {
 }
 
 export async function fetchConsumables(): Promise<Consumable[]> {
-  const { data, error } = await supabase.from("consumables").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("consumables", "created_at", false)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_consumables")) {
     const legacyRaw = localStorage.getItem("yt_consumables")

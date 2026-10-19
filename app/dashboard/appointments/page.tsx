@@ -181,7 +181,8 @@ export default function AppointmentsPage() {
 
   const validateAppointment = (appt: Partial<Appointment>) => {
     const missing: string[] = []
-    if (!appt.customerId) missing.push("Müşteri")
+    // customerId veritabanında saklanmadığı için kayıtlı randevularda boş gelir; ad varsa müşteri sayılır
+    if (!appt.customerId && !appt.customerName) missing.push("Müşteri")
     if (!appt.date) missing.push("Tarih")
     if (!appt.time) missing.push("Saat")
     if (missing.length > 0) {

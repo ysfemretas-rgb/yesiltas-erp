@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface Appointment {
@@ -43,8 +43,7 @@ function toRow(a: Partial<Appointment>) {
 }
 
 export async function fetchAppointments(): Promise<Appointment[]> {
-  const { data, error } = await supabase.from("appointments").select("*").order("appointment_date", { ascending: true }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("appointments", "appointment_date", true)
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_appointments")) {
     const legacyRaw = localStorage.getItem("yt_appointments")

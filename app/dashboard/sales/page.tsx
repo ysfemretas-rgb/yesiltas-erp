@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode, Printer, Ban } from "lucide-react"
+import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode, Printer, Ban, Shield } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
@@ -22,6 +22,8 @@ import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/inventory"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { printSaleReceipt } from "@/lib/saleReceipt"
+import { createWarranty } from "@/lib/warranties"
+import { addMonths } from "date-fns"
 import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 
@@ -475,6 +477,35 @@ Bu işlem geri alınamaz!`)) return
 
   // İptal / iade: kayıt silinmez, "iptal" olarak kalır; stok geri eklenir,
   // bağlı borç ve kasa kaydı kaldırılır.
+  // Satıştan tek tıkla garanti kaydı oluşturur (süre sorulur, varsayılan 12 ay).
+  const handleCreateWarranty = async (sale: Sale) => {
+    const input = window.prompt(`${sale.customerName} — ürün garanti süresi (ay):`, "12")
+    if (input === null) return
+    const months = Math.round(Number(input))
+    if (!months || months < 1 || months > 120) {
+      showToast("Geçerli bir ay sayısı girin (1-120).", "error")
+      return
+    }
+    try {
+      const start = sale.date || localDateStr()
+      const end = localDateStr(addMonths(new Date(`${start}T12:00:00`), months))
+      await createWarranty({
+        deviceName: sale.items.map(i => `${i.name}${i.quantity > 1 ? ` x${i.quantity}` : ""}`).join(", ").slice(0, 200) || "Satış ürünü",
+        customerName: sale.customerName,
+        customerPhone: sale.customerPhone || "",
+        warrantyType: "Genel",
+        startDate: start,
+        endDate: end,
+        status: "active",
+        notes: `Satış ${sale.saleCode || ""} için otomatik oluşturuldu`.trim(),
+      })
+      showToast(`Garanti kaydı oluşturuldu (${months} ay). Garantiler sayfasında görebilirsiniz.`, "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Garanti kaydı oluşturulamadı.", "error")
+    }
+  }
+
   const handleCancelSale = async (saleId: string) => {
     const sale = sales.find(s => s.id === saleId)
     if (!sale || sale.status === "cancelled") return
@@ -1214,6 +1245,16 @@ Bu işlem geri alınamaz!`)) return
                     >
                       <Printer className="w-3 h-3 mr-1" />Fiş
                     </Button>
+                    {sale.status !== "cancelled" && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="border-indigo-600 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10" 
+                      onClick={() => handleCreateWarranty(sale)}
+                    >
+                      <Shield className="w-3 h-3 mr-1" />Garanti
+                    </Button>
+                    )}
                     {sale.status !== "cancelled" && (
                     <Button 
                       size="sm" 

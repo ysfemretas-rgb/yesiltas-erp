@@ -10,6 +10,7 @@ import { fetchAppointments } from "@/lib/appointments"
 import { fetchCustomers } from "@/lib/customers"
 import { fetchRepairs, Repair } from "@/lib/repairs"
 import { fetchSales } from "@/lib/sales"
+import { computeCustomerDebts } from "@/lib/customerDebt"
 
 interface ReminderItem {
   id: string
@@ -111,21 +112,13 @@ export default function TodayPage() {
       const paymentLine = iban
         ? `\uD83C\uDFE6 IBAN ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.\n${iban}${accountName ? ` (${accountName})` : ""}\n\uD83D\uDCDD Açıklama kısmını boş bırakabilirsiniz.\n\uD83E\uDDFE Ödeme sonrası dekontu bize iletmenizi rica ederiz.`
         : `\uD83C\uDFE6 Havale/EFT ile ödeyebilir ya da cihazınızı teslim alırken nakit ödeyebilirsiniz.`
+      const debtMap = computeCustomerDebts(customers, repairsData as any, sales as any)
       for (const c of customers) {
         const phone = c.phone || c.phone1 || ""
         if (!phone) continue
-        // Toplam borç: manuel borçlar + tamir/satıştan gelen bakiyeler (tamir/satış
-        // sayfalarındaki hesaplamayla aynı yöntem). Fazla ödemesi varsa (alacaklıysa)
-        // net negatif çıkar ve hatırlatma listesine hiç girmez — sadece gerçek
-        // borçlular listelenir.
-        const manualDebt = (c.debts || []).filter((d: any) => d.status === "unpaid").reduce((sum: number, d: any) => sum + d.amount, 0)
-        const repairDebt = repairsData
-          .filter(r => r.customerName === c.name || r.customerName?.includes(c.firstName || ""))
-          .reduce((sum, r) => sum + (r.remaining || 0), 0)
-        const saleDebt = sales
-          .filter(s => s.customerName === c.name || s.customerName?.includes(c.firstName || ""))
-          .reduce((sum, s) => sum + (s.remaining || 0), 0)
-        const totalDebt = manualDebt + repairDebt + saleDebt
+        // Toplam borç: ortak hesaplama (ID/kod eşleşmesi, çift sayım yok, eşantiyon/iptal hariç).
+        // Fazla ödemesi olanlar (net negatif) hatırlatma listesine girmez.
+        const totalDebt = debtMap.get(c.id) || 0
         if (totalDebt <= 0) continue
         newItems.push({
           id: `d-${c.id}`,

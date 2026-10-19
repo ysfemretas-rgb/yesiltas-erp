@@ -5,6 +5,8 @@ import { fetchInventory } from '@/lib/inventory'
 import { fetchWarranties } from '@/lib/warranties'
 import { fetchCustomers } from '@/lib/customers'
 import { fetchRepairs } from '@/lib/repairs'
+import { fetchSales } from '@/lib/sales'
+import { computeCustomerDebts } from '@/lib/customerDebt'
 
 export interface AppNotification {
   id: string
@@ -62,7 +64,7 @@ export function useNotifications() {
     try {
       const warranties = await fetchWarranties()
       warranties.forEach((w) => {
-        if (w.status === 'expired' || !w.endDate) return
+        if (!w.endDate) return
         const d = daysUntil(w.endDate)
         if (d < 0) {
           list.push({
@@ -85,12 +87,19 @@ export function useNotifications() {
     }
 
     try {
-      const customers = await fetchCustomers()
+      const [customers, allRepairs, allSales] = await Promise.all([
+        fetchCustomers(),
+        fetchRepairs().catch(() => []),
+        fetchSales().catch(() => []),
+      ])
+      // Borç = tamir + satış kalanı + elle girilen borçlar (ortak hesaplama)
+      const debts = computeCustomerDebts(customers, allRepairs as any, allSales as any)
       customers.forEach((c) => {
-        if (c.totalDebt > 0) {
+        const debt = debts.get(c.id) || 0
+        if (debt > 0) {
           list.push({
             id: `debt-${c.id}`,
-            message: `💰 ${c.name} adlı müşterinin ${c.totalDebt.toLocaleString('tr-TR')} TL borcu var`,
+            message: `💰 ${c.name} adlı müşterinin ${debt.toLocaleString('tr-TR')} TL borcu var`,
             link: '/dashboard/customers',
             severity: 'warning',
           })

@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
+import { pullCompanySettings } from "@/lib/companySettings"
 import { supabase } from "@/lib/supabase"
 import { NotificationBell } from "@/components/NotificationBell"
 
@@ -74,6 +75,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { rates, isLoadingRates: isLoading, fetchRates: fetchCurrency } = useExchangeRates()
   const usdRate = rates.USD || null
   const lastUpdate = rates.lastUpdated
+
+  // Firma ayarlarını (IBAN, iskonto limiti...) sunucudan alıp bu cihaza yansıt
+  useEffect(() => {
+    pullCompanySettings()
+  }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -391,9 +397,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-emerald-400 font-bold text-xs">{tlValue}₺</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-blue-400 text-xs font-bold">
-                {usdRate ? `₺${usdRate.toFixed(2)}` : "--"}
-              </span>
+              <div className="flex flex-col items-end leading-tight">
+                <span className="text-blue-400 text-xs font-bold">
+                  {usdRate ? `₺${usdRate.toFixed(2)}` : "--"}
+                </span>
+                {lastUpdate && (
+                  <span className="text-slate-500 text-[10px] whitespace-nowrap">{lastUpdate}</span>
+                )}
+              </div>
               <Button
                 variant="ghost"
                 size="sm"

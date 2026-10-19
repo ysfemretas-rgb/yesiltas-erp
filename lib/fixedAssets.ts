@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface FixedAsset {
@@ -41,8 +41,7 @@ function toRow(a: Partial<FixedAsset>) {
 }
 
 export async function fetchFixedAssets(): Promise<FixedAsset[]> {
-  const { data, error } = await supabase.from("fixed_assets").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("fixed_assets", "created_at", false)
   return (data || []).map(fromRow)
 }
 

@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface Task {
@@ -37,8 +37,7 @@ function toRow(t: Partial<Task>) {
 }
 
 export async function fetchTasks(): Promise<Task[]> {
-  const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(1000)
-  if (error) throw error
+  const data = await fetchAllRows("tasks", "created_at", false)
   return (data || []).map(fromRow)
 }
 

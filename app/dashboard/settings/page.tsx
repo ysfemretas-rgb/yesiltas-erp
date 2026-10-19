@@ -1,5 +1,6 @@
 "use client"
 
+import { pushCompanySettings } from "@/lib/companySettings"
 import { Toast, useToast } from "@/components/toast"
 
 import { useState, useEffect } from "react"
@@ -162,6 +163,9 @@ export default function SettingsPage() {
 
   const handleSaveCompany = () => {
     localStorage.setItem("yt_company", JSON.stringify(company))
+    pushCompanySettings(company).then((ok) => {
+      if (!ok) showToast("Ayarlar bu cihaza kaydedildi ancak sunucuya yazılamadı (v3 SQL çalıştırıldı mı?).", "error")
+    })
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
