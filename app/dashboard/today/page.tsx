@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { localDateStr } from "@/lib/dates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MessageCircle, Shield, Calendar, Wallet, Wrench, RefreshCw, Loader2 } from "lucide-react"
@@ -14,7 +15,7 @@ import { computeCustomerDebts } from "@/lib/customerDebt"
 
 interface ReminderItem {
   id: string
-  group: "warranty" | "appointment" | "debt" | "repair"
+  group: "warranty" | "appointment" | "debt" | "repair" | "installment" | "birthday"
   title: string
   subtitle: string
   phone: string
@@ -38,6 +39,8 @@ const GROUP_META: Record<ReminderItem["group"], { label: string; icon: any; colo
   appointment: { label: "📅 Randevu Hatırlatma", icon: Calendar, color: "text-pink-400" },
   debt: { label: "💰 Ödeme Hatırlatma", icon: Wallet, color: "text-amber-400" },
   repair: { label: "🔧 Bekleyen Tamir", icon: Wrench, color: "text-orange-400" },
+  installment: { label: "📅 Taksit Hatırlatma", icon: Wallet, color: "text-red-400" },
+  birthday: { label: "🎂 Doğum Günü", icon: Calendar, color: "text-cyan-400" },
 }
 
 export default function TodayPage() {
@@ -139,6 +142,54 @@ export default function TodayPage() {
       }
     } catch (e) {
       console.error("Müşteriler yüklenemedi:", e)
+    }
+
+    // Taksit hatırlatmaları: her taksitli satışın ilk ödenmemiş taksiti, vadesi 3 gün içinde ya da geçmişse
+    try {
+      const allSales = await fetchSales().catch(() => [])
+      for (const sale of allSales) {
+        if (sale.status === "cancelled" || !sale.customerPhone || !(sale.installments || []).length) continue
+        const next = (sale.installments || []).find(i => i.paidAmount < i.amount - 0.01)
+        if (!next) continue
+        const d = daysUntil(next.dueDate)
+        if (d > 3) continue
+        const left = Math.round((next.amount - next.paidAmount) * 100) / 100
+        newItems.push({
+          id: `i-${sale.id}-${next.no}`,
+          group: "installment",
+          title: `${sale.customerName} — ${next.no}. taksit`,
+          subtitle: d < 0 ? `${left.toLocaleString("tr-TR")} TL — ${-d} gün gecikti` : d === 0 ? `${left.toLocaleString("tr-TR")} TL — bugün vadesi` : `${left.toLocaleString("tr-TR")} TL — ${d} gün sonra`,
+          phone: sale.customerPhone,
+          message: `\uD83D\uDC4B Merhaba ${sale.customerName},\n\n\uD83D\uDCC5 *Yeşiltaş Teknoloji*'den taksit hatırlatmasıdır.\n\n${next.no}. taksit tutarınız *${left.toLocaleString("tr-TR")} TL*, vade tarihi *${next.dueDate}*.\n\nÖdemenizi yapabilirsiniz, teşekkür ederiz. \uD83D\uDE4F`,
+        })
+      }
+    } catch (e) {
+      console.error("Taksit hatırlatmaları oluşturulamadı:", e)
+    }
+
+    // Doğum günü: bugün ve yarın
+    try {
+      const customersAll = await fetchCustomers()
+      const now = new Date()
+      for (const c of customersAll) {
+        const phone = c.phone || c.phone1 || ""
+        if (!c.birthDate || !phone) continue
+        const [, m, dd] = c.birthDate.split("-").map(Number)
+        if (!m || !dd) continue
+        const thisYear = new Date(now.getFullYear(), m - 1, dd)
+        const d = daysUntil(localDateStr(thisYear))
+        if (d < 0 || d > 1) continue
+        newItems.push({
+          id: `b-${c.id}`,
+          group: "birthday",
+          title: c.name,
+          subtitle: d === 0 ? "Bugün doğum günü 🎉" : "Yarın doğum günü",
+          phone,
+          message: `\uD83C\uDF82 Merhaba ${c.firstName || c.name},\n\n*Yeşiltaş Teknoloji* ailesi olarak doğum gününüzü kutlar, sağlıklı ve mutlu bir yıl dileriz! \uD83C\uDF89`,
+        })
+      }
+    } catch (e) {
+      console.error("Doğum günü hatırlatmaları oluşturulamadı:", e)
     }
 
     try {

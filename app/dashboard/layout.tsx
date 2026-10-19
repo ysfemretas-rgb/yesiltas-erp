@@ -80,6 +80,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Firma ayarlarını (IBAN, iskonto limiti...) sunucudan alıp bu cihaza yansıt
   useEffect(() => {
     pullCompanySettings()
+    // Çevrimdışı sayfa ve hızlı açılış için servis çalışanını kaydet (hata verirse sessizce geç)
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator && window.location.protocol === "https:") {
+      navigator.serviceWorker.register("/sw.js").catch((e) => console.error("Servis çalışanı kaydedilemedi:", e))
+    }
   }, [])
 
   useEffect(() => {

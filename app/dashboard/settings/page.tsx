@@ -17,7 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, Building, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Loader2 } from "lucide-react"
-import { exportBackup } from "@/lib/backup"
+import { exportBackup, restoreBackup } from "@/lib/backup"
+import { useIsManager } from "@/hooks/useIsManager"
 import { WhatsAppTemplates, DEFAULT_TEMPLATES as DEFAULT_WA_TEMPLATES, getWhatsAppTemplates, saveWhatsAppTemplates } from "@/lib/whatsappTemplates"
 
 interface CompanySettings {
@@ -82,6 +83,8 @@ export default function SettingsPage() {
 
   const { authorized, checking } = usePageAccess("Ayarlar")
   const [backupLoading, setBackupLoading] = useState(false)
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const isManager = useIsManager()
   const [isLoaded, setIsLoaded] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
   const [waTemplates, setWaTemplates] = useState<WhatsAppTemplates>(DEFAULT_WA_TEMPLATES)
@@ -712,7 +715,7 @@ export default function SettingsPage() {
                   Tüm verinizi (müşteriler, tamirler, satışlar, envanter, garantiler, finans, tedarikçiler, personel, randevular, görevler) tek bir dosyaya indirin — kayıt/referans amaçlıdır.
                 </p>
                 <div className="p-3 rounded-lg border border-amber-700/50 bg-amber-900/10 text-sm text-amber-300">
-                  💡 Bu dosyadan geri yükleme yapılamaz. Verileriniz artık Supabase'de bulut üzerinde güvende — gerçek bir felaket kurtarma gerekirse Supabase Dashboard → Database → Backups'ı kullanın.
+                  💡 Yedek dosyasını güvenli bir yerde saklayın. Geri yükleme kayıtları birleştirir: yedekteki kayıtlar eklenir/güncellenir, yedekte olmayan kayıtlara dokunulmaz.
                 </div>
                 <Button
                   onClick={async () => {
@@ -733,6 +736,44 @@ export default function SettingsPage() {
                   {backupLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
                   {backupLoading ? "Hazırlanıyor..." : "Yedeği İndir"}
                 </Button>
+                {isManager && (
+                  <div className="space-y-2 pt-3 border-t border-slate-700">
+                    <p className="text-sm text-slate-400">Daha önce indirdiğiniz bir yedeği geri yükleyin (sadece Yönetici):</p>
+                    <input
+                      id="restore-file"
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ""
+                        if (!file) return
+                        if (!confirm(`"${file.name}" yedeği geri yüklenecek.\n\nYedekteki kayıtlar eklenir veya güncellenir (silme yapılmaz). Devam edilsin mi?`)) return
+                        setRestoreLoading(true)
+                        try {
+                          const report = await restoreBackup(file)
+                          const ok = Object.values(report.restored).reduce((a, b) => a + b, 0)
+                          const failed = Object.keys(report.failed)
+                          showToast(failed.length === 0 ? `Geri yükleme tamam: ${ok} kayıt işlendi.` : `${ok} kayıt işlendi; şu tablolar yüklenemedi: ${failed.join(", ")}`, failed.length === 0 ? "success" : "error")
+                        } catch (err: any) {
+                          console.error(err)
+                          showToast(err?.message || "Geri yükleme sırasında bir sorun oluştu.", "error")
+                        } finally {
+                          setRestoreLoading(false)
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      disabled={restoreLoading}
+                      onClick={() => document.getElementById("restore-file")?.click()}
+                      className="border-slate-600 text-slate-300"
+                    >
+                      {restoreLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2 rotate-180" />}
+                      {restoreLoading ? "Yükleniyor..." : "Yedekten Geri Yükle"}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

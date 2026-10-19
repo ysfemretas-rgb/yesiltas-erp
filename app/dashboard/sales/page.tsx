@@ -15,11 +15,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode, Printer, Ban, Shield, Download, QrCode, Eye } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
+import { Sale, SaleItem, SalePayment, Installment, TradeIn, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
 import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
-import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/inventory"
+import { InventoryItem, fetchInventory, adjustInventoryQuantity, createInventoryItem } from "@/lib/inventory"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { printSaleReceipt } from "@/lib/saleReceipt"
 import { createWarranty } from "@/lib/warranties"
@@ -48,9 +48,29 @@ const paymentMethods = [
   { value: "card", label: "💳 Kredi Kartı" },
   { value: "transfer", label: "🏦 Havale/EFT" },
   { value: "partial", label: "💰 Kısmi Ödeme" },
+  { value: "split", label: "🔀 Çoklu Ödeme" },
+  { value: "installment", label: "📅 Taksitli" },
   { value: "unpaid", label: "⏳ Ödenmedi" },
   { value: "gift", label: "🎁 Eşantiyon (Bedelsiz)" },
 ]
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+// Aylık eşit taksit planı: son taksit yuvarlama farkını alır
+function buildInstallments(total: number, count: number, firstDate: string): Installment[] {
+  if (total <= 0 || count < 1) return []
+  const base = Math.floor((total / count) * 100) / 100
+  const list: Installment[] = []
+  const start = new Date(`${firstDate}T12:00:00`)
+  let allocated = 0
+  for (let i = 0; i < count; i++) {
+    const due = new Date(start.getFullYear(), start.getMonth() + i, start.getDate(), 12)
+    const amount = i === count - 1 ? round2(total - allocated) : base
+    allocated = round2(allocated + amount)
+    list.push({ no: i + 1, dueDate: localDateStr(due), amount, paidAmount: 0 })
+  }
+  return list
+}
 
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
@@ -88,6 +108,21 @@ export default function SalesPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [listPage, setListPage] = useState(1)
   const [viewSale, setViewSale] = useState<Sale | null>(null)
+  // Çoklu ödeme / taksit / takas / iade
+  const [splitCash, setSplitCash] = useState("")
+  const [splitCard, setSplitCard] = useState("")
+  const [splitTransfer, setSplitTransfer] = useState("")
+  const [editSplitCash, setEditSplitCash] = useState("")
+  const [editSplitCard, setEditSplitCard] = useState("")
+  const [editSplitTransfer, setEditSplitTransfer] = useState("")
+  const [instDown, setInstDown] = useState("")
+  const [instCount, setInstCount] = useState("3")
+  const [instFirstDate, setInstFirstDate] = useState("")
+  const [tradeName, setTradeName] = useState("")
+  const [tradeImei, setTradeImei] = useState("")
+  const [tradeValue, setTradeValue] = useState("")
+  const [refundQty, setRefundQty] = useState<Record<number, string>>({})
+  const [refundMode, setRefundMode] = useState<"cash" | "balance">("cash")
   const PAGE_SIZE = 20
 
   // Ürünler, müşteriler ve satışlar artık Supabase'den geliyor.
@@ -188,11 +223,25 @@ export default function SalesPage() {
   const maxEditCartDiscount = editCartSubtotal * maxDiscountPercent / 100
 
   const isGiftSale = paymentMethod === "gift"
-  const paid = isGiftSale ? 0 : (paymentMethod === "partial" ? Number(paidAmount) || 0 : (paymentMethod === "unpaid" ? 0 : cartTotal))
-  const remaining = isGiftSale ? 0 : cartTotal - paid
+  const isSplit = paymentMethod === "split"
+  const isInstallment = paymentMethod === "installment"
+  const splitSum = (Number(splitCash) || 0) + (Number(splitCard) || 0) + (Number(splitTransfer) || 0)
+  // Takas: müşteriden alınan cihazın değeri satış bedelinden düşülür (nakit değildir)
+  const tradeVal = isGiftSale || !tradeName.trim() ? 0 : Math.max(0, Number(tradeValue) || 0)
+  // cashPaid = kasaya fiilen giren para; paid = cashPaid + takas değeri
+  const cashPaid = isGiftSale ? 0
+    : paymentMethod === "partial" ? Number(paidAmount) || 0
+    : paymentMethod === "unpaid" ? 0
+    : isSplit ? splitSum
+    : isInstallment ? Number(instDown) || 0
+    : Math.max(0, cartTotal - tradeVal)
+  const paid = isGiftSale ? 0 : cashPaid + tradeVal
+  const remaining = isGiftSale ? 0 : round2(cartTotal - paid)
+  const installmentPlan = isInstallment && remaining > 0 ? buildInstallments(remaining, Math.max(1, Math.min(24, Math.floor(Number(instCount) || 1))), instFirstDate || localDateStr(new Date(Date.now() + 30 * 86400000))) : []
 
   const isEditGift = editPaymentMethod === "gift"
-  const editPaid = isEditGift ? 0 : editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
+  const editSplitSum = (Number(editSplitCash) || 0) + (Number(editSplitCard) || 0) + (Number(editSplitTransfer) || 0)
+  const editPaid = isEditGift ? 0 : editPaymentMethod === "partial" ? Number(editPaidAmount) || 0 : editPaymentMethod === "split" ? editSplitSum : (editPaymentMethod === "unpaid" ? 0 : editCartTotal)
   const editRemaining = isEditGift ? 0 : editCartTotal - editPaid
 
   // Alış fiyatını TL'ye çevirir (dolar/euro ile alınan ürünlerde kâr hesabı doğru çıksın).
@@ -220,11 +269,14 @@ export default function SalesPage() {
     return byName.length === 1 ? byName[0].id : ""
   }
 
+  const splitBreakdown = (cash: number, card: number, transfer: number) =>
+    [cash > 0 ? `Nakit ${formatCurrency(cash)}` : "", card > 0 ? `Kart ${formatCurrency(card)}` : "", transfer > 0 ? `Havale ${formatCurrency(transfer)}` : ""].filter(Boolean).join(", ")
+
   const itemsCostTRY = (items: SaleItem[]) => items.reduce((sum, i) => sum + (i.purchasePrice || 0) * (i.quantity || 0), 0)
 
   // Satışın kasa kaydını (yeniden) yazar. Eşantiyonda gider, ürünün ALIŞ maliyetidir (satış fiyatı değil);
   // ödenmemiş satışta 0 TL'lik gelir kaydı oluşturulmaz.
-  const writeSaleFinance = async (saleId: string, customerName: string, items: SaleItem[], gift: boolean, paidAmount: number) => {
+  const writeSaleFinance = async (saleId: string, customerName: string, items: SaleItem[], gift: boolean, paidAmount: number, breakdown: string = "") => {
     const names = items.map(i => i.name).join(", ")
     try {
       if (gift) {
@@ -246,7 +298,7 @@ export default function SalesPage() {
           type: "income",
           category: "Satış",
           amount: paidAmount,
-          description: `🛒 Satış: ${customerName} - ${names}`,
+          description: `🛒 Satış: ${customerName} - ${names}${breakdown ? ` (${breakdown})` : ""}`,
           date: localDateStr(),
           customer: customerName,
           source: "sale",
@@ -423,6 +475,23 @@ export default function SalesPage() {
       return
     }
 
+    if (isSplit && splitSum <= 0) {
+      showToast("Çoklu ödeme için en az bir tutar girin.", "error")
+      return
+    }
+    if (tradeName.trim() && tradeVal <= 0) {
+      showToast("Takas cihazının değerini girin.", "error")
+      return
+    }
+    if (tradeVal > cartTotal) {
+      showToast("Takas değeri satış tutarından büyük olamaz.", "error")
+      return
+    }
+    if (isInstallment && remaining <= 0) {
+      showToast("Taksitli satışta peşinat toplam tutardan küçük olmalı.", "error")
+      return
+    }
+
     // Telefon numarası kontrolü
     const phone = customer.phone || customer.phone1 || ""
     if (!phone) {
@@ -444,6 +513,15 @@ export default function SalesPage() {
         paymentMethod,
         date: localDateStr(),
         status: "completed",
+        payments: isSplit
+          ? ([
+              { method: "cash", amount: Number(splitCash) || 0 },
+              { method: "card", amount: Number(splitCard) || 0 },
+              { method: "transfer", amount: Number(splitTransfer) || 0 },
+            ] as SalePayment[]).filter(p => p.amount > 0)
+          : [],
+        installments: installmentPlan,
+        tradeIn: tradeVal > 0 ? { name: tradeName.trim(), imei: tradeImei.trim() || undefined, value: tradeVal } : null,
       })
 
       // Update customer debt (fazla ödeme varsa — remaining negatifse — borç
@@ -455,10 +533,40 @@ export default function SalesPage() {
       // Stok (atomik)
       await applyStockDeltas(cart.map(item => ({ productId: item.productId, delta: -item.quantity })), `Satış ${sale.saleCode || ""}`.trim())
 
-      setSales([sale, ...sales])
+      let savedSale = sale
 
-      // Kasa
-      await writeSaleFinance(sale.id, customer.name, cart, isGiftSale, paid)
+      // Takas: alınan cihaz ikinci el stoğa girer (alış maliyeti = takas değeri)
+      if (tradeVal > 0) {
+        try {
+          const tradeItem = await createInventoryItem({
+            name: `${tradeName.trim()} (Takas)`,
+            sku: "",
+            category: "İkinci El",
+            quantity: 1,
+            minQuantity: 0,
+            purchasePrice: tradeVal,
+            purchaseCurrency: "TRY",
+            profitMargin: 20,
+            salePrice: Math.round(tradeVal * 1.2),
+            supplier: "",
+            location: "",
+            paymentStatus: "paid",
+            paidAmount: 0,
+            imei: tradeImei.trim() || undefined,
+          } as any)
+          const tradeIn: TradeIn = { name: tradeName.trim(), imei: tradeImei.trim() || undefined, value: tradeVal, productId: tradeItem.id }
+          savedSale = await updateSale(sale.id, { tradeIn })
+          setProducts(prev => [tradeItem, ...prev])
+        } catch (e) {
+          console.error("Takas cihazı stoğa eklenemedi:", e)
+          showToast("Satış kaydedildi ancak takas cihazı stoğa eklenemedi; Envanter'den elle ekleyin.", "error")
+        }
+      }
+
+      setSales([savedSale, ...sales])
+
+      // Kasa: sadece fiilen alınan nakit/kart/havale yazılır (takas değeri kasaya girmez)
+      await writeSaleFinance(sale.id, customer.name, cart, isGiftSale, cashPaid, isSplit ? splitBreakdown(Number(splitCash) || 0, Number(splitCard) || 0, Number(splitTransfer) || 0) : (tradeVal > 0 ? `takas ${formatCurrency(tradeVal)} düşüldü` : ""))
 
       // Reset
       setCart([])
@@ -466,6 +574,9 @@ export default function SalesPage() {
       setPaymentMethod("cash")
       setPaidAmount("")
       setSaleDiscount("")
+      setSplitCash(""); setSplitCard(""); setSplitTransfer("")
+      setInstDown(""); setInstCount("3"); setInstFirstDate("")
+      setTradeName(""); setTradeImei(""); setTradeValue("")
       setShowNewSale(false)
       showToast("Satış tamamlandı.", "success")
     } catch (e) {
@@ -488,6 +599,7 @@ Bu işlem geri alınamaz!`)) return
 
     try {
       await deleteSale(saleId)
+      if (sale.status !== "cancelled") await removeTradeInStock(sale)
       await deleteDebtsBySource("sale", saleId)
       await deleteTransactionsBySource("sale", saleId)
 
@@ -511,6 +623,99 @@ Bu işlem geri alınamaz!`)) return
     } catch (e: any) {
       console.error(e)
       showToast(e?.message || "Satış silinirken bir sorun oluştu.", "error")
+    }
+  }
+
+  // Takaslı satış iptal/silinirse, takasla alınan cihaz hâlâ stoktaysa stoktan düşülür
+  const removeTradeInStock = async (sale: Sale) => {
+    const productId = sale.tradeIn?.productId
+    if (!productId) return
+    const p = products.find(x => x.id === productId)
+    if (p && p.quantity > 0) {
+      await adjustInventoryQuantity(productId, -p.quantity, `Takas iptali ${sale.saleCode || ""}`.trim(), p.name).catch((e) => console.error(e))
+      setProducts(prev => prev.map(x => x.id === productId ? { ...x, quantity: 0 } : x))
+    }
+  }
+
+  // Kısmi ürün iadesi: seçilen ürünler stoğa döner, satış tutarı orantılı düşer.
+  // Nakit iade: müşterinin fazla ödediği kısım kasadan geri verilir; bakiyeye mahsup: fark müşteri alacağı olur.
+  const handleRefund = async () => {
+    const sale = viewSale
+    if (!sale) return
+    const lines = sale.items
+      .map((it, i) => ({ it, i, q: Math.min(it.quantity, Math.max(0, Math.floor(Number(refundQty[i]) || 0))) }))
+      .filter(x => x.q > 0)
+    if (lines.length === 0) {
+      showToast("İade edilecek ürün adedi girin.", "error")
+      return
+    }
+    const subtotal = sale.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
+    const newItems = sale.items
+      .map((it, i) => ({ ...it, quantity: it.quantity - (lines.find(l => l.i === i)?.q || 0) }))
+      .filter(it => it.quantity > 0)
+    if (newItems.length === 0) {
+      showToast("Tüm ürünler iade ediliyorsa satışı \"İptal\" edin.", "error")
+      return
+    }
+    const newSubtotal = newItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
+    const newDiscount = subtotal > 0 ? round2(sale.discount * newSubtotal / subtotal) : 0
+    const newTotal = round2(Math.max(0, newSubtotal - newDiscount))
+    const refundValue = round2(sale.totalAmount - newTotal)
+    let newPaid = sale.paid
+    let cashRefund = 0
+    if (refundMode === "cash") {
+      cashRefund = Math.max(0, round2(sale.paid - newTotal))
+      newPaid = round2(sale.paid - cashRefund)
+    }
+    const newRemaining = round2(newTotal - newPaid)
+    const customerId = resolveCustomerId(sale)
+    if ((sale.remaining > 0 || newRemaining > 0) && !customerId) {
+      showToast("Bu satışın müşterisi kesin olarak bulunamadı; iade yapılamıyor.", "error")
+      return
+    }
+    if (!confirm(`İade edilecek tutar: ${formatCurrency(refundValue)}\n${refundMode === "cash" ? `Müşteriye nakit iade: ${formatCurrency(cashRefund)}` : "Fark müşteri bakiyesine yazılır"}\n\nOnaylıyor musunuz?`)) return
+
+    try {
+      const refund = { date: localDateStr(), mode: refundMode, amount: refundValue, items: lines.map(l => ({ name: l.it.name, quantity: l.q })) }
+      const updated = await updateSale(sale.id, {
+        items: newItems,
+        totalAmount: newTotal,
+        discount: newDiscount,
+        paid: newPaid,
+        remaining: newRemaining,
+        refunds: [...(sale.refunds || []), refund],
+      })
+      await applyStockDeltas(lines.map(l => ({ productId: l.it.productId, delta: l.q })), `Satış iadesi ${sale.saleCode || ""}`.trim())
+      if (sale.remaining > 0 || newRemaining > 0) {
+        await deleteDebtsBySource("sale", sale.id)
+        if (newRemaining > 0) {
+          await addDebt(customerId, {
+            amount: newRemaining,
+            description: `🛒 Satış bakiyesi (iade sonrası): ${newItems.map(i => i.name).join(", ")}`,
+            sourceType: "sale",
+            sourceId: sale.id,
+          })
+        }
+      }
+      if (cashRefund > 0) {
+        await createTransaction({
+          type: "expense",
+          category: "Satış İadesi",
+          amount: cashRefund,
+          description: `↩️ Satış iadesi: ${sale.customerName} - ${lines.map(l => `${l.it.name} x${l.q}`).join(", ")}`,
+          date: localDateStr(),
+          customer: sale.customerName,
+          source: "sale",
+          sourceId: sale.id,
+        }).catch((e) => console.error("İade kasaya yazılamadı:", e))
+      }
+      setSales(sales.map(s => s.id === sale.id ? updated : s))
+      setViewSale(updated)
+      setRefundQty({})
+      showToast("İade yapıldı, ürünler stoğa geri eklendi.", "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "İade yapılırken bir sorun oluştu.", "error")
     }
   }
 
@@ -557,6 +762,7 @@ Bu işlem geri alınamaz!`)) return
 
     try {
       await updateSale(saleId, { status: "cancelled" })
+      await removeTradeInStock(sale)
       await deleteDebtsBySource("sale", saleId)
       await deleteTransactionsBySource("sale", saleId)
       await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış iptali ${sale.saleCode || ""}`.trim())
@@ -569,6 +775,22 @@ Bu işlem geri alınamaz!`)) return
   }
 
   const openEditSale = (sale: Sale) => {
+    if (sale.paymentMethod === "installment" || (sale.installments || []).length > 0) {
+      showToast("Taksitli satışlar düzenlenemez. İptal edip yeniden oluşturabilirsiniz; ödemeler için Müşteriler > Borç > Tahsil Et kullanılır.", "error")
+      return
+    }
+    if (sale.tradeIn) {
+      showToast("Takaslı satışlar düzenlenemez. İptal edip yeniden oluşturabilirsiniz.", "error")
+      return
+    }
+    if ((sale.refunds || []).length > 0) {
+      showToast("İade yapılmış satışlar düzenlenemez.", "error")
+      return
+    }
+    const pay = sale.payments || []
+    setEditSplitCash(String(pay.find(p => p.method === "cash")?.amount || ""))
+    setEditSplitCard(String(pay.find(p => p.method === "card")?.amount || ""))
+    setEditSplitTransfer(String(pay.find(p => p.method === "transfer")?.amount || ""))
     setEditingSale(sale)
     setEditCart([...sale.items])
     setEditPaymentMethod(sale.paymentMethod)
@@ -603,6 +825,13 @@ Bu işlem geri alınamaz!`)) return
         paid: editPaid,
         remaining: newRemaining,
         paymentMethod: editPaymentMethod,
+        payments: editPaymentMethod === "split"
+          ? ([
+              { method: "cash", amount: Number(editSplitCash) || 0 },
+              { method: "card", amount: Number(editSplitCard) || 0 },
+              { method: "transfer", amount: Number(editSplitTransfer) || 0 },
+            ] as SalePayment[]).filter(p => p.amount > 0)
+          : [],
       })
 
       // Stok farkları (atomik)
@@ -634,7 +863,7 @@ Bu işlem geri alınamaz!`)) return
 
       // Kasa: eski kayıt silinip yeni durumla yeniden yazılır (eskiden düzenleme kasaya yansımıyordu)
       await deleteTransactionsBySource("sale", editingSale.id)
-      await writeSaleFinance(editingSale.id, oldSale.customerName, editCart, isEditGift, editPaid)
+      await writeSaleFinance(editingSale.id, oldSale.customerName, editCart, isEditGift, editPaid, editPaymentMethod === "split" ? splitBreakdown(Number(editSplitCash) || 0, Number(editSplitCard) || 0, Number(editSplitTransfer) || 0) : "")
 
       setSales(sales.map(s => s.id === editingSale.id ? updatedSale : s))
       setShowEditSale(false)
@@ -979,6 +1208,12 @@ Bu işlem geri alınamaz!`)) return
                       <div>
                         <div className="text-sm text-white">{item.name}</div>
                         <div className="text-xs text-slate-400">{formatCurrency(item.price)} x {item.quantity}</div>
+                        <Input
+                          value={item.imei || ""}
+                          onChange={(e) => setCart(cart.map(c => c.productId === item.productId ? { ...c, imei: e.target.value } : c))}
+                          placeholder="IMEI / Seri No (opsiyonel)"
+                          className="mt-1 h-7 w-44 bg-slate-900 border-slate-700 text-white text-xs"
+                        />
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="text-sm font-bold text-emerald-400">{formatCurrency(item.price * item.quantity)}</div>
@@ -1062,7 +1297,57 @@ Bu işlem geri alınamaz!`)) return
                       </div>
                     </div>
                   )}
-                  {remaining > 0 && paymentMethod !== "partial" && (
+                  {isSplit && (
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">🔀 Ödeme Dağılımı (TL)</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input type="number" inputMode="decimal" placeholder="Nakit" value={splitCash} onChange={(e) => setSplitCash(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                        <Input type="number" inputMode="decimal" placeholder="Kart" value={splitCard} onChange={(e) => setSplitCard(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                        <Input type="number" inputMode="decimal" placeholder="Havale" value={splitTransfer} onChange={(e) => setSplitTransfer(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400">💵 Alınan: {formatCurrency(cashPaid)}</span>
+                        {remaining >= 0 ? (
+                          <span className="text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</span>
+                        ) : (
+                          <span className="text-cyan-400">💰 Fazla Ödeme (Alacaklı): {formatCurrency(-remaining)}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {isInstallment && (
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">📅 Taksit Planı</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input type="number" inputMode="decimal" placeholder="Peşinat" value={instDown} onChange={(e) => setInstDown(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                        <Input type="number" min={1} max={24} placeholder="Taksit sayısı" value={instCount} onChange={(e) => setInstCount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                        <Input type="date" value={instFirstDate} onChange={(e) => setInstFirstDate(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                      </div>
+                      <p className="text-xs text-slate-500">Peşinat düşüldükten sonra kalan tutar aylık eşit taksitlere bölünür; ilk vade tarihi boşsa 30 gün sonradır. Faiz uygulanmaz.</p>
+                      {installmentPlan.length > 0 && (
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {installmentPlan.map(i => (
+                            <div key={i.no} className="flex justify-between text-xs p-1.5 bg-slate-800 rounded">
+                              <span className="text-slate-400">{i.no}. taksit — {i.dueDate}</span>
+                              <span className="text-amber-400">{formatCurrency(i.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!isGiftSale && (
+                    <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                      <Label className="text-slate-300">🔄 Takas (opsiyonel)</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input placeholder="Cihaz adı" value={tradeName} onChange={(e) => setTradeName(e.target.value)} className="bg-slate-900 border-slate-600 text-white col-span-2" />
+                        <Input type="number" inputMode="decimal" placeholder="Değer (TL)" value={tradeValue} onChange={(e) => setTradeValue(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                      </div>
+                      <Input placeholder="IMEI (opsiyonel)" value={tradeImei} onChange={(e) => setTradeImei(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                      {tradeVal > 0 && <p className="text-xs text-purple-300">Takas değeri {formatCurrency(tradeVal)} ödemeden düşülür; cihaz "İkinci El" olarak stoğa girer.</p>}
+                    </div>
+                  )}
+                  {remaining > 0 && paymentMethod !== "partial" && !isSplit && (
                     <div className="text-sm text-amber-400">⏳ Kalan Borç: {formatCurrency(remaining)}</div>
                   )}
                   <Button
@@ -1080,7 +1365,7 @@ Bu işlem geri alınamaz!`)) return
       </Dialog>
 
       {/* Satış Detayı (karekod / arama ile açılır) */}
-      <Dialog open={!!viewSale} onOpenChange={(o) => { if (!o) setViewSale(null) }}>
+      <Dialog open={!!viewSale} onOpenChange={(o) => { if (!o) { setViewSale(null); setRefundQty({}) } }}>
         <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">🛒 Satış {viewSale?.saleCode || ""}</DialogTitle>
@@ -1094,8 +1379,8 @@ Bu işlem geri alınamaz!`)) return
               <div className="text-xs text-slate-400">📅 {viewSale.date} | 💳 {paymentMethods.find(m => m.value === viewSale.paymentMethod)?.label || viewSale.paymentMethod}</div>
               <div className="space-y-1">
                 {viewSale.items.map((i, idx) => (
-                  <div key={idx} className="flex justify-between p-2 bg-slate-800 rounded">
-                    <span>{i.name} <span className="text-slate-500">x{i.quantity}</span></span>
+                  <div key={idx} className="flex justify-between p-2 bg-slate-800 rounded gap-2">
+                    <span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{i.imei && <span className="block text-[11px] font-mono text-slate-500">IMEI: {i.imei}</span>}</span>
                     <span>{formatCurrency(i.price * i.quantity)}</span>
                   </div>
                 ))}
@@ -1108,6 +1393,70 @@ Bu işlem geri alınamaz!`)) return
                 {viewSale.paymentMethod === "gift" && <div className="text-purple-300">🎁 Eşantiyon (bedelsiz)</div>}
                 {viewSale.status === "cancelled" && <div className="text-slate-400">🚫 İptal edildi</div>}
               </div>
+
+              {(viewSale.payments || []).length > 0 && (
+                <div className="text-xs text-slate-400">
+                  🔀 Ödeme dağılımı: {(viewSale.payments || []).map(p => `${p.method === "cash" ? "Nakit" : p.method === "card" ? "Kart" : "Havale"} ${formatCurrency(p.amount)}`).join(" • ")}
+                </div>
+              )}
+              {viewSale.tradeIn && (
+                <div className="text-xs text-purple-300">
+                  🔄 Takas: {viewSale.tradeIn.name}{viewSale.tradeIn.imei ? ` (IMEI ${viewSale.tradeIn.imei})` : ""} — {formatCurrency(viewSale.tradeIn.value)} ödemeden düşüldü
+                </div>
+              )}
+              {(viewSale.installments || []).length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-slate-300 font-medium">📅 Taksit Planı</div>
+                  {(viewSale.installments || []).map(inst => {
+                    const done = inst.paidAmount >= inst.amount - 0.01
+                    const overdue = !done && inst.dueDate < localDateStr()
+                    return (
+                      <div key={inst.no} className="flex justify-between text-xs p-1.5 bg-slate-800 rounded">
+                        <span className={overdue ? "text-red-400" : "text-slate-400"}>{inst.no}. taksit — {inst.dueDate}{overdue ? " (gecikti)" : ""}</span>
+                        <span className={done ? "text-emerald-400" : "text-amber-400"}>
+                          {done ? "✓ Ödendi" : `${formatCurrency(inst.amount - inst.paidAmount)} kaldı`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  <p className="text-[11px] text-slate-500">Taksit ödemesi almak için: Müşteriler &gt; Borç &gt; Tahsil Et.</p>
+                </div>
+              )}
+              {(viewSale.refunds || []).length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-slate-300 font-medium">↩️ İadeler</div>
+                  {(viewSale.refunds || []).map((r, idx) => (
+                    <div key={idx} className="text-xs p-1.5 bg-slate-800 rounded text-slate-400">
+                      {r.date} — {r.items.map(i => `${i.name} x${i.quantity}`).join(", ")} • {formatCurrency(r.amount)} ({r.mode === "cash" ? "nakit iade" : "bakiyeye mahsup"})
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {viewSale.status !== "cancelled" && viewSale.paymentMethod !== "gift" && viewSale.paymentMethod !== "installment" && !viewSale.tradeIn && (
+                <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                  <div className="text-slate-300 font-medium">↩️ Kısmi Ürün İadesi</div>
+                  {viewSale.items.map((it, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-400 truncate">{it.name} (en çok {it.quantity})</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={it.quantity}
+                        value={refundQty[idx] ?? ""}
+                        onChange={(e) => setRefundQty({ ...refundQty, [idx]: e.target.value })}
+                        placeholder="0"
+                        className="w-16 h-7 bg-slate-900 border-slate-600 text-white text-xs"
+                      />
+                    </div>
+                  ))}
+                  <div className="flex gap-2 text-xs">
+                    <button type="button" onClick={() => setRefundMode("cash")} className={`px-2 py-1 rounded border ${refundMode === "cash" ? "border-emerald-600 text-emerald-300" : "border-slate-600 text-slate-400"}`}>Nakit iade</button>
+                    <button type="button" onClick={() => setRefundMode("balance")} className={`px-2 py-1 rounded border ${refundMode === "balance" ? "border-emerald-600 text-emerald-300" : "border-slate-600 text-slate-400"}`}>Bakiyeye mahsup</button>
+                  </div>
+                  <Button size="sm" variant="outline" className="border-amber-600 text-amber-400" onClick={handleRefund}>İadeyi Uygula</Button>
+                </div>
+              )}
               <div className="flex gap-2 flex-wrap pt-1">
                 <Button size="sm" variant="outline" className="border-green-600 text-green-400" onClick={() => sendWhatsApp(viewSale)}><MessageCircle className="w-3 h-3 mr-1" />WhatsApp</Button>
                 <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => printSaleReceipt(viewSale)}><Printer className="w-3 h-3 mr-1" />Fiş</Button>
@@ -1227,11 +1576,22 @@ Bu işlem geri alınamaz!`)) return
                   <SelectValue placeholder="Ödeme şekli" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-600">
-                  {paymentMethods.map(m => (
+                  {paymentMethods.filter(m => m.value !== "installment").map(m => (
                     <SelectItem key={m.value} value={m.value} className="text-white">{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {editPaymentMethod === "split" && (
+                <div className="space-y-2">
+                  <Label className="text-slate-300">🔀 Ödeme Dağılımı (TL)</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input type="number" inputMode="decimal" placeholder="Nakit" value={editSplitCash} onChange={(e) => setEditSplitCash(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                    <Input type="number" inputMode="decimal" placeholder="Kart" value={editSplitCard} onChange={(e) => setEditSplitCard(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                    <Input type="number" inputMode="decimal" placeholder="Havale" value={editSplitTransfer} onChange={(e) => setEditSplitTransfer(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                  </div>
+                  <div className="text-sm text-slate-400">💵 Alınan: {formatCurrency(editPaid)} {editRemaining > 0 ? `• ⏳ Kalan: ${formatCurrency(editRemaining)}` : ""}</div>
+                </div>
+              )}
               {isEditGift && (
                 <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 text-sm text-purple-300">
                   🎁 Bu satış bedelsiz (eşantiyon) olarak işaretlenecek. Müşteriden ücret alınmayacak, borç oluşmayacak.

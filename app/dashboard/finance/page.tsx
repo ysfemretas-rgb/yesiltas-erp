@@ -73,14 +73,7 @@ export default function FinancePage() {
     return () => { cancelled = true }
   }, [])
 
-  // Teknik Servis ve Satış sayfaları henüz Supabase'e taşınmadığı için hâlâ
-  // localStorage'daki finans listesini okuyor/yazıyor (tamamlanan işlemde
-  // otomatik gelir kaydı oluşturuyorlar). Onlar taşınana kadar, o sayfaların
-  // ve Raporlar'ın güncel veriyi görebilmesi için burada bir ayna tutuyoruz.
-  useEffect(() => {
-    if (!isLoaded || typeof window === "undefined") return
-    localStorage.setItem("yt_finance", JSON.stringify(transactions))
-  }, [transactions, isLoaded])
+  // (Eskiden kasa kayıtları tarayıcıya da kopyalanıyordu; artık gerek kalmadığı için kaldırıldı.)
 
   useEffect(() => { setListPage(1) }, [filterType, filterCategory, filterSource, searchTerm])
 

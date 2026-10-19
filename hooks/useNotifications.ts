@@ -27,6 +27,7 @@ function daysUntil(dateStr: string): number {
 // doğrudan Supabase'den okuyup aksiyon alınması gereken durumları tek bir
 // bildirim listesinde toplar.
 const SEEN_KEY = 'yt_seen_notifications'
+const DISMISSED_KEY = 'yt_dismissed_notifications'
 
 function getSeenIds(): Set<string> {
   if (typeof window === 'undefined') return new Set()
@@ -38,8 +39,28 @@ function getSeenIds(): Set<string> {
   }
 }
 
+function getDismissedIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY)
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveDismissedIds(ids: Set<string>) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+  } catch {
+    // yoksay
+  }
+}
+
 export function useNotifications() {
-  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [allNotifications, setAllNotifications] = useState<AppNotification[]>([])
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedIds())
   const [seenIds, setSeenIds] = useState<Set<string>>(() => getSeenIds())
 
   const refresh = useCallback(async () => {
@@ -127,7 +148,15 @@ export function useNotifications() {
       console.error('Tamir bildirimleri yüklenemedi:', e)
     }
 
-    setNotifications(list)
+    setAllNotifications(list)
+    // Sorunu çözülen (artık listede olmayan) bildirimlerin "silindi" işareti temizlenir;
+    // aynı sorun ileride tekrar çıkarsa yeniden bildirilir.
+    setDismissedIds((prev) => {
+      const currentIds = new Set(list.map((n) => n.id))
+      const next = new Set<string>((Array.from(prev) as string[]).filter((id) => currentIds.has(id)))
+      if (next.size !== prev.size) saveDismissedIds(next)
+      return next.size !== prev.size ? next : prev
+    })
   }, [])
 
   useEffect(() => {
@@ -140,6 +169,28 @@ export function useNotifications() {
   // Bildirimleri "görüldü" olarak işaretler — bunları bir daha kırmızı
   // rozette saymaz, ama aynı sorun devam ettiği sürece listede görünmeye
   // devam eder (sorun çözülene kadar tamamen kaybolmaz).
+  const notifications = allNotifications.filter((n) => !dismissedIds.has(n.id))
+
+  // Tek bildirimi sil (sorun çözülene kadar tekrar gösterilmez)
+  const dismissNotification = useCallback((id: string) => {
+    setDismissedIds((prev) => {
+      const next = new Set<string>(prev)
+      next.add(id)
+      saveDismissedIds(next)
+      return next
+    })
+  }, [])
+
+  // Hepsini sil
+  const dismissAll = useCallback(() => {
+    setDismissedIds((prev) => {
+      const next = new Set<string>(prev)
+      allNotifications.forEach((n) => next.add(n.id))
+      saveDismissedIds(next)
+      return next
+    })
+  }, [allNotifications])
+
   const markAllSeen = useCallback(() => {
     setSeenIds((prev) => {
       const next = new Set(prev)
@@ -153,5 +204,5 @@ export function useNotifications() {
 
   const unseenCount = notifications.filter((n) => !seenIds.has(n.id)).length
 
-  return { notifications, refresh, markAllSeen, unseenCount }
+  return { notifications, refresh, markAllSeen, unseenCount, dismissNotification, dismissAll }
 }

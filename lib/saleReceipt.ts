@@ -1,18 +1,22 @@
-// Satış fişi. Tamir fişiyle aynı yöntemle (tarayıcı yazdırma penceresi) basılır,
-// böylece Türkçe karakterler her zaman doğru çıkar.
+// Satış belgesi (resmi antetli). Tarayıcının yazdırma penceresiyle basılır; Türkçe karakterler doğru çıkar.
+import { esc, money, readCompany, docStyles, toolbarHtml, letterheadHtml, footerHtml, openPrintWindow } from "@/lib/printTheme"
 
 interface ReceiptSale {
   id: string
   saleCode?: string
   customerName: string
+  customerCode?: string
   customerPhone?: string
-  items: { name: string; price: number; quantity: number }[]
+  items: { name: string; price: number; quantity: number; imei?: string }[]
   totalAmount: number
   discount: number
   paid: number
   remaining: number
   paymentMethod: string
   date: string
+  payments?: { method: string; amount: number }[]
+  installments?: { no: number; dueDate: string; amount: number; paidAmount: number }[]
+  tradeIn?: { name: string; imei?: string; value: number } | null
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -20,25 +24,10 @@ const METHOD_LABELS: Record<string, string> = {
   card: "Kredi Kartı",
   transfer: "Havale/EFT",
   partial: "Kısmi Ödeme",
+  split: "Çoklu Ödeme",
+  installment: "Taksitli",
   unpaid: "Ödenmedi",
   gift: "Eşantiyon (Bedelsiz)",
-}
-
-function esc(v: unknown): string {
-  return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-}
-
-function money(amount: number) {
-  return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount || 0)
-}
-
-function readCompany(): { name?: string; address?: string; phone?: string; iban?: string; accountName?: string } {
-  try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem("yt_company") : null
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
 }
 
 export function printSaleReceipt(sale: ReceiptSale) {
@@ -47,67 +36,57 @@ export function printSaleReceipt(sale: ReceiptSale) {
   const isGift = sale.paymentMethod === "gift"
   const subtotal = sale.items.reduce((s, i) => s + i.price * i.quantity, 0)
 
-  const rows = sale.items.map(i => `<tr>
-      <td>${esc(i.name)}</td><td style="text-align:center">${i.quantity}</td>
-      <td style="text-align:right">${money(i.price)}</td><td style="text-align:right">${money(i.price * i.quantity)}</td></tr>`).join("")
+  const rows = sale.items.map((i, idx) => `<tr>
+      <td style="width:6%">${idx + 1}</td>
+      <td>${esc(i.name)}${i.imei ? `<div style="font-size:9.5px;color:#6b7280">IMEI / Seri No: ${esc(i.imei)}</div>` : ""}</td>
+      <td style="text-align:center;width:10%">${i.quantity}</td>
+      <td style="text-align:right;width:18%">${money(i.price)}</td>
+      <td style="text-align:right;width:18%">${money(i.price * i.quantity)}</td></tr>`).join("")
+
+  const paymentBreakdown = (sale.payments || []).length > 0
+    ? `<div class="row"><span>Ödeme Dağılımı</span><span>${(sale.payments || []).map(p => `${p.method === "cash" ? "Nakit" : p.method === "card" ? "Kart" : "Havale"} ${money(p.amount)}`).join(" • ")}</span></div>`
+    : ""
+
+  const installments = (sale.installments || []).length > 0
+    ? `<div style="margin-top:10px"><div style="font-weight:700;color:#064e3b;margin-bottom:3px">TAKSİT PLANI</div>
+        <table class="grid"><tr><th>Taksit</th><th>Vade Tarihi</th><th style="text-align:right">Tutar</th></tr>
+        ${(sale.installments || []).map(i => `<tr><td>${i.no}. taksit</td><td>${esc(i.dueDate)}</td><td style="text-align:right">${money(i.amount)}</td></tr>`).join("")}</table></div>`
+    : ""
 
   const html = `<!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8" /><title>Satış Fişi - ${esc(no)}</title>
+<html lang="tr"><head><meta charset="utf-8" /><title>Satış Belgesi - ${esc(no)}</title>
 <style>
   @page { size: A5; margin: 12mm; }
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #111; margin: 0; font-size: 12px; line-height: 1.5; }
-  .header { text-align: center; border-bottom: 2px solid #059669; padding-bottom: 8px; margin-bottom: 12px; }
-  .company { font-size: 18px; font-weight: bold; color: #059669; }
-  .company-sub { font-size: 11px; color: #555; margin-top: 2px; }
-  .title { text-align: center; font-size: 14px; font-weight: bold; margin: 12px 0 8px; letter-spacing: 1px; }
-  .meta { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-bottom: 10px; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  th { text-align: left; border-bottom: 2px solid #ddd; padding: 4px; font-size: 11px; color: #555; }
-  td { padding: 5px 4px; border-bottom: 1px solid #e5e5e5; vertical-align: top; }
-  .money { margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; }
-  .row { display: flex; justify-content: space-between; padding: 3px 0; }
-  .row.total { border-top: 1px solid #ddd; margin-top: 4px; padding-top: 6px; font-weight: bold; }
-  .footer { text-align: center; margin-top: 14px; font-size: 10px; color: #777; }
-  .toolbar { position: sticky; top: 0; display: flex; gap: 8px; justify-content: center; padding: 10px; margin: -12mm -12mm 10px -12mm; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; }
-  .toolbar button { font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer; }
-  .btn-print { background: #059669; color: #fff; } .btn-close { background: #e2e8f0; color: #334155; }
-  @media print { .no-print { display: none !important; } }
+  ${docStyles()}
 </style></head><body>
-  <div class="toolbar no-print">
-    <button class="btn-print" onclick="window.print()">🖨️ Yazdır</button>
-    <button class="btn-close" onclick="window.close(); setTimeout(function(){ history.back(); }, 150);">✕ Kapat</button>
-  </div>
-  <div class="header">
-    <div class="company">${esc(company.name || "Yeşiltaş Teknoloji")}</div>
-    <div class="company-sub">${esc(company.address || "")}${company.address && company.phone ? " · " : ""}${esc(company.phone || "")}</div>
-  </div>
-  <div class="title">SATIŞ FİŞİ</div>
-  <div class="meta"><span>Fiş No: <strong>${esc(no)}</strong></span><span>Tarih: <strong>${esc(sale.date)}</strong></span></div>
-  <div style="margin-bottom:8px">Müşteri: <strong>${esc(sale.customerName || "-")}</strong>${sale.customerPhone ? " · " + esc(sale.customerPhone) : ""}</div>
-  <table>
-    <tr><th>Ürün</th><th style="text-align:center">Adet</th><th style="text-align:right">Fiyat</th><th style="text-align:right">Tutar</th></tr>
+  ${toolbarHtml()}
+  ${letterheadHtml(company)}
+  <div class="doc-title">Satış Belgesi</div>
+  <div class="meta"><span>Belge No: <strong>${esc(no)}</strong></span><span>Tarih: <strong>${esc(sale.date)}</strong></span></div>
+  <table class="grid kv" style="margin-bottom:8px">
+    <tr><td class="l">Müşteri</td><td class="v">${esc(sale.customerName || "-")}${sale.customerCode ? ` <span style="font-weight:400;color:#6b7280">(${esc(sale.customerCode)})</span>` : ""}</td></tr>
+    ${sale.customerPhone ? `<tr><td class="l">Telefon</td><td class="v">${esc(sale.customerPhone)}</td></tr>` : ""}
+  </table>
+  <table class="grid">
+    <tr><th>#</th><th>Ürün / Hizmet</th><th style="text-align:center">Adet</th><th style="text-align:right">Birim Fiyat</th><th style="text-align:right">Tutar</th></tr>
     ${rows}
   </table>
-  <div class="money">
+  <div class="totals">
     <div class="row"><span>Ara Toplam</span><span>${money(subtotal)}</span></div>
     ${sale.discount > 0 ? `<div class="row"><span>İskonto</span><span>-${money(sale.discount)}</span></div>` : ""}
-    <div class="row total"><span>Toplam</span><span>${money(sale.totalAmount)}</span></div>
+    <div class="row strong"><span>Genel Toplam</span><span>${money(sale.totalAmount)}</span></div>
     <div class="row"><span>Ödeme Şekli</span><span>${esc(METHOD_LABELS[sale.paymentMethod] || sale.paymentMethod)}</span></div>
-    ${isGift ? "" : `<div class="row"><span>Alınan</span><span>${money(sale.paid)}</span></div>`}
-    ${!isGift && sale.remaining > 0 ? `<div class="row total"><span>Kalan Borç</span><span>${money(sale.remaining)}</span></div>` : ""}
-    ${!isGift && sale.remaining < 0 ? `<div class="row total"><span>Fazla Ödeme (Alacağınız)</span><span>${money(-sale.remaining)}</span></div>` : ""}
+    ${paymentBreakdown}
+    ${sale.tradeIn ? `<div class="row"><span>Takas: ${esc(sale.tradeIn.name)}${sale.tradeIn.imei ? ` (IMEI ${esc(sale.tradeIn.imei)})` : ""}</span><span>-${money(sale.tradeIn.value)}</span></div>` : ""}
+    ${isGift ? "" : `<div class="row"><span>Ödenen</span><span>${money(sale.paid)}</span></div>`}
+    ${!isGift && sale.remaining > 0 ? `<div class="row strong"><span>Kalan Borç</span><span>${money(sale.remaining)}</span></div>` : ""}
+    ${!isGift && sale.remaining < 0 ? `<div class="row strong"><span>Fazla Ödeme (Alacak)</span><span>${money(-sale.remaining)}</span></div>` : ""}
   </div>
-  ${company.iban && !isGift && sale.remaining > 0 ? `<div style="margin-top:8px;font-size:10px;color:#555;">Havale/EFT: <strong>${esc(company.iban)}</strong>${company.accountName ? ` (${esc(company.accountName)})` : ""}</div>` : ""}
-  <div class="footer">${esc(company.name || "Yeşiltaş Teknoloji")} · Bizi tercih ettiğiniz için teşekkür ederiz.</div>
-  <script>window.onload = function() { var m = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); if (!m) { window.print(); } }</script>
+  ${isGift ? `<div class="note">Bu satış bedelsiz (eşantiyon) olarak düzenlenmiştir.</div>` : ""}
+  ${installments}
+  ${company.iban && !isGift && sale.remaining > 0 ? `<div class="note">Havale/EFT ile ödeme: <strong>${esc(company.iban)}</strong>${company.accountName ? ` — ${esc(company.accountName)}` : ""}</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="line"></div>Teslim Alan (Müşteri)</div><div class="sig"><div class="line"></div>Teslim Eden (Yetkili)</div></div>
+  ${footerHtml("Bu belge bilgilendirme amaçlıdır; fatura veya yazar kasa fişi yerine geçmez.", company)}
 </body></html>`
-
-  const win = window.open("", "_blank", "width=800,height=900")
-  if (!win) {
-    alert("Yazdırma penceresi açılamadı. Tarayıcınızın açılır pencere engelleyicisini kontrol edin.")
-    return
-  }
-  win.document.write(html)
-  win.document.close()
+  openPrintWindow(html)
 }

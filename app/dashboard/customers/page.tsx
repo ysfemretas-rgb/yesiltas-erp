@@ -4,7 +4,7 @@ import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt, collectBalance } from "@/lib/customers"
+import { Customer, Debt, fetchCustomers, createCustomer, updateCustomer, deleteCustomer, addDebt, payDebt, collectBalance, mergeCustomers } from "@/lib/customers"
 import { fetchRepairs as fetchRepairsData } from "@/lib/repairs"
 import { fetchSales as fetchSalesData } from "@/lib/sales"
 import { validatePhone } from "@/lib/validation"
@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle, Download, QrCode } from "lucide-react"
+import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle, Download, QrCode, GitMerge } from "lucide-react"
 import { printRecordLabel } from "@/lib/labels"
 import { exportToExcel } from "@/lib/exportExcel"
 import { Pagination } from "@/components/Pagination"
@@ -100,6 +100,8 @@ export default function CustomersPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const [listPage, setListPage] = useState(1)
+  const [mergeSource, setMergeSource] = useState<Customer | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState("")
   const PAGE_SIZE = 20
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
@@ -326,6 +328,23 @@ export default function CustomersPage() {
     exportToExcel("borc-yaslandirma", "Borç Yaşlandırma", rows)
   }
 
+  const handleMerge = async () => {
+    if (!mergeSource || !mergeTargetId) return
+    const target = customers.find(c => c.id === mergeTargetId)
+    if (!target) return
+    if (!confirm(`"${mergeSource.name}" müşterisinin tüm kayıtları "${target.name}" müşterisine taşınacak ve "${mergeSource.name}" silinecek.\n\nBu işlem geri alınamaz. Devam edilsin mi?`)) return
+    try {
+      const result = await mergeCustomers(mergeSource.id, mergeTargetId)
+      setMergeSource(null)
+      setMergeTargetId("")
+      await loadAll()
+      showToast(`Müşteriler birleştirildi (${result.moved} kayıt taşındı).`, "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Birleştirme sırasında bir sorun oluştu.", "error")
+    }
+  }
+
   const handleAddCustomer = async () => {
     const firstName = newCustomer.firstName || ""
     const lastName = newCustomer.lastName || ""
@@ -352,6 +371,7 @@ export default function CustomersPage() {
         lastVisit: localDateStr(),
         status: "active",
         notes: newCustomer.notes || "",
+        birthDate: newCustomer.birthDate || "",
       })
       setCustomers([customer, ...customers])
       setNewCustomer({ status: "active", city: "İstanbul", debts: [], totalDebt: 0, totalRepairs: 0 })
@@ -376,6 +396,7 @@ export default function CustomersPage() {
       address: customer.address,
       city: customer.city,
       notes: customer.notes,
+      birthDate: customer.birthDate || "",
     })
     setIsEditOpen(true)
   }
@@ -398,6 +419,7 @@ export default function CustomersPage() {
         address: newCustomer.address || "",
         city: newCustomer.city || selectedCustomer.city,
         notes: newCustomer.notes || "",
+        birthDate: newCustomer.birthDate || "",
       })
       setCustomers(customers.map(c => c.id === updated.id ? { ...updated, totalDebt: c.totalDebt, totalRepairs: c.totalRepairs } : c))
       setIsEditOpen(false)
@@ -723,6 +745,15 @@ export default function CustomersPage() {
                   className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Doğum Tarihi (opsiyonel)</label>
+                <Input
+                  type="date"
+                  value={newCustomer.birthDate || ""}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, birthDate: e.target.value })}
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+              </div>
               <Button 
                 onClick={handleAddCustomer} 
                 disabled={!newCustomer.firstName || !newCustomer.lastName || (!newCustomer.phone && !newCustomer.phone1)}
@@ -910,6 +941,11 @@ export default function CustomersPage() {
                       <Edit3 className="h-4 w-4 mr-1" />Düzenle
                     </Button>
                     {isManager && (
+                    <Button size="sm" variant="outline" onClick={() => { setMergeSource(customer); setMergeTargetId("") }} className="border-slate-600 text-slate-300 hover:text-white">
+                      <GitMerge className="h-4 w-4 mr-1" />Birleştir
+                    </Button>
+                    )}
+                    {isManager && (
                     <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
                       <Trash2 className="h-4 w-4 mr-1" />Sil
                     </Button>
@@ -1087,9 +1123,40 @@ export default function CustomersPage() {
               <label className="text-sm font-medium text-slate-300">E-posta</label>
               <Input value={newCustomer.email || ""} onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Doğum Tarihi</label>
+              <Input type="date" value={newCustomer.birthDate || ""} onChange={(e) => setNewCustomer({...newCustomer, birthDate: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+            </div>
             <Button onClick={handleEditCustomer} className="bg-emerald-600 hover:bg-emerald-700">
               <Save className="mr-2 h-4 w-4" />
               Güncelle
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mükerrer müşteri birleştirme */}
+      <Dialog open={!!mergeSource} onOpenChange={(o) => { if (!o) setMergeSource(null) }}>
+        <DialogContent className="sm:max-w-[480px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Müşteri Birleştir</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-slate-400">
+              <span className="text-white font-medium">{mergeSource?.name}</span> kaydının tüm satış, tamir, borç ve diğer kayıtları aşağıda seçeceğiniz müşteriye taşınır; bu kayıt silinir.
+            </p>
+            <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
+              <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                <SelectValue placeholder="Hangi müşteriyle birleşsin?" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
+                {customers.filter(c => c.id !== mergeSource?.id).map(c => (
+                  <SelectItem key={c.id} value={c.id} className="text-white">{c.name} — {c.phone || c.phone1} {c.customerCode ? `(${c.customerCode})` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handleMerge} disabled={!mergeTargetId} className="w-full bg-amber-600 hover:bg-amber-700">
+              <GitMerge className="mr-2 h-4 w-4" />Birleştir
             </Button>
           </div>
         </DialogContent>

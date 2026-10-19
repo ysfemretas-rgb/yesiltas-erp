@@ -9,6 +9,7 @@ import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/in
 import { fetchStaff, StaffMember } from "@/lib/staff"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { exportToExcel } from "@/lib/exportExcel"
+import { SignaturePad } from "@/components/SignaturePad"
 import { Pagination } from "@/components/Pagination"
 import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon } from "lucide-react"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
@@ -687,6 +688,20 @@ function RepairsPageContent() {
     })))
   }
 
+  // İmza kayda hemen yazılır (Güncelle'ye basmayı beklemez)
+  const saveSignature = async (url: string) => {
+    if (!selectedRepair) return
+    try {
+      const updated = await updateRepair(selectedRepair.id, { signature: url })
+      setSelectedRepair(updated)
+      setRepairs(repairs.map(r => r.id === updated.id ? updated : r))
+      showToast("İmza kaydedildi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("İmza kaydedilemedi (v5 SQL çalıştırıldı mı?).", "error")
+    }
+  }
+
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
 
@@ -1349,6 +1364,19 @@ function RepairsPageContent() {
                   <span className="text-slate-400">Tahmini kâr: <span className={selectedRepair.paymentType === "gift" || selectedRepair.cost - (selectedRepair.partsCost || 0) < 0 ? "text-red-400" : "text-emerald-400"}>{formatCurrency(selectedRepair.paymentType === "gift" ? -(selectedRepair.partsCost || 0) : selectedRepair.cost - (selectedRepair.partsCost || 0))}</span></span>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+              <Label className="text-slate-300">✍️ Müşteri İmzası</Label>
+              {selectedRepair?.signature ? (
+                <div className="space-y-2">
+                  <img src={selectedRepair.signature} alt="İmza" className="h-20 rounded border border-slate-600 bg-white" />
+                  <Button type="button" size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => saveSignature("")}>İmzayı Sil</Button>
+                </div>
+              ) : (
+                <SignaturePad onSaved={saveSignature} />
+              )}
+              <p className="text-xs text-slate-500">İmza, Fiş yazdırıldığında "Teslim Eden (Müşteri)" alanında görünür.</p>
             </div>
 
             <div className="space-y-2">

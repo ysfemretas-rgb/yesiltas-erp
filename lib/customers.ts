@@ -32,6 +32,7 @@ export interface Customer {
   lastVisit: string
   status: "active" | "inactive"
   notes: string
+  birthDate?: string
 }
 
 function debtFromRow(row: any): Debt {
@@ -77,6 +78,7 @@ function customerFromRow(row: any, debts: Debt[]): Customer {
     lastVisit: row.last_visit ?? "",
     status: (row.status as "active" | "inactive") ?? "active",
     notes: row.notes ?? "",
+    birthDate: row.birth_date ? String(row.birth_date).slice(0, 10) : "",
   }
 }
 
@@ -94,6 +96,7 @@ function customerToRow(c: Partial<Customer>) {
   if (c.lastVisit !== undefined) row.last_visit = c.lastVisit || null
   if (c.status !== undefined) row.status = c.status
   if (c.notes !== undefined) row.notes = c.notes
+  if (c.birthDate !== undefined) row.birth_date = c.birthDate || null
   return row
 }
 
@@ -255,7 +258,8 @@ export async function collectBalance(
 ): Promise<{ paid: number; remaining: number; collected: number }> {
   const table = kind === "sale" ? "sales" : "devices"
   const nameCol = "customer_name"
-  const { data: row, error } = await supabase.from(table).select(`paid_amount, remaining_amount, ${nameCol}`).eq("id", id).single()
+  const selectCols = kind === "sale" ? `paid_amount, remaining_amount, ${nameCol}, installments` : `paid_amount, remaining_amount, ${nameCol}`
+  const { data: row, error } = await supabase.from(table).select(selectCols).eq("id", id).single() as { data: any; error: any }
   if (error || !row) throw error || new Error("Kayıt bulunamadı")
   const currentRemaining = Number(row.remaining_amount) || 0
   if (currentRemaining <= 0) throw new Error("Bu kayıtta tahsil edilecek bakiye yok.")
@@ -263,7 +267,19 @@ export async function collectBalance(
   const newPaid = (Number(row.paid_amount) || 0) + collected
   const newRemaining = Math.round((currentRemaining - collected) * 100) / 100
 
-  const { error: upErr } = await supabase.from(table).update({ paid_amount: newPaid, remaining_amount: newRemaining }).eq("id", id)
+  const updatePayload: Record<string, unknown> = { paid_amount: newPaid, remaining_amount: newRemaining }
+  // Taksitli satışta tahsilat en eski taksitten başlayarak taksitlere dağıtılır
+  if (kind === "sale" && Array.isArray(row.installments) && row.installments.length > 0) {
+    let left = collected
+    updatePayload.installments = row.installments.map((inst: any) => {
+      if (left <= 0) return inst
+      const need = Math.max(0, (Number(inst.amount) || 0) - (Number(inst.paidAmount) || 0))
+      const pay = Math.min(need, left)
+      left = Math.round((left - pay) * 100) / 100
+      return { ...inst, paidAmount: Math.round(((Number(inst.paidAmount) || 0) + pay) * 100) / 100 }
+    })
+  }
+  const { error: upErr } = await supabase.from(table).update(updatePayload).eq("id", id)
   if (upErr) throw upErr
 
   const sourceType = kind === "sale" ? "sale" : "device"
@@ -295,4 +311,70 @@ export async function collectBalance(
   }
   logActivity("Müşteriler", "updated", `${row[nameCol] || ""} — ${collected.toLocaleString("tr-TR")} TL tahsil edildi`)
   return { paid: newPaid, remaining: newRemaining, collected }
+}
+
+// Mükerrer müşteri birleştirme: "kaynak" müşterinin tüm satış, tamir, borç, randevu,
+// garanti ve kasa kayıtları "hedef" müşteriye taşınır, sonra kaynak müşteri silinir.
+export async function mergeCustomers(sourceId: string, targetId: string): Promise<{ moved: number }> {
+  if (sourceId === targetId) throw new Error("Aynı müşteri seçildi.")
+  const { data: src, error: e1 } = await supabase.from("customers").select("*").eq("id", sourceId).single()
+  const { data: tgt, error: e2 } = await supabase.from("customers").select("*").eq("id", targetId).single()
+  if (e1 || e2 || !src || !tgt) throw new Error("Müşteri kaydı bulunamadı.")
+
+  let moved = 0
+  const count = (n: number | null | undefined) => { moved += n || 0 }
+
+  // Satışlar: ID, kod veya (kodsuz eski kayıtlarda) tam isim eşleşmesi
+  const salePatch = { customer_id: tgt.id, customer_name: tgt.name, customer_code: tgt.customer_code, customer_phone: tgt.phone }
+  const byId = await supabase.from("sales").update(salePatch).eq("customer_id", src.id).select("id")
+  if (byId.error) throw byId.error
+  count(byId.data?.length)
+  if (src.customer_code) {
+    const byCode = await supabase.from("sales").update(salePatch).eq("customer_code", src.customer_code).select("id")
+    if (byCode.error) throw byCode.error
+    count(byCode.data?.length)
+  }
+  const byName = await supabase.from("sales").update(salePatch).is("customer_id", null).is("customer_code", null).eq("customer_name", src.name).select("id")
+  if (byName.error) throw byName.error
+  count(byName.data?.length)
+
+  // Tamirler
+  const repairPatch = { customer_name: tgt.name, customer_code: tgt.customer_code }
+  if (src.customer_code) {
+    const r1 = await supabase.from("devices").update(repairPatch).eq("customer_code", src.customer_code).select("id")
+    if (r1.error) throw r1.error
+    count(r1.data?.length)
+  }
+  const r2 = await supabase.from("devices").update(repairPatch).is("customer_code", null).eq("customer_name", src.name).select("id")
+  if (r2.error) throw r2.error
+  count(r2.data?.length)
+
+  // Borçlar
+  const d = await supabase.from("debts").update({ customer_id: tgt.id }).eq("customer_id", src.id).select("id")
+  if (d.error) throw d.error
+  count(d.data?.length)
+
+  // İsimle tutulan kayıtlar (hata verirse birleştirmeyi durdurmaz)
+  for (const table of ["appointments", "warranties"]) {
+    const r = await supabase.from(table).update({ customer_name: tgt.name }).eq("customer_name", src.name).select("id")
+    if (r.error) console.error(`${table} güncellenemedi:`, r.error)
+    else count(r.data?.length)
+  }
+  const t = await supabase.from("transactions").update({ customer: tgt.name }).eq("customer", src.name).select("id")
+  if (t.error) console.error("Kasa kayıtları güncellenemedi:", t.error)
+
+  // Hedefte boş olan iletişim bilgilerini kaynaktan tamamla
+  const fill: Record<string, unknown> = {}
+  if (!tgt.phone2 && src.phone2) fill.phone2 = src.phone2
+  if (!tgt.email && src.email) fill.email = src.email
+  if (!tgt.address && src.address) fill.address = src.address
+  if (!tgt.birth_date && src.birth_date) fill.birth_date = src.birth_date
+  if (Object.keys(fill).length > 0) await supabase.from("customers").update(fill).eq("id", tgt.id)
+
+  const del = await supabase.from("customers").delete().eq("id", src.id).select("id")
+  if (del.error) throw del.error
+  if (!del.data || del.data.length === 0) throw new Error("Kayıtlar taşındı ancak eski müşteri silinemedi (silme yetkisi sadece Yönetici'dedir).")
+
+  logActivity("Müşteriler", "updated", `${src.name} müşterisi ${tgt.name} ile birleştirildi (${moved} kayıt taşındı)`)
+  return { moved }
 }

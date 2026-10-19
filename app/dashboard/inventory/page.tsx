@@ -27,12 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle, Download, ClipboardList, RefreshCw, History as HistoryIcon, Copy } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle, Download, ClipboardList, RefreshCw, History as HistoryIcon, Copy, Smartphone } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 import { ImageUploadField } from "@/components/ImageUploadField"
 import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
+import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
 import { Pagination } from "@/components/Pagination"
 import { StockMovement, fetchStockMovements, logStockMovement } from "@/lib/stockMovements"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
@@ -83,6 +84,8 @@ export default function InventoryPage() {
   const [listPage, setListPage] = useState(1)
   const PAGE_SIZE = 20
   const [orderOpen, setOrderOpen] = useState(false)
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [purchaseForm, setPurchaseForm] = useState({ sellerName: "", sellerPhone: "", sellerIdNo: "", deviceName: "", imei: "", conditionNote: "", price: "", salePrice: "", addToStock: true })
   const [countOpen, setCountOpen] = useState(false)
   const [countScanOpen, setCountScanOpen] = useState(false)
   const [countInput, setCountInput] = useState("")
@@ -288,6 +291,35 @@ export default function InventoryPage() {
     }
     const message = `Merhaba ${supplier?.contactPerson || supplier?.name},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\n📦 *${item.name}* ürününden stoğumuz azaldı (Mevcut: ${item.quantity}).\nSipariş vermek istiyoruz, fiyat ve stok bilgisi paylaşabilir misiniz?`
     window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(message)}`, "_blank")
+  }
+
+  const handleDevicePurchase = async () => {
+    const price = Number(purchaseForm.price) || 0
+    if (!purchaseForm.sellerName.trim() || !purchaseForm.deviceName.trim() || price <= 0) {
+      showToast("Satıcı adı, cihaz adı ve ödenen tutar zorunludur.", "error")
+      return
+    }
+    try {
+      const { purchase, item } = await createDevicePurchase({
+        sellerName: purchaseForm.sellerName.trim(),
+        sellerPhone: purchaseForm.sellerPhone.trim(),
+        sellerIdNo: purchaseForm.sellerIdNo.trim(),
+        deviceName: purchaseForm.deviceName.trim(),
+        imei: purchaseForm.imei.trim(),
+        conditionNote: purchaseForm.conditionNote.trim(),
+        price,
+        addToStock: purchaseForm.addToStock,
+        salePrice: Number(purchaseForm.salePrice) || undefined,
+      })
+      if (item) setInventory([item, ...inventory])
+      setPurchaseOpen(false)
+      setPurchaseForm({ sellerName: "", sellerPhone: "", sellerIdNo: "", deviceName: "", imei: "", conditionNote: "", price: "", salePrice: "", addToStock: true })
+      showToast("Cihaz alımı kaydedildi, kasaya gider yazıldı.", "success")
+      printPurchaseDocument(purchase)
+    } catch (e) {
+      console.error(e)
+      showToast("Cihaz alımı kaydedilemedi (v5 SQL çalıştırıldı mı?).", "error")
+    }
   }
 
   const exportInventory = () => {
@@ -582,6 +614,9 @@ export default function InventoryPage() {
         <div className="flex gap-2 flex-wrap">
           <Button onClick={exportInventory} variant="outline" className="border-slate-600 text-slate-300">
             <Download className="mr-2 h-4 w-4" />Excel'e Aktar
+          </Button>
+          <Button onClick={() => setPurchaseOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+            <Smartphone className="mr-2 h-4 w-4" />Cihaz Alımı
           </Button>
           <Button onClick={() => setCountOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
             <ClipboardList className="mr-2 h-4 w-4" />Sayım
@@ -1192,6 +1227,33 @@ export default function InventoryPage() {
           />
         </CardContent>
       </Card>
+
+      {/* İkinci El Cihaz Alımı */}
+      <Dialog open={purchaseOpen} onOpenChange={setPurchaseOpen}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-white">📱 İkinci El Cihaz Alımı</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Satıcı Ad Soyad *" value={purchaseForm.sellerName} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerName: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+              <Input placeholder="Telefon" value={purchaseForm.sellerPhone} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerPhone: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            </div>
+            <Input placeholder="T.C. Kimlik No (belgeye yazılır, kaydedilmez)" value={purchaseForm.sellerIdNo} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerIdNo: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            <Input placeholder="Cihaz (marka / model) *" value={purchaseForm.deviceName} onChange={(e) => setPurchaseForm({ ...purchaseForm, deviceName: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            <Input placeholder="IMEI / Seri No" value={purchaseForm.imei} onChange={(e) => setPurchaseForm({ ...purchaseForm, imei: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            <Input placeholder="Cihaz durumu (çizik, pil sağlığı, aksesuar...)" value={purchaseForm.conditionNote} onChange={(e) => setPurchaseForm({ ...purchaseForm, conditionNote: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="number" inputMode="decimal" placeholder="Ödenen tutar (TL) *" value={purchaseForm.price} onChange={(e) => setPurchaseForm({ ...purchaseForm, price: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+              <Input type="number" inputMode="decimal" placeholder="Satış fiyatı (boşsa +%20)" value={purchaseForm.salePrice} onChange={(e) => setPurchaseForm({ ...purchaseForm, salePrice: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={purchaseForm.addToStock} onChange={(e) => setPurchaseForm({ ...purchaseForm, addToStock: e.target.checked })} />
+              Cihazı "İkinci El" olarak stoğa ekle
+            </label>
+            <p className="text-xs text-slate-500">Kaydedince alım belgesi yazdırılır ve ödenen tutar kasaya gider olarak yazılır. T.C. kimlik no veritabanına kaydedilmez, sadece belgeye basılır.</p>
+            <Button onClick={handleDevicePurchase} className="w-full bg-emerald-600 hover:bg-emerald-700">Kaydet ve Belgeyi Yazdır</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Sipariş Listesi */}
       <Dialog open={orderOpen} onOpenChange={setOrderOpen}>

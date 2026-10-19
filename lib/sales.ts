@@ -7,6 +7,35 @@ export interface SaleItem {
   price: number
   purchasePrice?: number
   quantity: number
+  imei?: string // ikinci el telefon / seri no (opsiyonel)
+}
+
+export interface SalePayment {
+  method: "cash" | "card" | "transfer"
+  amount: number
+}
+
+// Taksit planı: her taksit için vade tarihi, tutar ve ne kadarının ödendiği
+export interface Installment {
+  no: number
+  dueDate: string
+  amount: number
+  paidAmount: number
+}
+
+export interface SaleRefund {
+  date: string
+  mode: "cash" | "balance"
+  amount: number
+  items: { name: string; quantity: number }[]
+}
+
+// Takas: müşteriden alınan cihaz (satış bedelinden düşülür, ikinci el stoğa girer)
+export interface TradeIn {
+  name: string
+  imei?: string
+  value: number
+  productId?: string
 }
 
 export interface Sale {
@@ -24,6 +53,10 @@ export interface Sale {
   paymentMethod: string
   date: string
   status: "completed" | "cancelled"
+  payments?: SalePayment[]
+  installments?: Installment[]
+  refunds?: SaleRefund[]
+  tradeIn?: TradeIn | null
 }
 
 function fromRow(row: any): Sale {
@@ -42,6 +75,10 @@ function fromRow(row: any): Sale {
     paymentMethod: row.payment_method ?? "cash",
     date: row.sale_date ?? (row.created_at ? String(row.created_at).slice(0, 10) : ""),
     status: (row.sale_status as Sale["status"]) ?? "completed",
+    payments: Array.isArray(row.payments) ? row.payments : [],
+    installments: Array.isArray(row.installments) ? row.installments : [],
+    refunds: Array.isArray(row.refunds) ? row.refunds : [],
+    tradeIn: row.trade_in ?? null,
   }
 }
 
@@ -63,6 +100,10 @@ function toRow(s: Partial<Sale>) {
   if (s.paymentMethod !== undefined) row.payment_method = s.paymentMethod
   if (s.date !== undefined) row.sale_date = s.date || null
   if (s.status !== undefined) row.sale_status = s.status
+  if (s.payments !== undefined) row.payments = s.payments
+  if (s.installments !== undefined) row.installments = s.installments
+  if (s.refunds !== undefined) row.refunds = s.refunds
+  if (s.tradeIn !== undefined) row.trade_in = s.tradeIn
   return row
 }
 

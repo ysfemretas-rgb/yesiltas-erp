@@ -32,6 +32,7 @@ export interface Repair {
   technician?: string
   parts?: RepairPart[]
   partsCost?: number
+  signature?: string
 }
 
 function fromRow(row: any): Repair {
@@ -59,6 +60,7 @@ function fromRow(row: any): Repair {
     technician: row.technician ?? "",
     parts: Array.isArray(row.parts) ? row.parts : [],
     partsCost: Number(row.parts_cost) || 0,
+    signature: row.signature ?? "",
   }
 }
 
@@ -84,6 +86,7 @@ function toRow(r: Partial<Repair>) {
   if (r.technician !== undefined) row.technician = r.technician
   if (r.parts !== undefined) row.parts = r.parts
   if (r.partsCost !== undefined) row.parts_cost = r.partsCost
+  if (r.signature !== undefined) row.signature = r.signature || null
   return row
 }
 

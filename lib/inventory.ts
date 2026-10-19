@@ -25,6 +25,7 @@ export interface InventoryItem {
   paidAmount: number
   // Bugüne kadar tedarikçiden alınan toplam adet (satılsa bile düşmez) — tedarikçi borcu bundan hesaplanır.
   purchasedQuantity?: number
+  imei?: string // ikinci el cihazlar için
 }
 
 function fromRow(row: any): InventoryItem {
@@ -46,6 +47,7 @@ function fromRow(row: any): InventoryItem {
     location: row.location ?? "",
     paymentStatus: (row.payment_status as InventoryItem["paymentStatus"]) ?? "unpaid",
     paidAmount: Number(row.paid_amount) || 0,
+    imei: row.imei ?? "",
     purchasedQuantity: row.total_purchased_qty != null ? Number(row.total_purchased_qty) : (row.quantity ?? 0),
   }
 }
@@ -68,6 +70,7 @@ function toRow(i: Partial<InventoryItem>) {
   if (i.paymentStatus !== undefined) row.payment_status = i.paymentStatus
   if (i.paidAmount !== undefined) row.paid_amount = i.paidAmount
   if (i.purchasedQuantity !== undefined) row.total_purchased_qty = i.purchasedQuantity
+  if (i.imei !== undefined) row.imei = i.imei || null
   return row
 }
 
