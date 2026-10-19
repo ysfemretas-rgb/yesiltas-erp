@@ -24,7 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar } from "lucide-react"
+import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, ShoppingCart, HandCoins, Save, Pencil, Calendar, Download } from "lucide-react"
+import { exportToExcel } from "@/lib/exportExcel"
+import { Pagination } from "@/components/Pagination"
 import { printDayClose } from "@/lib/dayClose"
 import { Transaction, fetchTransactions, createTransaction, updateTransaction, deleteTransaction } from "@/lib/finance"
 
@@ -44,6 +46,8 @@ export default function FinancePage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [listPage, setListPage] = useState(1)
+  const PAGE_SIZE = 30
 
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
     type: "income",
@@ -78,6 +82,8 @@ export default function FinancePage() {
     localStorage.setItem("yt_finance", JSON.stringify(transactions))
   }, [transactions, isLoaded])
 
+  useEffect(() => { setListPage(1) }, [filterType, filterCategory, filterSource, searchTerm])
+
   const filteredTransactions = transactions.filter((t) => {
     const matchesType = filterType === "all" || t.type === filterType
     const matchesCategory = filterCategory === "all" || t.category === filterCategory
@@ -88,6 +94,18 @@ export default function FinancePage() {
   })
 
   const todayStr = localDateStr()
+
+  const exportFinance = () => {
+    exportToExcel("kasa", "Kasa Hareketleri", filteredTransactions.map(t => ({
+      "Tarih": t.date,
+      "Tür": t.type === "income" ? "Gelir" : "Gider",
+      "Kategori": t.category,
+      "Açıklama": t.description,
+      "Müşteri/Tedarikçi": t.customer || "",
+      "Kaynak": t.source === "sale" ? "Satış" : t.source === "repair" ? "Tamir" : "Manuel",
+      "Tutar (TL)": t.type === "income" ? t.amount : -t.amount,
+    })))
+  }
   const todayIncome = transactions.filter(t => t.type === "income" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
   const todayExpense = transactions.filter(t => t.type === "expense" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
   const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
@@ -227,6 +245,9 @@ export default function FinancePage() {
         <div className="flex items-center gap-2">
         <Button variant="outline" onClick={() => printDayClose(todayStr, transactions)} className="border-slate-600 text-slate-300 hover:text-white">
           📊 Gün Sonu
+        </Button>
+        <Button variant="outline" onClick={exportFinance} className="border-slate-600 text-slate-300 hover:text-white">
+          <Download className="mr-2 h-4 w-4" />Excel
         </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -483,7 +504,7 @@ export default function FinancePage() {
               <div className="col-span-1 text-center">Tip</div>
               <div className="col-span-1 text-center">İşlem</div>
             </div>
-            {filteredTransactions.map((transaction) => (
+            {filteredTransactions.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map((transaction) => (
               <div key={transaction.id} className="grid grid-cols-12 gap-2 p-3 text-sm border-b border-slate-700 last:border-0 items-center hover:bg-slate-800/50">
                 <div className="col-span-2 font-medium text-white truncate">{transaction.description}</div>
                 <div className="col-span-2">
@@ -534,6 +555,15 @@ export default function FinancePage() {
             )}
             </div>
           </div>
+          <Pagination
+            currentPage={listPage}
+            totalPages={Math.ceil(filteredTransactions.length / PAGE_SIZE)}
+            goToPage={(p) => setListPage(Math.max(1, Math.min(p, Math.ceil(filteredTransactions.length / PAGE_SIZE))))}
+            goToNext={() => setListPage(p => Math.min(p + 1, Math.ceil(filteredTransactions.length / PAGE_SIZE)))}
+            goToPrev={() => setListPage(p => Math.max(p - 1, 1))}
+            totalItems={filteredTransactions.length}
+            pageSize={PAGE_SIZE}
+          />
         </CardContent>
       </Card>
 

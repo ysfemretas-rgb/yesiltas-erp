@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode, Printer, Ban, Shield } from "lucide-react"
+import { Search, ShoppingCart, Plus, Minus, Trash2, MessageCircle, X, UserPlus, Pencil, AlertTriangle, Package, Barcode, Printer, Ban, Shield, Download, QrCode, Eye } from "lucide-react"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Sale, SaleItem, fetchSales, createSale, updateSale, deleteSale } from "@/lib/sales"
@@ -23,6 +23,9 @@ import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/in
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { printSaleReceipt } from "@/lib/saleReceipt"
 import { createWarranty } from "@/lib/warranties"
+import { printRecordLabel } from "@/lib/labels"
+import { exportToExcel } from "@/lib/exportExcel"
+import { Pagination } from "@/components/Pagination"
 import { addMonths } from "date-fns"
 import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
@@ -83,6 +86,9 @@ export default function SalesPage() {
   const [showMoreCustomerFields, setShowMoreCustomerFields] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [listPage, setListPage] = useState(1)
+  const [viewSale, setViewSale] = useState<Sale | null>(null)
+  const PAGE_SIZE = 20
 
   // Ürünler, müşteriler ve satışlar artık Supabase'den geliyor.
   useEffect(() => {
@@ -113,6 +119,39 @@ export default function SalesPage() {
       .finally(() => setIsLoaded(true))
   }, [])
 
+
+  // Karekod / arama ile gelindiğinde (?open=ID) satış detayını aç
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    const openId = new URLSearchParams(window.location.search).get("open")
+    if (!openId) return
+    const found = sales.find(s => s.id === openId)
+    if (found) setViewSale(found)
+    else showToast("Satış kaydı bulunamadı.", "error")
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [isLoaded])
+
+  useEffect(() => {
+    const total = Math.max(1, Math.ceil(sales.length / PAGE_SIZE))
+    if (listPage > total) setListPage(total)
+  }, [sales.length])
+
+  const exportSales = () => {
+    exportToExcel("satislar", "Satışlar", sales.map(s => ({
+      "Satış Kodu": s.saleCode || "",
+      "Tarih": s.date,
+      "Müşteri": s.customerName,
+      "Müşteri Kodu": s.customerCode || "",
+      "Ürünler": s.items.map(i => `${i.name} x${i.quantity}`).join(", "),
+      "Ara Toplam": s.items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+      "İskonto": s.discount,
+      "Toplam": s.totalAmount,
+      "Alınan": s.paid,
+      "Kalan": s.remaining,
+      "Ödeme Şekli": paymentMethods.find(m => m.value === s.paymentMethod)?.label || s.paymentMethod,
+      "Durum": s.status === "cancelled" ? "İptal" : "Tamamlandı",
+    })))
+  }
 
   const filteredCustomers = useMemo(() => {
     if (!customerSearch || customerSearch.length < 1) return []
@@ -220,14 +259,14 @@ export default function SalesPage() {
   }
 
   // Stok farklarını veritabanında atomik uygular ve ekrandaki listeyi günceller.
-  const applyStockDeltas = async (deltas: { productId: string; delta: number }[]) => {
+  const applyStockDeltas = async (deltas: { productId: string; delta: number }[], reason: string = "Satış") => {
     const active = deltas.filter(d => d.delta !== 0)
     if (active.length === 0) return
     setProducts(prev => prev.map(p => {
       const d = active.filter(x => x.productId === p.id).reduce((sum, x) => sum + x.delta, 0)
       return d ? { ...p, quantity: Math.max(0, p.quantity + d) } : p
     }))
-    await Promise.all(active.map(d => adjustInventoryQuantity(d.productId, d.delta).catch((e) => console.error("Stok güncellenemedi:", e))))
+    await Promise.all(active.map(d => adjustInventoryQuantity(d.productId, d.delta, reason, products.find(p => p.id === d.productId)?.name || "").catch((e) => console.error("Stok güncellenemedi:", e))))
   }
 
   const addToCart = (product: InventoryItem, quantity: number = 1) => {
@@ -414,7 +453,7 @@ export default function SalesPage() {
       }
 
       // Stok (atomik)
-      await applyStockDeltas(cart.map(item => ({ productId: item.productId, delta: -item.quantity })))
+      await applyStockDeltas(cart.map(item => ({ productId: item.productId, delta: -item.quantity })), `Satış ${sale.saleCode || ""}`.trim())
 
       setSales([sale, ...sales])
 
@@ -454,7 +493,7 @@ Bu işlem geri alınamaz!`)) return
 
       // İptal edilmiş satışın stoğu zaten iade edilmişti; tekrar ekleme
       if (sale.status !== "cancelled") {
-        await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })))
+        await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış silindi ${sale.saleCode || ""}`.trim())
       }
 
       const custId = resolveCustomerId(sale)
@@ -520,7 +559,7 @@ Bu işlem geri alınamaz!`)) return
       await updateSale(saleId, { status: "cancelled" })
       await deleteDebtsBySource("sale", saleId)
       await deleteTransactionsBySource("sale", saleId)
-      await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })))
+      await applyStockDeltas(sale.items.map(item => ({ productId: item.productId, delta: item.quantity })), `Satış iptali ${sale.saleCode || ""}`.trim())
       setSales(sales.map(s => s.id === saleId ? { ...s, status: "cancelled" as const } : s))
       showToast("Satış iptal edildi, stok geri eklendi.", "success")
     } catch (e: any) {
@@ -572,7 +611,7 @@ Bu işlem geri alınamaz!`)) return
         const oldQty = oldSale.items.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
         const newQty = editCart.filter(i => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0)
         return { productId, delta: oldQty - newQty }
-      }))
+      }), `Satış düzenleme ${oldSale.saleCode || ""}`.trim())
 
       // Borç: eski bağlı borcu temizle, yeni bakiye varsa yeniden oluştur
       if (oldRemaining > 0 || newRemaining > 0) {
@@ -709,6 +748,9 @@ Bu işlem geri alınamaz!`)) return
         <div className="flex gap-2">
           <Button onClick={() => router.push("/dashboard/inventory")} variant="outline" className="border-slate-600 text-slate-300">
             <Package className="w-4 h-4 mr-2" />Envanteri Aç
+          </Button>
+          <Button onClick={exportSales} variant="outline" className="border-slate-600 text-slate-300">
+            <Download className="w-4 h-4 mr-2" />Excel
           </Button>
           <Button onClick={() => setShowNewSale(true)} className="bg-emerald-600 hover:bg-emerald-700">
             <ShoppingCart className="w-4 h-4 mr-2" />Yeni Satış
@@ -1037,6 +1079,47 @@ Bu işlem geri alınamaz!`)) return
         </DialogContent>
       </Dialog>
 
+      {/* Satış Detayı (karekod / arama ile açılır) */}
+      <Dialog open={!!viewSale} onOpenChange={(o) => { if (!o) setViewSale(null) }}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl">🛒 Satış {viewSale?.saleCode || ""}</DialogTitle>
+          </DialogHeader>
+          {viewSale && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between gap-2 flex-wrap">
+                <span className="text-white font-medium">{viewSale.customerName}</span>
+                {viewSale.customerCode && <span className="font-mono text-xs text-slate-400">{viewSale.customerCode}</span>}
+              </div>
+              <div className="text-xs text-slate-400">📅 {viewSale.date} | 💳 {paymentMethods.find(m => m.value === viewSale.paymentMethod)?.label || viewSale.paymentMethod}</div>
+              <div className="space-y-1">
+                {viewSale.items.map((i, idx) => (
+                  <div key={idx} className="flex justify-between p-2 bg-slate-800 rounded">
+                    <span>{i.name} <span className="text-slate-500">x{i.quantity}</span></span>
+                    <span>{formatCurrency(i.price * i.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1 border-t border-slate-700 pt-2">
+                {viewSale.discount > 0 && <div className="flex justify-between text-slate-400"><span>İskonto</span><span>-{formatCurrency(viewSale.discount)}</span></div>}
+                <div className="flex justify-between font-bold"><span>Toplam</span><span>{formatCurrency(viewSale.totalAmount)}</span></div>
+                {viewSale.paymentMethod !== "gift" && <div className="flex justify-between text-emerald-400"><span>Alınan</span><span>{formatCurrency(viewSale.paid)}</span></div>}
+                {viewSale.paymentMethod !== "gift" && viewSale.remaining > 0 && <div className="flex justify-between text-amber-400"><span>Kalan Borç</span><span>{formatCurrency(viewSale.remaining)}</span></div>}
+                {viewSale.paymentMethod === "gift" && <div className="text-purple-300">🎁 Eşantiyon (bedelsiz)</div>}
+                {viewSale.status === "cancelled" && <div className="text-slate-400">🚫 İptal edildi</div>}
+              </div>
+              <div className="flex gap-2 flex-wrap pt-1">
+                <Button size="sm" variant="outline" className="border-green-600 text-green-400" onClick={() => sendWhatsApp(viewSale)}><MessageCircle className="w-3 h-3 mr-1" />WhatsApp</Button>
+                <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => printSaleReceipt(viewSale)}><Printer className="w-3 h-3 mr-1" />Fiş</Button>
+                {viewSale.status !== "cancelled" && (
+                  <Button size="sm" variant="outline" className="border-blue-600 text-blue-400" onClick={() => { const sl = viewSale; setViewSale(null); openEditSale(sl) }}><Pencil className="w-3 h-3 mr-1" />Düzenle</Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Sale Dialog */}
       <Dialog open={showEditSale} onOpenChange={setShowEditSale}>
         <DialogContent className="max-w-4xl bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
@@ -1197,7 +1280,7 @@ Bu işlem geri alınamaz!`)) return
             <p className="text-slate-500 text-center py-8">📝 Henüz satış bulunmuyor.</p>
           ) : (
             <div className="space-y-2">
-              {sales.map(sale => (
+              {sales.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map(sale => (
                 <div key={sale.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1245,6 +1328,14 @@ Bu işlem geri alınamaz!`)) return
                     >
                       <Printer className="w-3 h-3 mr-1" />Fiş
                     </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-500/10" 
+                      onClick={() => printRecordLabel({ kind: "sale", id: sale.id, code: sale.saleCode || "", title: sale.customerName, lines: [sale.date, `${sale.items.length} ürün • ${formatCurrency(sale.totalAmount)}`] })}
+                    >
+                      <QrCode className="w-3 h-3 mr-1" />Etiket
+                    </Button>
                     {sale.status !== "cancelled" && (
                     <Button 
                       size="sm" 
@@ -1278,6 +1369,15 @@ Bu işlem geri alınamaz!`)) return
                   </div>
                 </div>
               ))}
+              <Pagination
+                currentPage={listPage}
+                totalPages={Math.ceil(sales.length / PAGE_SIZE)}
+                goToPage={(p) => setListPage(Math.max(1, Math.min(p, Math.ceil(sales.length / PAGE_SIZE))))}
+                goToNext={() => setListPage(p => Math.min(p + 1, Math.ceil(sales.length / PAGE_SIZE)))}
+                goToPrev={() => setListPage(p => Math.max(p - 1, 1))}
+                totalItems={sales.length}
+                pageSize={PAGE_SIZE}
+              />
             </div>
           )}
         </CardContent>

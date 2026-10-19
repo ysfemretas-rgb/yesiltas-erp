@@ -1,6 +1,13 @@
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
+export interface RepairPart {
+  productId: string
+  name: string
+  quantity: number
+  unitCost: number // TL cinsinden birim alış maliyeti (eklendiği andaki kurla)
+}
+
 export interface Repair {
   id: string
   repairCode?: string
@@ -22,6 +29,9 @@ export interface Repair {
   imei?: string
   createdAt: string
   completedAt?: string
+  technician?: string
+  parts?: RepairPart[]
+  partsCost?: number
 }
 
 function fromRow(row: any): Repair {
@@ -46,6 +56,9 @@ function fromRow(row: any): Repair {
     imei: row.imei ?? undefined,
     createdAt: row.received_date ? String(row.received_date).slice(0, 10) : "",
     completedAt: row.completed_date ? String(row.completed_date).slice(0, 10) : undefined,
+    technician: row.technician ?? "",
+    parts: Array.isArray(row.parts) ? row.parts : [],
+    partsCost: Number(row.parts_cost) || 0,
   }
 }
 
@@ -68,6 +81,9 @@ function toRow(r: Partial<Repair>) {
   if (r.notes !== undefined) row.notes = r.notes
   if (r.imei !== undefined) row.imei = r.imei || null
   if (r.completedAt !== undefined) row.completed_date = r.completedAt || null
+  if (r.technician !== undefined) row.technician = r.technician
+  if (r.parts !== undefined) row.parts = r.parts
+  if (r.partsCost !== undefined) row.parts_cost = r.partsCost
   return row
 }
 

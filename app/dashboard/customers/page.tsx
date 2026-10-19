@@ -33,7 +33,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle } from "lucide-react"
+import { Plus, Users, Search, Phone, Mail, MapPin, CreditCard, History, Trash2, Edit3, Save, MessageCircle, Download, QrCode } from "lucide-react"
+import { printRecordLabel } from "@/lib/labels"
+import { exportToExcel } from "@/lib/exportExcel"
+import { Pagination } from "@/components/Pagination"
 
 interface Repair {
   id: string
@@ -96,6 +99,8 @@ export default function CustomersPage() {
   const [repairs, setRepairs] = useState<Repair[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
+  const [listPage, setListPage] = useState(1)
+  const PAGE_SIZE = 20
   const [whatsappType, setWhatsappType] = useState<"simple" | "detailed">("simple")
 
   // Bir tamir/satış kaydı hangi müşteriye ait? Eskiden isim "içeriyor mu" diye bakılıyordu
@@ -142,6 +147,23 @@ export default function CustomersPage() {
     if (typeof window === "undefined") return
     loadAll()
   }, [])
+
+  // Karekod / arama ile gelindiğinde (?open=ID) müşteri detayını aç
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    const openId = new URLSearchParams(window.location.search).get("open")
+    if (!openId) return
+    const found = customers.find(c => c.id === openId)
+    if (found) {
+      setSelectedCustomer(found)
+      setIsDetailOpen(true)
+    } else {
+      showToast("Müşteri kaydı bulunamadı.", "error")
+    }
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [isLoaded])
+
+  useEffect(() => { setListPage(1) }, [searchTerm, filterStatus])
 
   // Müşterinin borcu: tamir kalanı + satış kalanı + SADECE elle eklenmiş borçlar.
   // (Satış/tamirden doğan borç kayıtları zaten kalan tutarda sayıldığı için tekrar toplanmıyordu — çift sayım.)
@@ -258,6 +280,50 @@ export default function CustomersPage() {
   const getInitials = (name: string) => {
     if (!name) return "?"
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+  }
+
+  const exportCustomers = () => {
+    exportToExcel("musteriler", "Müşteriler", customers.map(c => ({
+      "Müşteri Kodu": c.customerCode,
+      "Ad Soyad": c.name,
+      "Telefon": c.phone || c.phone1 || "",
+      "Telefon 2": c.phone2 || "",
+      "E-posta": c.email,
+      "Şehir": c.city,
+      "Adres": c.address,
+      "Borç (TL)": Math.max(0, customerDebts.get(c.id) || 0),
+      "Alacak (TL)": Math.max(0, -(customerDebts.get(c.id) || 0)),
+      "Son Ziyaret": c.lastVisit,
+      "Not": c.notes,
+    })))
+  }
+
+  // Borç yaşlandırma: borçlu müşteriler, en eski açık borcun yaşına göre
+  const exportDebtAging = () => {
+    const today = new Date()
+    const rows = customers
+      .map(c => {
+        const debt = customerDebts.get(c.id) || 0
+        const dates: string[] = []
+        repairs.filter(r => belongsTo(c, r) && r.paymentType !== "gift" && (r.remaining || 0) > 0 && r.createdAt).forEach(r => dates.push(r.createdAt))
+        activeSales(sales).filter(s => belongsTo(c, s) && s.paymentMethod !== "gift" && (s.remaining || 0) > 0 && s.date).forEach(s => dates.push(s.date))
+        manualDebtsOf(c).filter(d => d.status === "unpaid" && d.date).forEach(d => dates.push(d.date))
+        const oldest = dates.sort()[0]
+        const days = oldest ? Math.max(0, Math.floor((today.getTime() - new Date(oldest).getTime()) / 86400000)) : 0
+        return { c, debt, oldest, days }
+      })
+      .filter(x => x.debt > 0)
+      .sort((a, b) => b.days - a.days)
+      .map(({ c, debt, oldest, days }) => ({
+        "Müşteri Kodu": c.customerCode,
+        "Ad Soyad": c.name,
+        "Telefon": c.phone || c.phone1 || "",
+        "Toplam Borç (TL)": debt,
+        "En Eski Borç Tarihi": oldest || "",
+        "Gün": days,
+        "Yaş Grubu": days >= 90 ? "90+ gün" : days >= 60 ? "60-89 gün" : days >= 30 ? "30-59 gün" : "0-29 gün",
+      }))
+    exportToExcel("borc-yaslandirma", "Borç Yaşlandırma", rows)
   }
 
   const handleAddCustomer = async () => {
@@ -550,6 +616,13 @@ export default function CustomersPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">👥 Müşteri Yönetimi</h1>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <Button variant="outline" onClick={exportCustomers} className="border-slate-600 text-slate-300 hover:text-white">
+          <Download className="mr-2 h-4 w-4" />Excel
+        </Button>
+        <Button variant="outline" onClick={exportDebtAging} className="border-slate-600 text-amber-400 hover:text-amber-300">
+          <Download className="mr-2 h-4 w-4" />Borç Raporu
+        </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-emerald-600 hover:bg-emerald-700">
@@ -661,6 +734,7 @@ export default function CustomersPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -741,7 +815,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="space-y-3">
-            {filteredCustomers.map((customer) => {
+            {filteredCustomers.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map((customer) => {
               const debt = customerDebts.get(customer.id) || 0
               const hasDebt = debt > 0
               const hasCredit = debt < 0
@@ -826,6 +900,9 @@ export default function CustomersPage() {
                     <Button size="sm" variant="outline" onClick={() => openWhatsAppDialog(customer)} className="border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10">
                       <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
                     </Button>
+                    <Button size="sm" variant="outline" onClick={() => printRecordLabel({ kind: "customer", id: customer.id, code: customer.customerCode, title: customer.name, lines: [customer.phone || customer.phone1 || ""] })} className="border-slate-600 text-slate-300 hover:text-white">
+                      <QrCode className="h-4 w-4 mr-1" />Etiket
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => openDebtDialog(customer)} className="border-slate-600 text-slate-300 hover:text-white">
                       <CreditCard className="h-4 w-4 mr-1" />Borç
                     </Button>
@@ -842,6 +919,15 @@ export default function CustomersPage() {
               )
             })}
           </div>
+          <Pagination
+            currentPage={listPage}
+            totalPages={Math.ceil(filteredCustomers.length / PAGE_SIZE)}
+            goToPage={(p) => setListPage(Math.max(1, Math.min(p, Math.ceil(filteredCustomers.length / PAGE_SIZE))))}
+            goToNext={() => setListPage(p => Math.min(p + 1, Math.ceil(filteredCustomers.length / PAGE_SIZE)))}
+            goToPrev={() => setListPage(p => Math.max(p - 1, 1))}
+            totalItems={filteredCustomers.length}
+            pageSize={PAGE_SIZE}
+          />
         </CardContent>
       </Card>
 

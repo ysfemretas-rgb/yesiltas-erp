@@ -27,11 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle, Download, ClipboardList, RefreshCw, History as HistoryIcon, Copy } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 import { ImageUploadField } from "@/components/ImageUploadField"
 import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
+import { exportToExcel } from "@/lib/exportExcel"
+import { Pagination } from "@/components/Pagination"
+import { StockMovement, fetchStockMovements, logStockMovement } from "@/lib/stockMovements"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
 
 const INVENTORY_IMPORT_FIELDS: ImportField[] = [
@@ -77,6 +80,16 @@ export default function InventoryPage() {
   const [isSupplierBarcodeScannerOpen, setIsSupplierBarcodeScannerOpen] = useState(false)
   const [isNewSupplierBarcodeScannerOpen, setIsNewSupplierBarcodeScannerOpen] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [listPage, setListPage] = useState(1)
+  const PAGE_SIZE = 20
+  const [orderOpen, setOrderOpen] = useState(false)
+  const [countOpen, setCountOpen] = useState(false)
+  const [countScanOpen, setCountScanOpen] = useState(false)
+  const [countInput, setCountInput] = useState("")
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null)
+  const [movements, setMovements] = useState<StockMovement[]>([])
+  const [movementsLoading, setMovementsLoading] = useState(false)
   const [quickSupplierFor, setQuickSupplierFor] = useState<"new" | "edit" | null>(null)
   const [quickSupplierName, setQuickSupplierName] = useState("")
   const [quickSupplierPhone, setQuickSupplierPhone] = useState("")
@@ -118,6 +131,19 @@ export default function InventoryPage() {
       .catch((e) => console.error("Tedarikçiler yüklenemedi:", e))
     return () => { cancelled = true }
   }, [])
+
+  // Karekod / arama ile gelindiğinde (?open=ID) ürünü listede göster
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return
+    const openId = new URLSearchParams(window.location.search).get("open")
+    if (!openId) return
+    const found = inventory.find(i => i.id === openId)
+    if (found) setSearchTerm(found.productCode || found.name)
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [isLoaded])
+
+  useEffect(() => { setListPage(1) }, [searchTerm, filterCategory])
+
   if (checking) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -179,7 +205,7 @@ export default function InventoryPage() {
     setInventory(inventory.map(i => i.id === id ? { ...i, quantity: newQuantity } : i))
     try {
       // Stok atomik değiştirilir (aynı anda satış yapılıyorsa ezilmez)
-      await adjustInventoryQuantity(id, newQuantity - item.quantity)
+      await adjustInventoryQuantity(id, newQuantity - item.quantity, newQuantity > item.quantity ? "Elle artış (+)" : "Elle azalış (-)", item.name)
       // Stok artışı tedarikçiden alım sayılır; tedarikçi borcu bundan hesaplanır
       if (newQuantity > item.quantity) {
         const purchased = (item.purchasedQuantity ?? item.quantity) + (newQuantity - item.quantity)
@@ -262,6 +288,143 @@ export default function InventoryPage() {
     }
     const message = `Merhaba ${supplier?.contactPerson || supplier?.name},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\n📦 *${item.name}* ürününden stoğumuz azaldı (Mevcut: ${item.quantity}).\nSipariş vermek istiyoruz, fiyat ve stok bilgisi paylaşabilir misiniz?`
     window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(message)}`, "_blank")
+  }
+
+  const exportInventory = () => {
+    exportToExcel("envanter", "Envanter", inventoryWithPrices.map(i => ({
+      "Ürün Kodu": i.productCode,
+      "Ürün Adı": i.name,
+      "Kategori": i.category,
+      "Stok": i.quantity,
+      "Min. Stok": i.minQuantity,
+      "Alış Fiyatı": i.purchasePrice,
+      "Para Birimi": i.purchaseCurrency,
+      "Kâr Marjı (%)": i.profitMargin,
+      "Satış Fiyatı (TL)": i.salePrice,
+      "Tedarikçi": i.supplier,
+      "Satıcı Barkodu": i.supplierBarcode || "",
+      "Konum": i.location,
+    })))
+  }
+
+  // Dolar/euro ile alınan ürünlerin satış fiyatını güncel kura göre yeniden hesaplar
+  const refreshPricesByRate = async () => {
+    const targets = inventory.filter(i => i.purchaseCurrency !== "TRY" && i.purchasePrice > 0)
+    if (targets.length === 0) {
+      showToast("Dövizle alınmış ürün yok.", "error")
+      return
+    }
+    if (!confirm(`${targets.length} dövizli ürünün satış fiyatı güncel kura göre (USD ${rates.USD}, EUR ${rates.EUR}) yeniden hesaplanacak.\n\nDevam edilsin mi?`)) return
+    let changed = 0
+    const updatedList = [...inventory]
+    for (const item of targets) {
+      const newPrice = calculateSalePrice(item.purchasePrice, item.purchaseCurrency, item.profitMargin, rates)
+      if (newPrice === item.salePrice) continue
+      try {
+        await updateInventoryItem(item.id, { salePrice: newPrice })
+        const idx = updatedList.findIndex(i => i.id === item.id)
+        if (idx >= 0) updatedList[idx] = { ...updatedList[idx], salePrice: newPrice }
+        changed++
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    setInventory(updatedList)
+    showToast(changed > 0 ? `${changed} ürünün fiyatı güncellendi.` : "Fiyatlar zaten güncel.", "success")
+  }
+
+  // Kritik stoktaki ürünleri tedarikçiye göre gruplar (sipariş listesi)
+  const orderGroups = () => {
+    const low = inventory.filter(i => i.quantity <= i.minQuantity)
+    const map = new Map<string, InventoryItem[]>()
+    low.forEach(i => {
+      const key = i.supplier || "Tedarikçi seçilmemiş"
+      map.set(key, [...(map.get(key) || []), i])
+    })
+    return Array.from(map.entries()).map(([name, items]) => ({
+      name,
+      supplier: suppliers.find(s => s.name === name),
+      items: items.map(i => ({ item: i, suggest: Math.max(1, (i.minQuantity || 0) * 2 - i.quantity) })),
+    }))
+  }
+
+  const orderText = (group: ReturnType<typeof orderGroups>[number]) =>
+    `Merhaba ${group.supplier?.contactPerson || group.name},\n\n*Yeşiltaş Teknoloji*'den sipariş listemiz:\n\n` +
+    group.items.map(g => `📦 ${g.item.name} — ${g.suggest} adet`).join("\n") +
+    `\n\nFiyat ve stok bilgisi paylaşabilir misiniz?`
+
+  const sendOrderWhatsApp = (group: ReturnType<typeof orderGroups>[number]) => {
+    const phone = (group.supplier?.phone || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
+    if (phone.length < 10) {
+      showToast("Bu tedarikçinin telefon numarası kayıtlı değil.", "error")
+      return
+    }
+    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(orderText(group))}`, "_blank")
+  }
+
+  const copyOrder = async (group: ReturnType<typeof orderGroups>[number]) => {
+    try {
+      await navigator.clipboard.writeText(orderText(group))
+      showToast("Sipariş metni kopyalandı.", "success")
+    } catch {
+      showToast("Kopyalanamadı.", "error")
+    }
+  }
+
+  // Stok sayımı: kod okutulur / yazılır, her okutuş sayımı 1 artırır
+  const addCount = (raw: string) => {
+    const code = raw.trim()
+    if (!code) return
+    const lower = code.toLowerCase()
+    const found = inventory.find(i =>
+      (i.productCode || "").toLowerCase() === lower ||
+      (i.supplierBarcode || "").toLowerCase() === lower ||
+      (i.sku || "").toLowerCase() === lower
+    )
+    if (!found) {
+      showToast(`"${code}" için ürün bulunamadı.`, "error")
+      return
+    }
+    setCounts(prev => ({ ...prev, [found.id]: (prev[found.id] || 0) + 1 }))
+    setCountInput("")
+  }
+
+  const applyCounts = async () => {
+    const diffs = (Object.entries(counts) as [string, number][])
+      .map(([id, counted]) => ({ item: inventory.find(i => i.id === id), counted }))
+      .filter(x => x.item && x.counted !== x.item.quantity) as { item: InventoryItem; counted: number }[]
+    if (diffs.length === 0) {
+      showToast("Fark yok, değişiklik yapılmadı.", "success")
+      return
+    }
+    if (!confirm(`${diffs.length} ürünün stoğu sayım sonucuna göre düzeltilecek. Devam edilsin mi?`)) return
+    try {
+      for (const d of diffs) {
+        await adjustInventoryQuantity(d.item.id, d.counted - d.item.quantity, "Sayım düzeltmesi", d.item.name)
+      }
+      const updated = await fetchInventory()
+      setInventory(updated)
+      setCounts({})
+      setCountOpen(false)
+      showToast("Sayım sonucu uygulandı.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Sayım uygulanırken bir sorun oluştu.", "error")
+    }
+  }
+
+  const openHistory = async (item: InventoryItem) => {
+    setHistoryItem(item)
+    setMovements([])
+    setMovementsLoading(true)
+    try {
+      setMovements(await fetchStockMovements(item.id))
+    } catch (e) {
+      console.error(e)
+      showToast("Hareket geçmişi yüklenemedi (v4 SQL çalıştırıldı mı?).", "error")
+    } finally {
+      setMovementsLoading(false)
+    }
   }
 
   const handleExcelImport = async (rows: Record<string, any>[]) => {
@@ -366,6 +529,9 @@ export default function InventoryPage() {
       const increase = original ? Math.max(0, editingItem.quantity - original.quantity) : 0
       const purchasedQuantity = (original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity) + increase
       const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice, purchasedQuantity })
+      if (original && editingItem.quantity !== original.quantity) {
+        logStockMovement(editingItem.id, editingItem.name, editingItem.quantity - original.quantity, "Ürün düzenleme")
+      }
       setInventory(inventory.map(item => item.id === updated.id ? updated : item))
       setIsEditOpen(false)
       setEditingItem(null)
@@ -413,7 +579,19 @@ export default function InventoryPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">📦 Stok Yönetimi</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={exportInventory} variant="outline" className="border-slate-600 text-slate-300">
+            <Download className="mr-2 h-4 w-4" />Excel'e Aktar
+          </Button>
+          <Button onClick={() => setCountOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+            <ClipboardList className="mr-2 h-4 w-4" />Sayım
+          </Button>
+          <Button onClick={() => setOrderOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
+            <MessageCircle className="mr-2 h-4 w-4" />Sipariş Listesi
+          </Button>
+          <Button onClick={refreshPricesByRate} variant="outline" className="border-slate-600 text-slate-300">
+            <RefreshCw className="mr-2 h-4 w-4" />Kura Göre Fiyat
+          </Button>
           <Button onClick={() => setIsImportOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
             <Upload className="mr-2 h-4 w-4" />Excel ile Yükle
           </Button>
@@ -863,7 +1041,7 @@ export default function InventoryPage() {
                 <p>Ürün bulunamadı.</p>
               </div>
             )}
-            {filteredItems.map((item) => {
+            {filteredItems.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map((item) => {
               const stockPercent = item.minQuantity > 0 ? Math.min(100, (item.quantity / item.minQuantity) * 100) : 100
               const isLowStock = item.quantity <= item.minQuantity
               const purchaseInTRY = item.purchaseCurrency === "USD"
@@ -973,6 +1151,15 @@ export default function InventoryPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => openHistory(item)}
+                        className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-500/10"
+                        title="Stok hareket geçmişi"
+                      >
+                        <HistoryIcon className="h-4 w-4 mr-1" />Hareket
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => openEditDialog(item)}
                         className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       >
@@ -994,8 +1181,124 @@ export default function InventoryPage() {
               )
             })}
           </div>
+          <Pagination
+            currentPage={listPage}
+            totalPages={Math.ceil(filteredItems.length / PAGE_SIZE)}
+            goToPage={(p) => setListPage(Math.max(1, Math.min(p, Math.ceil(filteredItems.length / PAGE_SIZE))))}
+            goToNext={() => setListPage(p => Math.min(p + 1, Math.ceil(filteredItems.length / PAGE_SIZE)))}
+            goToPrev={() => setListPage(p => Math.max(p - 1, 1))}
+            totalItems={filteredItems.length}
+            pageSize={PAGE_SIZE}
+          />
         </CardContent>
       </Card>
+
+      {/* Sipariş Listesi */}
+      <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-white">📋 Tedarikçi Sipariş Listesi</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {orderGroups().length === 0 && <p className="text-sm text-slate-400">Kritik stokta ürün yok, sipariş gerekmiyor. 🎉</p>}
+            {orderGroups().map((g) => (
+              <div key={g.name} className="p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
+                <div className="font-medium text-white">🚚 {g.name}</div>
+                <div className="space-y-1">
+                  {g.items.map(({ item, suggest }) => (
+                    <div key={item.id} className="flex justify-between text-sm">
+                      <span className="text-slate-300">{item.name} <span className="text-slate-500">(stok {item.quantity}/{item.minQuantity})</span></span>
+                      <span className="text-amber-400 font-medium">{suggest} adet</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="border-green-600 text-green-400" onClick={() => sendOrderWhatsApp(g)} disabled={!g.supplier}>
+                    <MessageCircle className="h-3 w-3 mr-1" />WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => copyOrder(g)}>
+                    <Copy className="h-3 w-3 mr-1" />Kopyala
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500">Önerilen adet: asgari stokun 2 katına tamamlamak için gereken miktar.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stok Sayımı */}
+      <Dialog open={countOpen} onOpenChange={setCountOpen}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-white">📋 Stok Sayımı</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">Ürün kodunu okutun ya da yazıp Enter'a basın; her okutuş sayımı 1 artırır. Sonunda farklar stoğa işlenir.</p>
+            <div className="flex gap-2">
+              <Input
+                autoFocus
+                value={countInput}
+                onChange={(e) => setCountInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addCount(countInput) }}
+                placeholder="YTE-0001 veya barkod"
+                className="bg-slate-800 border-slate-600 text-white"
+              />
+              <Button type="button" size="icon" variant="outline" className="border-slate-600 text-amber-400 shrink-0" onClick={() => setCountScanOpen(true)}>
+                <Barcode className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {Object.keys(counts).length === 0 && <p className="text-sm text-slate-500">Henüz ürün sayılmadı.</p>}
+              {(Object.entries(counts) as [string, number][]).map(([id, counted]) => {
+                const item = inventory.find(i => i.id === id)
+                if (!item) return null
+                const diff = counted - item.quantity
+                return (
+                  <div key={id} className="flex items-center justify-between gap-2 p-2 bg-slate-800 rounded border border-slate-700">
+                    <div className="min-w-0">
+                      <div className="text-sm text-white truncate">{item.name}</div>
+                      <div className="text-xs text-slate-500">Sistemde: {item.quantity} • <span className={diff === 0 ? "text-emerald-400" : "text-amber-400"}>{diff === 0 ? "Tutuyor" : `Fark: ${diff > 0 ? "+" : ""}${diff}`}</span></div>
+                    </div>
+                    <Input
+                      type="number"
+                      value={counted}
+                      onChange={(e) => setCounts(prev => ({ ...prev, [id]: Math.max(0, Number(e.target.value) || 0) }))}
+                      className="w-20 h-8 bg-slate-900 border-slate-600 text-white text-sm"
+                    />
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={applyCounts} disabled={Object.keys(counts).length === 0} className="bg-emerald-600 hover:bg-emerald-700 flex-1">Sayımı Uygula</Button>
+              <Button variant="outline" onClick={() => setCounts({})} className="border-slate-600 text-slate-300">Temizle</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <BarcodeScannerDialog
+        open={countScanOpen}
+        onOpenChange={setCountScanOpen}
+        title="Sayım — Barkod Okut"
+        onScan={(code) => addCount(code)}
+      />
+
+      {/* Stok Hareket Geçmişi */}
+      <Dialog open={!!historyItem} onOpenChange={(o) => { if (!o) setHistoryItem(null) }}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-white">🕘 Stok Hareketleri — {historyItem?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            {movementsLoading && <p className="text-sm text-slate-400">Yükleniyor...</p>}
+            {!movementsLoading && movements.length === 0 && <p className="text-sm text-slate-500">Henüz kayıtlı hareket yok. (Hareketler bu sürümden sonra kaydedilir.)</p>}
+            {movements.map((m) => (
+              <div key={m.id} className="flex items-center justify-between p-2 bg-slate-800 rounded border border-slate-700 text-sm">
+                <div>
+                  <div className="text-white">{m.reason || "Stok değişimi"}</div>
+                  <div className="text-xs text-slate-500">{m.date}{m.userName ? ` • ${m.userName}` : ""}</div>
+                </div>
+                <span className={m.delta > 0 ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>{m.delta > 0 ? "+" : ""}{m.delta}</span>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

@@ -34,6 +34,7 @@ import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { pullCompanySettings } from "@/lib/companySettings"
 import { supabase } from "@/lib/supabase"
 import { NotificationBell } from "@/components/NotificationBell"
+import { GlobalSearch } from "@/components/GlobalSearch"
 
 const menuItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa", color: "text-emerald-400" },
@@ -91,7 +92,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) {
           localStorage.removeItem("yt_user")
-          window.location.href = "/login"
+          // Karekodla gelen kullanıcı girişten sonra aynı kayda dönsün
+          const back = window.location.pathname + window.location.search
+          window.location.href = back && back !== "/dashboard" ? `/login?redirect=${encodeURIComponent(back)}` : "/login"
           return
         }
 
@@ -346,11 +349,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-sm font-bold text-foreground">Yeşiltaş</span>
             </div>
             <div className="flex items-center gap-2">
+              <GlobalSearch />
               <NotificationBell />
             </div>
           </div>
 
           <div className="hidden lg:flex items-center justify-end gap-3 px-6 pt-4 pb-2">
+            <GlobalSearch listenKeyboard />
             <NotificationBell />
             <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
               <Input

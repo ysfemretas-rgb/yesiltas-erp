@@ -1,5 +1,6 @@
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
+import { logStockMovement } from "@/lib/stockMovements"
 
 export interface InventoryItem {
   id: string
@@ -137,16 +138,22 @@ export async function deleteInventoryItem(id: string): Promise<void> {
 // satış yaparsa eski "oku, hesapla, yaz" yöntemi birinin düşüşünü eziyordu.
 // Önce supabase-fixes-v2-migration.sql ile gelen adjust_inventory_quantity fonksiyonu
 // kullanılır; o yoksa eski yönteme düşer.
-export async function adjustInventoryQuantity(id: string, delta: number): Promise<number | null> {
+export async function adjustInventoryQuantity(id: string, delta: number, reason: string = "Stok değişimi", productName: string = ""): Promise<number | null> {
   if (!delta) return null
+  let result: number | null = null
   const { data, error } = await supabase.rpc("adjust_inventory_quantity", { p_id: id, p_delta: delta })
   if (!error && data !== null && data !== undefined) {
-    return Number(Array.isArray(data) ? data[0] : data)
+    result = Number(Array.isArray(data) ? data[0] : data)
+  } else {
+    const { data: row, error: readErr } = await supabase.from("inventory").select("quantity, name").eq("id", id).single()
+    if (readErr || !row) throw readErr || new Error("Ürün bulunamadı")
+    const next = Math.max(0, (row.quantity ?? 0) + delta)
+    const { error: upErr } = await supabase.from("inventory").update({ quantity: next }).eq("id", id)
+    if (upErr) throw upErr
+    if (!productName) productName = row.name ?? ""
+    result = next
   }
-  const { data: row, error: readErr } = await supabase.from("inventory").select("quantity").eq("id", id).single()
-  if (readErr || !row) throw readErr || new Error("Ürün bulunamadı")
-  const next = Math.max(0, (row.quantity ?? 0) + delta)
-  const { error: upErr } = await supabase.from("inventory").update({ quantity: next }).eq("id", id)
-  if (upErr) throw upErr
-  return next
+  // Geçmiş kaydı (hata verirse ana işlemi bozmaz)
+  logStockMovement(id, productName, delta, reason)
+  return result
 }

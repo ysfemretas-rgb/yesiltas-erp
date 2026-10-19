@@ -24,7 +24,8 @@ export function usePageAccess(requiredPermission: string) {
 
     const goLogin = () => {
       try { localStorage.removeItem('yt_user') } catch { /* yoksay */ }
-      window.location.href = '/login'
+      const back = window.location.pathname + window.location.search
+      window.location.href = `/login?redirect=${encodeURIComponent(back)}`
     }
 
     const run = async () => {

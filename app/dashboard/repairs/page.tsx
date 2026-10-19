@@ -4,7 +4,13 @@ import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { Repair, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
+import { Repair, RepairPart, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
+import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/inventory"
+import { fetchStaff, StaffMember } from "@/lib/staff"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
+import { exportToExcel } from "@/lib/exportExcel"
+import { Pagination } from "@/components/Pagination"
+import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon } from "lucide-react"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
@@ -86,6 +92,14 @@ function RepairsPageContent() {
   const [paymentType, setPaymentType] = useState<string>("unpaid")
   const [paidAmount, setPaidAmount] = useState("")
   const [notesInput, setNotesInput] = useState("")
+  const [technicianInput, setTechnicianInput] = useState("")
+  const [staffList, setStaffList] = useState<StaffMember[]>([])
+  const [stockItems, setStockItems] = useState<InventoryItem[]>([])
+  const [partProductId, setPartProductId] = useState("")
+  const [partQty, setPartQty] = useState("1")
+  const [listPage, setListPage] = useState(1)
+  const PAGE_SIZE = 20
+  const { rates } = useExchangeRates()
   const [isNewCustomer, setIsNewCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState("")
   const [newCustomerPhone1, setNewCustomerPhone1] = useState("")
@@ -161,6 +175,13 @@ function RepairsPageContent() {
   // QR etiketi okutulduğunda (?open=<id> ile gelindiğinde) ilgili tamir
   // kaydını otomatik açar. (React kuralları gereği erken "return"lerden
   // önce, diğer hook'larla aynı yerde tanımlanmalı.)
+  useEffect(() => {
+    fetchStaff().then(setStaffList).catch((e) => console.error("Personel yüklenemedi:", e))
+    fetchInventory().then(setStockItems).catch((e) => console.error("Envanter yüklenemedi:", e))
+  }, [])
+
+  useEffect(() => { setListPage(1) }, [search, statusFilter])
+
   const openEditDialog = (repair: Repair) => {
     setSelectedRepair(repair)
     setCustomerName(repair.customerName)
@@ -176,6 +197,9 @@ function RepairsPageContent() {
     setPaymentType(repair.paymentType)
     setPaidAmount(repair.paid.toString())
     setNotesInput(repair.notes)
+    setTechnicianInput(repair.technician || "")
+    setPartProductId("")
+    setPartQty("1")
     setIsEditDialogOpen(true)
   }
 
@@ -434,6 +458,7 @@ function RepairsPageContent() {
         remaining: remainingNum,
         paymentType: paymentType as Repair["paymentType"],
         notes: notesInput,
+        technician: technicianInput,
       })
 
       setRepairs(repairs.map((r) => r.id === selectedRepair.id ? updatedRepair : r))
@@ -500,6 +525,10 @@ function RepairsPageContent() {
   const handleDeleteRepair = async (id: string) => {
     if (confirm("Bu tamir kaydını silmek istediğinize emin misiniz?\n\n⚠️ Bu tamirden oluşan finans geliri kaydı da silinecek. Bu işlem geri alınamaz!")) {
       try {
+        const target = repairs.find((r) => r.id === id)
+        for (const part of target?.parts || []) {
+          await adjustInventoryQuantity(part.productId, part.quantity, `Tamir silindi ${target?.repairCode || ""}`.trim(), part.name).catch((e) => console.error(e))
+        }
         await deleteRepair(id)
         await deleteTransactionsBySource("repair", id)
         setRepairs(repairs.filter((r) => r.id !== id))
@@ -576,6 +605,88 @@ function RepairsPageContent() {
 
   const getRepairNotes = (repairId: string) => notes.filter((n) => n.repairId === repairId)
 
+  // Alış fiyatını TL'ye çevirir (parça maliyeti için)
+  const costInTRY = (item: InventoryItem) => {
+    const price = item.purchasePrice || 0
+    if (item.purchaseCurrency === "USD") return Math.round(price * rates.USD * 100) / 100
+    if (item.purchaseCurrency === "EUR") return Math.round(price * rates.EUR * 100) / 100
+    return price
+  }
+
+  const sumPartsCost = (parts: RepairPart[]) => Math.round(parts.reduce((sum, p) => sum + p.unitCost * p.quantity, 0) * 100) / 100
+
+  // Tamirde kullanılan parçayı ekler: stoktan düşer, maliyet tamire yazılır
+  const addPart = async () => {
+    if (!selectedRepair) return
+    const product = stockItems.find(i => i.id === partProductId)
+    const qty = Math.floor(Number(partQty))
+    if (!product || !qty || qty < 1) {
+      showToast("Parça ve adet seçin.", "error")
+      return
+    }
+    if (qty > product.quantity) {
+      showToast(`${product.name} — stokta sadece ${product.quantity} adet var.`, "error")
+      return
+    }
+    const current = selectedRepair.parts || []
+    const existing = current.find(p => p.productId === product.id)
+    const nextParts: RepairPart[] = existing
+      ? current.map(p => p.productId === product.id ? { ...p, quantity: p.quantity + qty } : p)
+      : [...current, { productId: product.id, name: product.name, quantity: qty, unitCost: costInTRY(product) }]
+    try {
+      await adjustInventoryQuantity(product.id, -qty, `Tamir ${selectedRepair.repairCode || ""}`.trim(), product.name)
+      const updated = await updateRepair(selectedRepair.id, { parts: nextParts, partsCost: sumPartsCost(nextParts) })
+      setSelectedRepair(updated)
+      setRepairs(repairs.map(r => r.id === updated.id ? updated : r))
+      setStockItems(stockItems.map(i => i.id === product.id ? { ...i, quantity: i.quantity - qty } : i))
+      setPartProductId("")
+      setPartQty("1")
+      showToast("Parça eklendi, stoktan düşüldü.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Parça eklenirken bir sorun oluştu (v4 SQL çalıştırıldı mı?).", "error")
+    }
+  }
+
+  const removePart = async (index: number) => {
+    if (!selectedRepair) return
+    const current = selectedRepair.parts || []
+    const part = current[index]
+    if (!part) return
+    const nextParts = current.filter((_, i) => i !== index)
+    try {
+      await adjustInventoryQuantity(part.productId, part.quantity, `Tamirden çıkarıldı ${selectedRepair.repairCode || ""}`.trim(), part.name)
+      const updated = await updateRepair(selectedRepair.id, { parts: nextParts, partsCost: sumPartsCost(nextParts) })
+      setSelectedRepair(updated)
+      setRepairs(repairs.map(r => r.id === updated.id ? updated : r))
+      setStockItems(stockItems.map(i => i.id === part.productId ? { ...i, quantity: i.quantity + part.quantity } : i))
+      showToast("Parça çıkarıldı, stoğa geri eklendi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Parça çıkarılırken bir sorun oluştu.", "error")
+    }
+  }
+
+  const exportRepairs = () => {
+    exportToExcel("tamirler", "Teknik Servis", filteredRepairs.map(r => ({
+      "Tamir Kodu": r.repairCode || "",
+      "Tarih": r.createdAt,
+      "Müşteri": r.customerName,
+      "Müşteri Kodu": r.customerCode || "",
+      "Telefon": r.phone1,
+      "Cihaz": `${r.brand} ${r.model}`.trim(),
+      "IMEI": r.imei || "",
+      "Arıza": r.issue,
+      "Durum": r.status === "completed" ? "Tamamlandı" : r.status === "in_progress" ? "Devam Ediyor" : "Bekliyor",
+      "Teknisyen": r.technician || "",
+      "Ücret": r.cost,
+      "Parça Maliyeti": r.partsCost || 0,
+      "Kâr": r.paymentType === "gift" ? -(r.partsCost || 0) : r.cost - (r.partsCost || 0),
+      "Alınan": r.paid,
+      "Kalan": r.remaining,
+    })))
+  }
+
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
 
@@ -585,11 +696,17 @@ function RepairsPageContent() {
         ? `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\uD83D\uDCB5 *Fazla Ödeme (Alacağınız):* ${formatCurrency(-repair.remaining)}\n\u2705 Hemen teslim alabilirsiniz.`
         : `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\u2705 Hemen teslim alabilirsiniz.`
 
-    const message = renderTemplate(getWhatsAppTemplates().repairs, {
-      musteri: repair.customerName,
-      cihaz: `${repair.brand} ${repair.model}`,
-      odeme_durumu: odemeDurumu,
-    })
+    // Mesaj tamirin gerçek durumuna göre hazırlanır (eskiden her zaman "tamamlandı" yazıyordu)
+    const device = `${repair.brand} ${repair.model}`.trim()
+    const message = repair.status === "completed"
+      ? renderTemplate(getWhatsAppTemplates().repairs, {
+          musteri: repair.customerName,
+          cihaz: device,
+          odeme_durumu: odemeDurumu,
+        })
+      : repair.status === "in_progress"
+        ? `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDD27 *${device}* cihazınızın tamir işlemi devam etmektedir. Tamamlandığında size haber vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
+        : `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDCE5 *${device}* cihazınız teslim alınmıştır${repair.repairCode ? ` (Kayıt No: ${repair.repairCode})` : ""}. İnceleme sonrası size bilgi vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
 
     window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
   }
@@ -600,6 +717,9 @@ function RepairsPageContent() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🔧 Teknik Servis</h1>
         <div className="flex gap-2">
+        <Button onClick={exportRepairs} variant="outline" className="border-slate-600 text-slate-300">
+          <DownloadIcon className="h-4 w-4 mr-2" />Excel
+        </Button>
         <Button onClick={() => setIsRepairScannerOpen(true)} variant="outline" className="border-slate-600 text-cyan-400">
           <QrCode className="h-4 w-4 mr-2" />QR Okut
         </Button>
@@ -922,7 +1042,7 @@ function RepairsPageContent() {
             <p className="text-slate-500 text-center py-8">📝 Kayıt bulunamadı.</p>
           ) : (
             <div className="space-y-2">
-              {filteredRepairs.map((repair) => (
+              {filteredRepairs.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map((repair) => (
                 <div key={repair.id} className="p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
@@ -1034,6 +1154,15 @@ function RepairsPageContent() {
                   </div>
                 </div>
               ))}
+              <Pagination
+                currentPage={listPage}
+                totalPages={Math.ceil(filteredRepairs.length / PAGE_SIZE)}
+                goToPage={(p) => setListPage(Math.max(1, Math.min(p, Math.ceil(filteredRepairs.length / PAGE_SIZE))))}
+                goToNext={() => setListPage(p => Math.min(p + 1, Math.ceil(filteredRepairs.length / PAGE_SIZE)))}
+                goToPrev={() => setListPage(p => Math.max(p - 1, 1))}
+                totalItems={filteredRepairs.length}
+                pageSize={PAGE_SIZE}
+              />
             </div>
           )}
         </CardContent>
@@ -1169,6 +1298,58 @@ function RepairsPageContent() {
                 </div>
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label className="text-slate-300">Teknisyen</Label>
+              <Select value={technicianInput || "__none__"} onValueChange={(v) => setTechnicianInput(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                  <SelectValue placeholder="Teknisyen seçin" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-600">
+                  <SelectItem value="__none__" className="text-slate-400">— Atanmadı —</SelectItem>
+                  {staffList.filter(m => m.status !== "inactive").map(m => (
+                    <SelectItem key={m.id} value={m.name} className="text-white">{m.name}</SelectItem>
+                  ))}
+                  {technicianInput && !staffList.some(m => m.name === technicianInput) && (
+                    <SelectItem value={technicianInput} className="text-white">{technicianInput}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+              <Label className="text-slate-300 flex items-center gap-2"><PackageIcon className="h-4 w-4" />Kullanılan Parçalar</Label>
+              {(selectedRepair?.parts || []).length === 0 && <p className="text-xs text-slate-500">Henüz parça eklenmedi. Eklenen parça stoktan otomatik düşer.</p>}
+              {(selectedRepair?.parts || []).map((p, i) => (
+                <div key={`${p.productId}-${i}`} className="flex items-center justify-between gap-2 text-sm p-2 bg-slate-900 rounded border border-slate-700">
+                  <span className="text-white truncate">{p.name} <span className="text-slate-500">x{p.quantity}</span></span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="text-amber-400">{formatCurrency(p.unitCost * p.quantity)}</span>
+                    <Button type="button" size="icon" variant="outline" className="h-6 w-6 text-red-400" onClick={() => removePart(i)}><TrashIcon className="h-3 w-3" /></Button>
+                  </span>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Select value={partProductId} onValueChange={setPartProductId}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white flex-1 min-w-0">
+                    <SelectValue placeholder="Parça seçin" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600 max-h-60">
+                    {stockItems.filter(i => i.quantity > 0).map(i => (
+                      <SelectItem key={i.id} value={i.id} className="text-white">{i.name} (stok {i.quantity})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input type="number" min={1} value={partQty} onChange={(e) => setPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
+                <Button type="button" onClick={addPart} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4" /></Button>
+              </div>
+              {selectedRepair && (selectedRepair.partsCost || 0) > 0 && (
+                <div className="flex justify-between text-sm pt-1 border-t border-slate-700">
+                  <span className="text-slate-400">Parça maliyeti: <span className="text-amber-400">{formatCurrency(selectedRepair.partsCost || 0)}</span></span>
+                  <span className="text-slate-400">Tahmini kâr: <span className={selectedRepair.paymentType === "gift" || selectedRepair.cost - (selectedRepair.partsCost || 0) < 0 ? "text-red-400" : "text-emerald-400"}>{formatCurrency(selectedRepair.paymentType === "gift" ? -(selectedRepair.partsCost || 0) : selectedRepair.cost - (selectedRepair.partsCost || 0))}</span></span>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-2">
               <Label className="text-slate-300">Notlar</Label>
