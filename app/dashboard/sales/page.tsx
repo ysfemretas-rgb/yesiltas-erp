@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -67,6 +68,7 @@ export default function SalesPage() {
   const { authorized, checking } = usePageAccess("Satış")
   const isManager = useIsManager()
   const { rates } = useExchangeRates()
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [products, setProducts] = useState<InventoryItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
@@ -1158,23 +1160,46 @@ Bu işlem geri alınamaz!`)) return
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Toplam Satış</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-white">{sales.filter(s => s.status !== "cancelled").length}</div></CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("today")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Bugün</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-emerald-400">{sales.filter(s => s.status !== "cancelled" && s.date === localDateStr()).length}</div></CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("revenue")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Toplam Gelir</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-green-400">{formatCurrency(sales.filter(s => s.status !== "cancelled").reduce((sum, s) => sum + (s.paid || 0), 0))}</div></CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("remaining")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-400">Bekleyen Tahsilat</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-amber-400">{formatCurrency(sales.filter(s => s.status !== "cancelled").reduce((sum, s) => sum + Math.max(0, s.remaining || 0), 0))}</div></CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const active = sales.filter(s => s.status !== "cancelled")
+  const rowOf = (s: Sale, right: string, rightClass: string): StatRow => ({
+    id: s.id,
+    title: s.customerName,
+    tag: s.saleCode,
+    subtitle: `${s.date} • ${s.items.map(i => i.name).join(", ")}`,
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); setViewSale(s) },
+  })
+  defs.all = { title: "Tüm Satışlar", rows: active.map(s => rowOf(s, money(s.totalAmount), "text-white")) }
+  defs.today = { title: "Bugünkü Satışlar", rows: active.filter(s => s.date === localDateStr()).map(s => rowOf(s, money(s.totalAmount), "text-emerald-400")) }
+  const paidRows = active.filter(s => (s.paid || 0) > 0)
+  defs.revenue = { title: "Tahsil Edilen Satışlar", summary: `Toplam tahsilat: ${money(paidRows.reduce((sum, s) => sum + s.paid, 0))}`, rows: paidRows.map(s => rowOf(s, money(s.paid), "text-green-400")) }
+  const remRows = active.filter(s => (s.remaining || 0) > 0)
+  defs.remaining = { title: "Tahsilatı Bekleyen Satışlar", summary: `Toplam bekleyen: ${money(remRows.reduce((sum, s) => sum + s.remaining, 0))}`, rows: remRows.map(s => rowOf(s, `Kalan ${money(s.remaining)}`, "text-amber-400")) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       {/* New Sale Dialog */}
       <Dialog open={showNewSale} onOpenChange={setShowNewSale}>

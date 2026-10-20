@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -62,6 +63,7 @@ export default function ConsumablesPage() {
   const { authorized, checking } = usePageAccess("Sarf Malzemeler")
   const isManager = useIsManager()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [consumables, setConsumables] = useState<Consumable[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
@@ -450,7 +452,7 @@ export default function ConsumablesPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Malzeme</CardTitle>
             <Package className="h-4 w-4 text-blue-400" />
@@ -459,7 +461,7 @@ export default function ConsumablesPage() {
             <div className="text-2xl font-bold text-white">{consumables.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("low")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Kritik Stok</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-400" />
@@ -468,7 +470,7 @@ export default function ConsumablesPage() {
             <div className="text-2xl font-bold text-red-400">{lowStockItems.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("value")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Değer</CardTitle>
             <DollarSign className="h-4 w-4 text-emerald-400" />
@@ -477,7 +479,7 @@ export default function ConsumablesPage() {
             <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalValue)}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("cats")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Kategori Sayısı</CardTitle>
             <Package className="h-4 w-4 text-purple-400" />
@@ -487,6 +489,25 @@ export default function ConsumablesPage() {
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (c: Consumable, right: string, rightClass: string): StatRow => ({
+    id: c.id,
+    title: c.name,
+    subtitle: `${c.category}${c.supplier ? ` • ${c.supplier}` : ""} • Stok ${c.currentStock}/${c.minStock} ${c.unit}`,
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); openEditDialog(c) },
+  })
+  defs.all = { title: "Tüm Sarf Malzemeler", rows: consumables.map(c => rowOf(c, `${c.currentStock} ${c.unit}`, c.currentStock <= c.minStock ? "text-red-400" : "text-white")) }
+  defs.low = { title: "Kritik Stoktaki Malzemeler", rows: lowStockItems.map(c => rowOf(c, `${c.currentStock}/${c.minStock} ${c.unit}`, "text-red-400")) }
+  defs.value = { title: "Stok Değeri (malzeme bazında)", summary: `Toplam: ${money(totalValue)}`, rows: consumables.map(c => rowOf(c, money(priceInTRY(c.purchasePrice, c.purchaseCurrency, rates) * c.currentStock), "text-emerald-400")) }
+  defs.cats = { title: "Kategoriler", rows: categories.map(cat => ({ id: cat, title: cat, right: `${consumables.filter(c => c.category === cat).length} malzeme`, rightClass: "text-purple-400" })) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       {lowStockItems.length > 0 && (
         <Card className="bg-red-900/20 border-red-800">

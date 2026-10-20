@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -77,6 +78,7 @@ export default function InventoryPage() {
   const { authorized, checking } = usePageAccess("Envanter")
   const isManager = useIsManager()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -992,7 +994,7 @@ export default function InventoryPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-5">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Ürün</CardTitle>
             <Package className="h-4 w-4 text-blue-500" />
@@ -1001,7 +1003,7 @@ export default function InventoryPage() {
             <div className="text-2xl font-bold text-white">{inventory.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("low")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Kritik Stok</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
@@ -1010,7 +1012,7 @@ export default function InventoryPage() {
             <div className="text-2xl font-bold text-red-400">{lowStockItems.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("cost")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Maliyet</CardTitle>
             <Barcode className="h-4 w-4 text-amber-500" />
@@ -1019,7 +1021,7 @@ export default function InventoryPage() {
             <div className="text-2xl font-bold text-amber-400">{formatCurrency(totalPurchaseValue)}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("saleValue")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Satış Değeri</CardTitle>
             <DollarSign className="h-4 w-4 text-emerald-500" />
@@ -1028,7 +1030,7 @@ export default function InventoryPage() {
             <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalSaleValue)}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("profit")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Tahmini Kar</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
@@ -1041,6 +1043,29 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const costTRY = (i: typeof inventoryWithPrices[number]) => (i.purchaseCurrency === "USD" ? i.purchasePrice * rates.USD : i.purchaseCurrency === "EUR" ? i.purchasePrice * rates.EUR : i.purchasePrice)
+  const rowOf = (i: typeof inventoryWithPrices[number], right: string, rightClass: string): StatRow => ({
+    id: i.id,
+    title: i.name,
+    tag: i.productCode,
+    subtitle: `${i.category} • Stok ${i.quantity}/${i.minQuantity}${i.supplier ? ` • ${i.supplier}` : ""}`,
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); setSearchTerm(i.productCode || i.name) },
+  })
+  const inStock = inventoryWithPrices.filter(i => i.quantity > 0)
+  defs.all = { title: "Tüm Ürünler", rows: inventoryWithPrices.map(i => rowOf(i, `${i.quantity} adet`, i.quantity <= i.minQuantity ? "text-red-400" : "text-white")) }
+  defs.low = { title: "Kritik Stoktaki Ürünler", rows: lowStockItems.map(i => rowOf(i, `${i.quantity}/${i.minQuantity}`, "text-red-400")) }
+  defs.cost = { title: "Stok Maliyeti (ürün bazında)", summary: `Toplam: ${money(totalPurchaseValue)}`, rows: inStock.map(i => rowOf(i, money(costTRY(i) * i.quantity), "text-amber-400")).sort((a, b) => 0) }
+  defs.saleValue = { title: "Stok Satış Değeri (ürün bazında)", summary: `Toplam: ${money(totalSaleValue)}`, rows: inStock.map(i => rowOf(i, money(i.salePrice * i.quantity), "text-emerald-400")) }
+  defs.profit = { title: "Tahmini Kâr (ürün bazında)", summary: `Toplam: ${money(totalProfit)}`, rows: inStock.map(i => rowOf(i, money((i.salePrice - costTRY(i)) * i.quantity), "text-green-400")) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       {lowStockItems.length > 0 && (
         <Card className="bg-red-900/20 border-red-800">

@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { CustomerPicker } from "@/components/CustomerPicker"
 import { localDateStr } from "@/lib/dates"
@@ -63,6 +64,7 @@ export default function AppointmentsPage() {
   const { authorized, checking } = usePageAccess("Randevular")
   const isManager = useIsManager()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -446,7 +448,7 @@ export default function AppointmentsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("pending")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Bekleyen</CardTitle>
             <Clock className="h-4 w-4 text-blue-400" />
@@ -455,7 +457,7 @@ export default function AppointmentsPage() {
             <div className="text-2xl font-bold text-blue-400">{pendingAppointments}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("today")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Bugün</CardTitle>
             <CalendarCheck className="h-4 w-4 text-emerald-400" />
@@ -464,7 +466,7 @@ export default function AppointmentsPage() {
             <div className="text-2xl font-bold text-emerald-400">{todayAppointments}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("past")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Geçmiş</CardTitle>
             <AlertTriangle className="h-4 w-4 text-orange-400" />
@@ -473,7 +475,7 @@ export default function AppointmentsPage() {
             <div className="text-2xl font-bold text-orange-400">{pastAppointments}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Toplam</CardTitle>
             <CalendarDays className="h-4 w-4 text-purple-400" />
@@ -483,6 +485,25 @@ export default function AppointmentsPage() {
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (a: Appointment): StatRow => ({
+    id: a.id,
+    title: a.customerName,
+    subtitle: `${a.date} ${a.time} • ${a.service}`,
+    right: a.status === "scheduled" ? "Bekliyor" : a.status === "completed" ? "Tamamlandı" : "İptal",
+    rightClass: a.status === "scheduled" ? "text-blue-400" : a.status === "completed" ? "text-emerald-400" : "text-slate-500",
+    onClick: () => { setStatKey(null); handleEditClick(a) },
+  })
+  defs.pending = { title: "Bekleyen Randevular", rows: appointments.filter(a => a.status === "scheduled").map(rowOf) }
+  defs.today = { title: "Bugünkü Randevular", rows: appointments.filter(a => a.date === todayStr && a.status === "scheduled").map(rowOf) }
+  defs.past = { title: "Geçmiş (Gelinmemiş/Bekleyen) Randevular", rows: appointments.filter(a => isPastDate(a.date) && a.status === "scheduled").map(rowOf) }
+  defs.all = { title: "Tüm Randevular", rows: appointments.map(rowOf) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>

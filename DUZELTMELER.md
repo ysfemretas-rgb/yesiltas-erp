@@ -107,3 +107,19 @@
 - **Aramada barkod:** Tamir arama kutusunun sağında 📷 barkod/karekod okut butonu; kutuya tamir kodu (YTT-), müşteri kodu, IMEI de yazılabilir (arama artık bunları da bulur). Barkod okuyucuyla okutunca (Enter) doğrudan kayıt açılır: tamir kodu/IMEI/karekod -> tamir kaydı; müşteri kodu (YTM-) -> o müşterinin tamirleri listelenir; satış (YTS-) veya ürün (YTE-) kodu -> ilgili sayfada açılır.
 - **WhatsApp:** Tüm sayfalarda WhatsApp artık telefonda doğrudan uygulamaya geçer (eskiden uygulama içi tarayıcıda açılıp dönüşte bembeyaz sayfada kalıyordu). iPhone'da hiçbir web sayfası açılmaz (yedek web bağlantısı kaldırıldı, çünkü iPhone'un onay penceresi açıkken devreye girip aynı beyaz sayfayı açıyordu). İlk açılışta iPhone "WhatsApp'ta aç?" diye sorabilir, "Aç" deyin.
 - **Kaldığınız yerden devam:** Telefonda uygulama kapanıp yeniden açılırsa (WhatsApp'a gidip dönünce iOS sayfayı yenileyebilir) en başa değil, en son bulunduğunuz sayfaya dönülür (6 saat içinde ve oturumun ilk açılışında).
+
+## v10 — Tüm sayfalarda tıklanabilir sayaç kutuları
+Üstteki sayı kutularına basınca, o sayının hangi kayıtlardan oluştuğunu gösteren liste penceresi açılır (10'dan fazla kayıtta pencerede arama kutusu çıkar; satıra basınca ilgili kayıt açılır):
+- **Satışlar:** Toplam Satış, Bugün, Toplam Gelir, Bekleyen Tahsilat
+- **Müşteriler:** Toplam, Aktif, Borçlu (en çok borçludan), Toplam Borç, Fazla Ödeme
+- **Envanter:** Toplam Ürün, Kritik Stok, Toplam Maliyet / Satış Değeri / Tahmini Kâr (ürün bazında döküm)
+- **Tedarikçiler:** Toplam, Aktif, Toplam Sipariş, Borcumuz, Alacağımız, Kategori
+- **Finans:** Toplam Gelir, Toplam Gider, Net Bakiye (kasa kayıtları listesi)
+- **Garantiler:** Toplam, Aktif, Bitmek Üzere, Süresi Dolmuş
+- **Randevular:** Bekleyen, Bugün, Geçmiş, Toplam
+- **Görevler:** Bekliyor, Devam Ediyor, Tamamlandı
+- **Personel:** Toplam, Aktif, İzinde, Pasif, Aylık Maaş Gideri
+- **Sarf Malzemeler:** Toplam, Kritik Stok, Toplam Değer, Kategori Sayısı
+- **Demirbaşlar:** Toplam Kalem, Toplam Değer
+- **Raporlar:** Toplam Gelir, Toplam Gider, Net Kâr, Toplam İşlem (seçili dönem)
+- Teknik Servis kutuları önceden yapılmıştı; Ana Sayfa kutuları zaten ilgili sayfayı açar.

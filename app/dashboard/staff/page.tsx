@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -81,6 +82,7 @@ export default function StaffPage() {
   const { authorized, checking } = usePageAccess("Personel")
   const isManager = useIsManager()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -406,7 +408,7 @@ export default function StaffPage() {
 
         {/* İstatistik Kartları */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Toplam Personel</CardTitle>
               <Users className="h-4 w-4 text-blue-400" />
@@ -415,7 +417,7 @@ export default function StaffPage() {
               <div className="text-2xl font-bold text-white">{staff.length}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("active")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Aktif</CardTitle>
               <Users className="h-4 w-4 text-emerald-400" />
@@ -424,7 +426,7 @@ export default function StaffPage() {
               <div className="text-2xl font-bold text-emerald-400">{activeCount}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("leave")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">İzinde</CardTitle>
               <Users className="h-4 w-4 text-yellow-400" />
@@ -433,7 +435,7 @@ export default function StaffPage() {
               <div className="text-2xl font-bold text-yellow-400">{onLeaveCount}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("inactive")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Pasif</CardTitle>
               <Users className="h-4 w-4 text-slate-400" />
@@ -442,7 +444,7 @@ export default function StaffPage() {
               <div className="text-2xl font-bold text-slate-400">{inactiveCount}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700 col-span-2 md:col-span-1">
+          <Card onClick={() => setStatKey("salary")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700 col-span-2 md:col-span-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Aylık Maaş Gideri</CardTitle>
               <Shield className="h-4 w-4 text-purple-400" />
@@ -452,6 +454,26 @@ export default function StaffPage() {
             </CardContent>
           </Card>
         </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (m: StaffMember, right: string, rightClass: string): StatRow => ({
+    id: m.id,
+    title: m.name,
+    subtitle: `${m.role || ""}${m.department ? ` • ${m.department}` : ""}${m.phone ? ` • ${m.phone}` : ""}`,
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); handleEditMember(m) },
+  })
+  defs.all = { title: "Tüm Personel", rows: staff.map(m => rowOf(m, m.status === "active" ? "Aktif" : m.status === "on_leave" ? "İzinde" : "Pasif", m.status === "active" ? "text-emerald-400" : "text-slate-400")) }
+  defs.active = { title: "Aktif Personel", rows: staff.filter(m => m.status === "active").map(m => rowOf(m, "", "")) }
+  defs.leave = { title: "İzindeki Personel", rows: staff.filter(m => m.status === "on_leave").map(m => rowOf(m, "", "")) }
+  defs.inactive = { title: "Pasif Personel", rows: staff.filter(m => m.status === "inactive").map(m => rowOf(m, "", "")) }
+  defs.salary = { title: "Aylık Maaş Gideri (aktif personel)", summary: `Toplam: ${money(totalSalary)}`, rows: staff.filter(m => m.status === "active").map(m => rowOf(m, money(Number(m.salary) || 0), "text-purple-400")) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
         {/* Personel Listesi */}
         <Card className="bg-slate-800 border-slate-700">

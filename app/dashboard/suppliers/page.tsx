@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -27,6 +28,7 @@ export default function SuppliersPage() {
   const isManager = useIsManager()
   const { rates } = useExchangeRates()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -392,7 +394,7 @@ export default function SuppliersPage() {
 
         {/* İstatistik Kartları */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Toplam Tedarikçi</CardTitle>
               <Truck className="h-4 w-4 text-blue-400" />
@@ -401,7 +403,7 @@ export default function SuppliersPage() {
               <div className="text-2xl font-bold text-white">{suppliers.length}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("active")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Aktif Tedarikçi</CardTitle>
               <Truck className="h-4 w-4 text-emerald-400" />
@@ -410,7 +412,7 @@ export default function SuppliersPage() {
               <div className="text-2xl font-bold text-emerald-400">{activeCount}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("orders")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Toplam Sipariş</CardTitle>
               <Package className="h-4 w-4 text-purple-400" />
@@ -419,7 +421,7 @@ export default function SuppliersPage() {
               <div className="text-2xl font-bold text-purple-400">{totalOrders}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("debt")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Toplam Borcumuz</CardTitle>
               <Package className="h-4 w-4 text-amber-400" />
@@ -431,7 +433,7 @@ export default function SuppliersPage() {
             </CardContent>
           </Card>
           {totalSupplierCredit > 0 && (
-            <Card className="bg-slate-800 border-slate-700">
+            <Card onClick={() => setStatKey("credit")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-slate-300">Tedarikçilerden Alacağımız (Fazla Ödeme)</CardTitle>
                 <Package className="h-4 w-4 text-cyan-400" />
@@ -443,7 +445,7 @@ export default function SuppliersPage() {
               </CardContent>
             </Card>
           )}
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("cats")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Kategori</CardTitle>
               <Truck className="h-4 w-4 text-orange-400" />
@@ -453,6 +455,28 @@ export default function SuppliersPage() {
             </CardContent>
           </Card>
         </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (sp: Supplier, right: string, rightClass: string): StatRow => ({
+    id: sp.id,
+    title: sp.name,
+    subtitle: `${sp.category || ""}${sp.phone ? ` • ${sp.phone}` : ""}`,
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); openEdit(sp) },
+  })
+  defs.all = { title: "Tüm Tedarikçiler", rows: suppliers.map(sp => rowOf(sp, "", "")) }
+  defs.active = { title: "Aktif Tedarikçiler", rows: suppliers.filter(sp => sp.status === "active").map(sp => rowOf(sp, "", "")) }
+  defs.orders = { title: "Tedarikçi Bazında Ürün/Sipariş", rows: suppliers.map(sp => rowOf(sp, `${supplierStats(sp.name).orderCount} ürün`, "text-purple-400")).filter(r => r.right !== "0 ürün") }
+  const debtors = suppliers.filter(sp => supplierStats(sp.name).debt > 0).sort((a, b) => supplierStats(b.name).debt - supplierStats(a.name).debt)
+  defs.debt = { title: "Tedarikçilere Borcumuz", summary: `Toplam: ${money(totalSupplierDebt)}`, rows: debtors.map(sp => rowOf(sp, money(supplierStats(sp.name).debt), "text-amber-400")) }
+  defs.credit = { title: "Tedarikçilerden Alacağımız", summary: `Toplam: ${money(totalSupplierCredit)}`, rows: suppliers.filter(sp => supplierStats(sp.name).credit > 0).map(sp => rowOf(sp, money(supplierStats(sp.name).credit), "text-cyan-400")) }
+  defs.cats = { title: "Kategoriye Göre Tedarikçiler", rows: suppliers.map(sp => rowOf(sp, sp.category || "—", "text-orange-300")).sort((a, b) => a.right!.localeCompare(b.right!, "tr")) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
         {/* Tedarikçi Listesi */}
         <Card className="bg-slate-800 border-slate-700">

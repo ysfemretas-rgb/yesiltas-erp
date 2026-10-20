@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { localDateStr } from "@/lib/dates"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -45,6 +46,7 @@ export default function FixedAssetsPage() {
   const isManager = useIsManager()
   const { rates, isLoadingRates, fetchRates } = useExchangeRates()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [assets, setAssets] = useState<FixedAsset[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -217,20 +219,20 @@ export default function FixedAssetsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardContent className="p-4">
             <div className="text-xs text-slate-400">Toplam Kalem</div>
             <div className="text-2xl font-bold text-white">{assets.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("value")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs text-slate-400">Toplam Değer (TL)</div>
                 <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalValueTRY)}</div>
               </div>
-              <Button size="icon" variant="outline" onClick={fetchRates} disabled={isLoadingRates} className="text-slate-400">
+              <Button size="icon" variant="outline" onClick={(e) => { e.stopPropagation(); fetchRates() }} disabled={isLoadingRates} className="text-slate-400">
                 <RefreshCw className={`h-4 w-4 ${isLoadingRates ? "animate-spin" : ""}`} />
               </Button>
             </div>
@@ -238,6 +240,23 @@ export default function FixedAssetsPage() {
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (a: FixedAsset, right: string, rightClass: string): StatRow => ({
+    id: a.id,
+    title: a.name,
+    subtitle: `${a.category} • ${a.quantity} adet${a.location ? ` • ${a.location}` : ""}`,
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); setEditingAsset(a); setIsEditOpen(true) },
+  })
+  defs.all = { title: "Tüm Demirbaşlar", rows: assets.map(a => rowOf(a, `${a.quantity} adet`, "text-white")) }
+  defs.value = { title: "Demirbaş Değeri (kalem bazında)", summary: `Toplam: ${money(totalValueTRY)}`, rows: assets.map(a => rowOf(a, money(toTRY(a.purchasePrice, a.purchaseCurrency, rates) * a.quantity), "text-emerald-400")) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       <Card className="bg-slate-900 border-slate-700">
         <CardHeader>

@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -33,6 +34,7 @@ export default function TasksPage() {
   const { authorized, checking } = usePageAccess("Görevler")
   const isManager = useIsManager()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
@@ -212,25 +214,42 @@ export default function TasksPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("pending")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardContent className="p-4">
             <div className="text-xs text-slate-400">⏳ Bekliyor</div>
             <div className="text-2xl font-bold text-white">{pendingCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("progress")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardContent className="p-4">
             <div className="text-xs text-slate-400">🔧 Devam Ediyor</div>
             <div className="text-2xl font-bold text-blue-400">{inProgressCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("done")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardContent className="p-4">
             <div className="text-xs text-slate-400">✅ Tamamlandı</div>
             <div className="text-2xl font-bold text-emerald-400">{doneCount}</div>
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (t: Task): StatRow => ({
+    id: t.id,
+    title: t.title,
+    subtitle: `${t.assignedTo ? `${t.assignedTo} • ` : ""}${t.dueDate ? `son tarih ${t.dueDate}` : "tarihsiz"}${t.description ? ` • ${t.description}` : ""}`,
+    right: t.priority === "high" ? "Yüksek" : t.priority === "medium" ? "Orta" : "Düşük",
+    rightClass: t.priority === "high" ? "text-red-400" : t.priority === "medium" ? "text-amber-400" : "text-slate-400",
+  })
+  defs.pending = { title: "Bekleyen Görevler", rows: tasks.filter(t => t.status === "pending").map(rowOf) }
+  defs.progress = { title: "Devam Eden Görevler", rows: tasks.filter(t => t.status === "in_progress").map(rowOf) }
+  defs.done = { title: "Tamamlanan Görevler", rows: tasks.filter(t => t.status === "done").map(rowOf) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       <div className="flex gap-2 flex-wrap">
         {(["all", "pending", "in_progress", "done"] as const).map((s) => (

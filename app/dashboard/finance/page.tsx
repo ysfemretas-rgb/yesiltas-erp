@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -42,6 +43,7 @@ export default function FinancePage() {
 
   const { authorized, checking } = usePageAccess("Finans")
   const isManager = useIsManager()
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [filterType, setFilterType] = useState<string>("all")
   const [filterCategory, setFilterCategory] = useState<string>("all")
@@ -393,7 +395,7 @@ export default function FinancePage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("income")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Gelir</CardTitle>
             <TrendingUp className="h-4 w-4 text-emerald-500" />
@@ -402,7 +404,7 @@ export default function FinancePage() {
             <div className="text-2xl font-bold text-emerald-400">{formatCurrency(totalIncome)}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("expense")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Gider</CardTitle>
             <TrendingDown className="h-4 w-4 text-red-500" />
@@ -411,7 +413,7 @@ export default function FinancePage() {
             <div className="text-2xl font-bold text-red-400">{formatCurrency(totalExpense)}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Net Bakiye</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-500" />
@@ -423,6 +425,24 @@ export default function FinancePage() {
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (t: Transaction): StatRow => ({
+    id: t.id,
+    title: t.description || t.category,
+    subtitle: `${t.date} • ${t.category}${t.customer ? ` • ${t.customer}` : ""}`,
+    right: `${t.type === "income" ? "+" : "-"}${money(t.amount)}`,
+    rightClass: t.type === "income" ? "text-emerald-400" : "text-red-400",
+    onClick: () => { setStatKey(null); openEditDialog(t) },
+  })
+  defs.income = { title: "Gelir Kayıtları", summary: `Toplam: ${money(totalIncome)}`, rows: transactions.filter(t => t.type === "income").map(rowOf) }
+  defs.expense = { title: "Gider Kayıtları", summary: `Toplam: ${money(totalExpense)}`, rows: transactions.filter(t => t.type === "expense").map(rowOf) }
+  defs.all = { title: "Tüm Kasa Hareketleri", summary: `Net bakiye: ${money(balance)}`, rows: transactions.map(rowOf) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="bg-slate-900 border-slate-700">

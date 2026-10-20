@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { fetchTransactions } from "@/lib/finance"
@@ -121,6 +122,7 @@ export default function ReportsPage() {
   }
   const { authorized, checking } = usePageAccess("Raporlar")
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
   const [dateRange, setDateRange] = useState({ start: "", end: "" })
@@ -666,7 +668,7 @@ export default function ReportsPage() {
 
         {/* Özet Kartlar */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("income")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -680,7 +682,7 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("expense")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -694,7 +696,7 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("net")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -708,7 +710,7 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800 border-slate-700">
+          <Card onClick={() => setStatKey("ops")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-800 border-slate-700">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -725,6 +727,31 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
         </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const finRow = (f: FinanceRecord): StatRow => ({
+    id: f.id,
+    title: f.description || f.category,
+    subtitle: `${f.date} • ${f.category}`,
+    right: `${f.type === "income" ? "+" : "-"}${money(Number(f.amount) || 0)}`,
+    rightClass: f.type === "income" ? "text-emerald-400" : "text-red-400",
+  })
+  defs.income = { title: "Gelir Kayıtları (seçili dönem)", summary: `Toplam: ${money(totalIncome)}`, rows: filteredFinance.filter(f => f.type === "income").map(finRow) }
+  defs.expense = { title: "Gider Kayıtları (seçili dönem)", summary: `Toplam: ${money(totalExpense)}`, rows: filteredFinance.filter(f => f.type === "expense").map(finRow) }
+  defs.net = { title: "Tüm Kasa Hareketleri (seçili dönem)", summary: `Net kâr: ${money(netProfit)}`, rows: filteredFinance.map(finRow) }
+  defs.ops = {
+    title: "İşlemler (tamir + satış, seçili dönem)",
+    summary: `${totalRepairs} tamir · ${totalSales} satış`,
+    rows: [
+      ...filteredRepairs.map((r): StatRow => ({ id: `r-${r.id}`, title: r.customerName || "-", tag: "Tamir", subtitle: `${r.date} • ${r.deviceModel}`, right: money(r.price), rightClass: "text-blue-400" })),
+      ...filteredSales.map((s): StatRow => ({ id: `s-${s.id}`, title: s.customerName, tag: "Satış", subtitle: `${s.date} • ${s.productName}`, right: money(s.totalPrice), rightClass: "text-emerald-400" })),
+    ],
+  }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
         {/* Gerçek Kâr Analizi */}
         <Card className="bg-slate-800 border-slate-700">

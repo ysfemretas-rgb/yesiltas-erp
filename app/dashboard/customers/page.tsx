@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -80,6 +81,7 @@ export default function CustomersPage() {
   const { authorized, checking } = usePageAccess("Müşteriler")
   const isManager = useIsManager()
 
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -770,7 +772,7 @@ export default function CustomersPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Toplam Müşteri</CardTitle>
             <Users className="h-4 w-4 text-blue-400" />
@@ -779,7 +781,7 @@ export default function CustomersPage() {
             <div className="text-2xl font-bold text-white">{customers.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("active")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Aktif Müşteri</CardTitle>
             <Users className="h-4 w-4 text-emerald-400" />
@@ -788,7 +790,7 @@ export default function CustomersPage() {
             <div className="text-2xl font-bold text-emerald-400">{activeCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("debtors")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Borçlu Müşteri</CardTitle>
             <CreditCard className="h-4 w-4 text-red-400" />
@@ -797,7 +799,7 @@ export default function CustomersPage() {
             <div className="text-2xl font-bold text-red-400">{debtCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card onClick={() => setStatKey("debt")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Toplam Borç</CardTitle>
             <CreditCard className="h-4 w-4 text-orange-400" />
@@ -807,7 +809,7 @@ export default function CustomersPage() {
           </CardContent>
         </Card>
         {totalCustomerCredit > 0 && (
-          <Card className="bg-slate-900 border-slate-800">
+          <Card onClick={() => setStatKey("credit")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-300">Müşterilerin Bizden Alacağı (Fazla Ödeme)</CardTitle>
               <CreditCard className="h-4 w-4 text-cyan-400" />
@@ -818,6 +820,30 @@ export default function CustomersPage() {
           </Card>
         )}
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (c: Customer, right: string, rightClass: string): StatRow => ({
+    id: c.id,
+    title: c.name,
+    tag: c.customerCode,
+    subtitle: c.phone || c.phone1 || "",
+    right,
+    rightClass,
+    onClick: () => { setStatKey(null); setSelectedCustomer(c); setIsDetailOpen(true) },
+  })
+  const debtOf = (c: Customer) => customerDebts.get(c.id) || 0
+  const debtors = customers.filter(c => debtOf(c) > 0).sort((a, b) => debtOf(b) - debtOf(a))
+  defs.all = { title: "Tüm Müşteriler", rows: customers.map(c => rowOf(c, debtOf(c) > 0 ? money(debtOf(c)) : "", "text-red-400")) }
+  defs.active = { title: "Aktif Müşteriler", rows: customers.filter(c => isCustomerActive(c)).map(c => rowOf(c, debtOf(c) > 0 ? money(debtOf(c)) : "", "text-red-400")) }
+  defs.debtors = { title: "Borçlu Müşteriler", summary: `Toplam borç: ${money(debtors.reduce((s, c) => s + debtOf(c), 0))}`, rows: debtors.map(c => rowOf(c, money(debtOf(c)), "text-red-400")) }
+  defs.debt = { title: "Borç Dağılımı (en çok borçludan)", summary: `Toplam borç: ${money(debtors.reduce((s, c) => s + debtOf(c), 0))}`, rows: debtors.map(c => rowOf(c, money(debtOf(c)), "text-orange-400")) }
+  const credits = customers.filter(c => debtOf(c) < 0)
+  defs.credit = { title: "Fazla Ödemesi Olan Müşteriler", rows: credits.map(c => rowOf(c, money(-debtOf(c)), "text-cyan-400")) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>

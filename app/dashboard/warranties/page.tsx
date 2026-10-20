@@ -1,5 +1,6 @@
 "use client"
 
+import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -36,6 +37,7 @@ export default function WarrantiesPage() {
   const { toast, showToast, hideToast } = useToast()
   const { authorized, checking } = usePageAccess("Garantiler")
   const isManager = useIsManager()
+  const [statKey, setStatKey] = useState<string | null>(null)
   const [warranties, setWarranties] = useState<Warranty[]>([])
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -360,7 +362,7 @@ export default function WarrantiesPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Garanti</CardTitle>
             <Shield className="h-4 w-4 text-blue-500" />
@@ -369,7 +371,7 @@ export default function WarrantiesPage() {
             <div className="text-2xl font-bold text-white">{warranties.length}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("active")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Aktif</CardTitle>
             <Shield className="h-4 w-4 text-emerald-500" />
@@ -378,7 +380,7 @@ export default function WarrantiesPage() {
             <div className="text-2xl font-bold text-emerald-400">{activeCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("expiring")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Bitmek Üzere</CardTitle>
             <Clock className="h-4 w-4 text-yellow-500" />
@@ -387,7 +389,7 @@ export default function WarrantiesPage() {
             <div className="text-2xl font-bold text-yellow-400">{expiringCount}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatKey("expired")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Süresi Dolmuş</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
@@ -397,6 +399,28 @@ export default function WarrantiesPage() {
           </CardContent>
         </Card>
       </div>
+
+{(() => {
+  const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
+  const defs: Record<string, { title: string; rows: StatRow[]; summary?: string }> = {}
+  const rowOf = (w: Warranty): StatRow => {
+    const d = getDaysRemaining(w.endDate)
+    return {
+      id: w.id,
+      title: w.deviceName,
+      subtitle: `${w.customerName} • bitiş ${w.endDate}`,
+      right: d < 0 ? `${-d} gün önce bitti` : `${d} gün kaldı`,
+      rightClass: d < 0 ? "text-red-400" : d <= 30 ? "text-yellow-400" : "text-emerald-400",
+      onClick: () => { setStatKey(null); openEditDialog(w) },
+    }
+  }
+  defs.all = { title: "Tüm Garantiler", rows: warranties.map(rowOf) }
+  defs.active = { title: "Aktif Garantiler", rows: warranties.filter(w => getStatusKey(w) === "active").map(rowOf) }
+  defs.expiring = { title: "Bitmek Üzere Olan Garantiler (30 gün)", rows: warranties.filter(w => getStatusKey(w) === "expiring").map(rowOf) }
+  defs.expired = { title: "Süresi Dolmuş Garantiler", rows: warranties.filter(w => getStatusKey(w) === "expired").map(rowOf) }
+  const def = statKey ? defs[statKey] : null
+  return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
+})()}
 
       <Card className="bg-slate-900 border-slate-700">
         <CardHeader>
