@@ -21,6 +21,7 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 | 7 | `supabase-fixes-v6-security.sql` | İsteğe bağlı | pasif kullanıcıları veritabanı seviyesinde engelle (geri alma bölümü var) |
 | 8 | `supabase-fixes-v7-migration.sql` | **Evet** | ek maliyet (gerçek kâr), kasa sayımı, ödeme takvimi tabloları |
 | 9 | `supabase-fixes-v8-migration.sql` | **Evet** | servis iş akışı: aşama, tahmini teslim, kalite kontrol, teklif |
+| 10 | `supabase-fixes-v9-migration.sql` | **Evet** | Alışlar sayfası (tedarikçiden ve müşteriden alış kayıtları) |
 
 ## Kontrol
 Çalıştırdıktan sonra Supabase > Database > Policies (veya `select * from pg_policies`) ile politikaları kontrol edin.

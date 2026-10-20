@@ -3,31 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { 
-  LayoutDashboard, 
-  ListChecks, 
-  ClipboardList, 
-  Wrench, 
-  Package, 
-  Package2, 
-  ShoppingCart, 
-  Users, 
-  Calendar, 
-  DollarSign, 
-  Shield, 
-  BarChart3, 
-  Users2, 
-  Truck, 
-  Settings,
-  FlaskConical,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
-  UserCircle,
-  Menu,
-  X,
-  RefreshCw
-} from "lucide-react"
+import { LayoutDashboard, ListChecks, ClipboardList, Wrench, Package, Package2, ShoppingCart, Users, Calendar, DollarSign, Shield, BarChart3, Users2, Truck, Settings, FlaskConical, ChevronLeft, ChevronRight, LogOut, UserCircle, Menu, X, RefreshCw, PackagePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
@@ -45,6 +21,7 @@ const menuItems = [
   { href: "/dashboard/appointments", icon: Calendar, label: "Randevular", color: "text-pink-400" },
   { href: "/dashboard/tasks", icon: ClipboardList, label: "Görevler", color: "text-fuchsia-400" },
   { href: "/dashboard/inventory", icon: Package, label: "Envanter", color: "text-amber-400" },
+  { href: "/dashboard/purchases", icon: PackagePlus, label: "Alışlar", color: "text-sky-400" },
   { href: "/dashboard/assets", icon: Package2, label: "Demirbaşlar", color: "text-slate-400" },
   { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
   { href: "/dashboard/finance", icon: DollarSign, label: "Finans", color: "text-green-400" },

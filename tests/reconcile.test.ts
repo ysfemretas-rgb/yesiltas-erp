@@ -111,3 +111,16 @@ test("değişiklik farkı eski → yeni olarak yazılır", () => {
   assert.equal(ch.length, 1)
   assert.equal(formatChanges(ch), "Fiyat: 100 → 90")
 })
+
+test("Alışlar sayfası: ödenen alışın kasa gideri yoksa uyarı, varsa sorun yok", () => {
+  const bad = reconcile({ ...base, alislar: [{ id: "a1", code: "ALS-1", partyName: "Toptancı", paid: 3000 }] })
+  assert.equal(bad.length, 1)
+  const ok = reconcile({
+    ...base,
+    alislar: [{ id: "a1", code: "ALS-1", partyName: "Toptancı", paid: 3000 }],
+    transactions: [{ type: "expense", amount: 3000, source: "manual", description: "📦 Alış ALS-1: Toptancı — ürün" }],
+  })
+  assert.equal(ok.length, 0)
+  const unpaid = reconcile({ ...base, alislar: [{ id: "a2", code: "ALS-2", partyName: "T", paid: 0 }] })
+  assert.equal(unpaid.length, 0)
+})

@@ -9,6 +9,7 @@ import { fetchRepairs } from "@/lib/repairs"
 import { fetchTransactions, syncTransactionsToNet } from "@/lib/finance"
 import { fetchInventory } from "@/lib/inventory"
 import { fetchDevicePurchases } from "@/lib/devicePurchases"
+import { fetchPurchases, Purchase } from "@/lib/purchases"
 import { reconcile, Issue } from "@/lib/reconcile"
 import { logActivity } from "@/lib/activityLog"
 import { localDateStr } from "@/lib/dates"
@@ -46,12 +47,13 @@ export function ReconcileDialog({
     setLoading(true)
     setLoadError("")
     try {
-      const [sales, repairs, transactions, inventory, purchases] = await Promise.all([
+      const [sales, repairs, transactions, inventory, purchases, alislar] = await Promise.all([
         fetchSales(),
         fetchRepairs(),
         fetchTransactions(),
         fetchInventory(),
         fetchDevicePurchases().catch(() => []),
+        fetchPurchases().catch((): Purchase[] => []),
       ])
       const found = reconcile({
         sales: sales as any,
@@ -59,6 +61,7 @@ export function ReconcileDialog({
         transactions: transactions as any,
         purchases,
         inventory: inventory as any,
+        alislar: alislar.map((a) => ({ id: a.id, code: a.code, partyName: a.partyName, paid: a.paid })),
       })
       setIssues(found)
       setCheckedAt(new Date().toLocaleTimeString("tr-TR"))

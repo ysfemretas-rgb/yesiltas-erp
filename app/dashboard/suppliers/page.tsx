@@ -17,7 +17,9 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 
-import { Supplier, SupplierPayment, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier, fetchSupplierPayments, createSupplierPayment } from "@/lib/suppliers"
+import { Supplier, SupplierPayment, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier, fetchSupplierPayments } from "@/lib/suppliers"
+import { Purchase, fetchPurchases, paySupplierDebt } from "@/lib/purchases"
+import { supplierNetDebt } from "@/lib/purchaseMath"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
 const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
@@ -33,6 +35,7 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [payments, setPayments] = useState<SupplierPayment[]>([])
+  const [purchases, setPurchases] = useState<Purchase[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -66,6 +69,9 @@ export default function SuppliersPage() {
     fetchInventory()
       .then((data) => { if (!cancelled) setInventory(data) })
       .catch((err) => console.error("Envanter yüklenemedi:", err))
+    fetchPurchases()
+      .then((data) => { if (!cancelled) setPurchases(data) })
+      .catch((e) => console.error("Alışlar yüklenemedi:", e))
     fetchSupplierPayments()
       .then((data) => { if (!cancelled) setPayments(data) })
     return () => { cancelled = true }
@@ -89,8 +95,11 @@ export default function SuppliersPage() {
       return sum + (total - paid)
     }, 0)
     const extraPaid = payments.filter(p => p.supplierName === supplierName).reduce((sum, p) => sum + p.amount, 0)
-    const net = Math.round((purchasedTotal - extraPaid) * 100) / 100
-    return { orderCount, debt: Math.max(0, net), credit: Math.max(0, -net) }
+    // Alışlar sayfasından yapılan alışların ödenmemiş kalanı da borca eklenir
+    const supplierPurchases = purchases.filter(p => p.kind === "supplier" && p.partyName === supplierName)
+    const purchasesRemaining = supplierPurchases.reduce((sum, p) => sum + Math.max(0, p.total - p.paid), 0)
+    const net = supplierNetDebt(purchasedTotal, purchasesRemaining, extraPaid)
+    return { orderCount: orderCount + supplierPurchases.length, debt: Math.max(0, net), credit: Math.max(0, -net) }
   }
 
   const handleSupplierPayment = async (supplier: Supplier) => {
@@ -103,8 +112,11 @@ export default function SuppliersPage() {
       return
     }
     try {
-      const payment = await createSupplierPayment({ supplierName: supplier.name, amount })
-      setPayments([payment, ...payments])
+      // Ödeme önce en eski alışlara dağıtılır; artan tutar genel ödeme olarak düşülür; kasaya tek gider yazılır
+      await paySupplierDebt(supplier.name, amount)
+      const [pay, pur] = await Promise.all([fetchSupplierPayments(), fetchPurchases()])
+      setPayments(pay)
+      setPurchases(pur)
       showToast("Ödeme kaydedildi ve kasaya gider olarak yazıldı.", "success")
     } catch (err) {
       console.error(err)

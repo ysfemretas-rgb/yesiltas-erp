@@ -116,6 +116,8 @@ export async function updateSupplier(id: string, input: Partial<Omit<Supplier, "
     if (r1.error) console.error("Envanterdeki tedarikçi adı güncellenemedi:", r1.error)
     const r2 = await supabase.from("supplier_payments").update({ supplier_name: updated.name }).eq("supplier_name", oldName)
     if (r2.error) console.error("Ödemelerdeki tedarikçi adı güncellenemedi:", r2.error)
+    const r3 = await supabase.from("purchases").update({ party_name: updated.name }).eq("kind", "supplier").eq("party_name", oldName)
+    if (r3.error) console.error("Alışlardaki tedarikçi adı güncellenemedi:", r3.error)
   }
   logActivity("Tedarikçiler", "updated", `${updated.name} güncellendi`)
   return updated

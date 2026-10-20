@@ -138,3 +138,14 @@
 - Satış kaydedilemezse gerçek hata nedeni toast'ta görünür.
 - **Eksik SQL sütunları artık satışı/tamiri engellemez:** yeni sürümlerle eklenen sütunlar (ek maliyet, taksit, takas, aşama, IMEI vb.) veritabanında henüz yoksa kayıt, bu sütunlar olmadan yapılır (o özelliğin verisi kaydedilmez). SQL dosyalarını çalıştırınca tam özellikler açılır.
 - **Son ürün (stok 1) artık satılabilir, stok 0'a düşer ("tükendi" olur):** Satışta stok düşme yöntemi değiştirildi; veritabanındaki özel SQL fonksiyonuna bağlı değil. Güncel stok okunur, yeterliyse "stok hâlâ aynıysa" koşuluyla düşürülür (aynı anda iki satış yapılırsa ikincisi reddedilir). Hata olursa gerçek hata metni ekranda görünür.
+
+## v13 — 📥 Alışlar sayfası (alış ve satış tek sistemde)
+**SQL:** `supabase-fixes-v9-migration.sql` çalıştırın. Menüde yeni **Alışlar** sayfası (Envanter yetkisiyle açılır).
+- **Tedarikçiden Alış:** tedarikçi seç (yoksa ➕ Yeni Tedarikçi), fatura no, tarih. Satır ekle: *mevcut ürüne stok ekle* (listeden ara) ya da *yeni ürün* (tür → marka → model → varyant, adı otomatik). Adet, birim alış fiyatı (TL/USD/EUR; kur otomatik), kâr % ve satış fiyatı (boşsa maliyet+kâr), min. stok, IMEI. Çok kalemli alış yapılabilir.
+- **Müşteriden Alış (ikinci el):** satıcıyı kayıtlı müşteriden seç ya da elle yaz; cihaz (tür/marka/model), IMEI, durum notu, ödenen bedel. Kaydedince resmi **alım belgesi** yazdırılır. T.C. kimlik no belgeye basılır, kaydedilmez.
+- **Otomatik entegrasyon:** kaydedilen her ürün **envantere eklenir** (stok artar / yeni ürün kodu atanır) ve **Satışlar'da hemen satılabilir**. Ödenen tutar kasaya **gider** olarak yazılır. Ödemesi eksik kalan kısım **Tedarikçiler sayfasında borç** görünür. Aynı IMEI iki kez stoğa girilemez.
+- **Ödeme durumu:** Ödendi / Kısmi / Ödenmedi (borç). Alış detayından "Ödeme Yap" kalan borcu kapatır ve kasaya gider yazar; Tedarikçiler sayfasındaki "Ödeme Yap" tutarı en eski borçlu alıştan başlayarak dağıtır.
+- **Güvenli kayıt:** envanter adımı başarısız olursa yapılanlar geri alınır, hiçbir kayıt yarım kalmaz (eskiden cihaz stoğa eklenemese de kasaya gider yazılıp belge çıkabiliyordu — "1000 TL'ye cihaz almış görünüyor ama satışta yok" sorununun sebebi buydu).
+- Alış geçmişi: arama (alış no, taraf, ürün, IMEI), tür/ödeme durumu filtresi, sayaç kutuları, alış fişi yazdırma, Excel.
+- Mutabakat Merkezi artık ödenmiş ama kasada gideri olmayan alışları da gösterir.
+- Envanter sayfasındaki "Cihaz Alımı" butonu yerine **Alış Yap** (Alışlar sayfasını açar).

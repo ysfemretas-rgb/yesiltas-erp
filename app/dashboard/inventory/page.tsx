@@ -679,8 +679,8 @@ export default function InventoryPage() {
           <Button onClick={exportInventory} variant="outline" className="border-slate-600 text-slate-300">
             <Download className="mr-2 h-4 w-4" />Excel'e Aktar
           </Button>
-          <Button onClick={() => setPurchaseOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
-            <Smartphone className="mr-2 h-4 w-4" />Cihaz Alımı
+          <Button onClick={() => { window.location.href = "/dashboard/purchases" }} variant="outline" className="border-slate-600 text-slate-300">
+            <Smartphone className="mr-2 h-4 w-4" />Alış Yap
           </Button>
           <Button onClick={() => setCountOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
             <ClipboardList className="mr-2 h-4 w-4" />Sayım

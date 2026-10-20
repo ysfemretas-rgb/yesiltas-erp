@@ -33,6 +33,12 @@ export interface RPurchase {
   price: number
   deviceName: string
 }
+export interface RAlis {
+  id: string
+  code: string
+  partyName: string
+  paid: number
+}
 export interface RItem {
   id: string
   name: string
@@ -65,7 +71,7 @@ function netOf(txs: RTx[], source: string, id: string): number {
 
 const money = (n: number) => `${r2(n).toLocaleString("tr-TR")} TL`
 
-export function reconcile(input: { sales: RSale[]; repairs: RRepair[]; transactions: RTx[]; purchases: RPurchase[]; inventory: RItem[] }): Issue[] {
+export function reconcile(input: { sales: RSale[]; repairs: RRepair[]; transactions: RTx[]; purchases: RPurchase[]; inventory: RItem[]; alislar?: RAlis[] }): Issue[] {
   const issues: Issue[] = []
   const { sales, repairs, transactions, purchases, inventory } = input
 
@@ -133,6 +139,21 @@ export function reconcile(input: { sales: RSale[]; repairs: RRepair[]; transacti
         severity: "high",
         title: `Alım belgesi ${p.docCode} — kasada gider kaydı yok`,
         detail: `${p.deviceName}: ${money(p.price)} ödeme yapılmış görünüyor ama kasada karşılığı bulunamadı. Finans'tan gider ekleyin.`,
+      })
+    }
+  }
+
+  // 4b) Alışlar sayfasından yapılan alışlar: ödenen tutarın kasada gideri var mı?
+  for (const a of input.alislar || []) {
+    if ((Number(a.paid) || 0) <= TOL) continue
+    const found = transactions.some((t) => t.type === "expense" && t.description.includes(a.code))
+    if (!found) {
+      issues.push({
+        id: `alis-${a.id}`,
+        kind: "purchase-finance",
+        severity: "high",
+        title: `Alış ${a.code} — kasada gider kaydı yok`,
+        detail: `${a.partyName}: ${money(a.paid)} ödeme yapılmış görünüyor ama kasada karşılığı bulunamadı. Finans'tan gider ekleyin.`,
       })
     }
   }

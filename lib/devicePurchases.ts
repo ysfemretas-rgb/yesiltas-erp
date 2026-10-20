@@ -79,6 +79,9 @@ export async function createDevicePurchase(input: DevicePurchaseInput): Promise<
       await supabase.from("device_purchases").update({ product_id: item.id }).eq("id", data.id)
     } catch (e) {
       console.error("Cihaz stoğa eklenemedi:", e)
+      // Sessizce yutma: belge/kasa kaydı yapılmadan hata ver (cihaz stoğa eklenemediyse alım da kaydedilmesin)
+      await supabase.from("device_purchases").delete().eq("id", data.id)
+      throw new Error("Cihaz stoğa eklenemediği için alım kaydedilmedi. Ayrıntı: " + ((e as any)?.message || e))
     }
   }
 
