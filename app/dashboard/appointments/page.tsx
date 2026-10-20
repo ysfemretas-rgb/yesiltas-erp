@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { CustomerPicker } from "@/components/CustomerPicker"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -333,7 +334,7 @@ export default function AppointmentsPage() {
         message += `\n\n\u{1F4DD} Not: ${appointment.notes}`
       }
 
-      window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
+      openWhatsApp("90" + cleanPhone, message)
     } catch (err) {
       console.error("WhatsApp error:", err)
       showToast("WhatsApp gönderilirken hata oluştu!", "error")

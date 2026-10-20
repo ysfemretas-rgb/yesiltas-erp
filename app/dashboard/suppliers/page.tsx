@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
@@ -232,7 +233,7 @@ export default function SuppliersPage() {
   const handleWhatsApp = (phone: string, name: string) => {
     const cleanPhone = phone.replace(/\s/g, "").replace(/^0/, "+90")
     const message = `Merhaba ${name}, 👋\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\nSipariş/tedarik konusunda görüşmek istiyoruz, müsait olduğunuzda dönüş yapabilir misiniz?\n\n🏪 *Yeşiltaş Teknoloji*`
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
+    openWhatsApp(cleanPhone, message)
   }
 
   const handleCall = (phone: string) => {

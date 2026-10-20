@@ -100,3 +100,10 @@
 - **Kalite kontrol listesi (Düzenle ekranı):** ekran/dokunmatik, kameralar, hoparlör-mikrofon, şarj, bağlantılar, tuşlar, yüz/parmak izi, pil, temizlik. İşaretler anında kaydedilir (kim, ne zaman). Liste tamamlanmadan "Teslime Hazır/Teslim Edildi" aşamasına geçilirse uyarı çıkar (engellemez).
 - **Müşteri onaylı teklif (Düzenle ekranı):** tutar ve teşhis notu girilir → "Teklifi Kaydet" → WhatsApp ile gönder veya resmi "Tamir Teklif Formu" yazdır (kabul/ret kutuları ve imza alanı). Müşteri yanıtına göre "Müşteri Onayladı / Reddetti" kaydedilir (kim, ne zaman). Onayda ücret teklif tutarından farklıysa güncellensin mi diye sorulur ve tamir aşamasına geçilir.
 - Otomatik testler 26'ya çıktı (`npm test`).
+
+## v9 — Teknik servis notları (sayfa sayfa düzeltmeler, 1. tur)
+- **Sayaç kutuları tıklanabilir:** Toplam Tamir, Bekleyen, Devam Eden, Biten, Toplam Gelir, Bekleyen Tahsilat (ve varsa Fazla Ödeme) kutularına basınca o kutudaki tamirlerin listesi açılır; bir satıra basınca tamir kaydı açılır.
+- **Yeni "Biten" kutusu:** biten tamir sayısı ve listesi.
+- **Aramada barkod:** Tamir arama kutusunun sağında 📷 barkod/karekod okut butonu; kutuya tamir kodu (YTT-), müşteri kodu, IMEI de yazılabilir (arama artık bunları da bulur). Barkod okuyucuyla okutunca (Enter) doğrudan kayıt açılır: tamir kodu/IMEI/karekod -> tamir kaydı; müşteri kodu (YTM-) -> o müşterinin tamirleri listelenir; satış (YTS-) veya ürün (YTE-) kodu -> ilgili sayfada açılır.
+- **WhatsApp:** Tüm sayfalarda WhatsApp artık telefonda doğrudan uygulamaya geçer (eskiden uygulama içi tarayıcıda açılıp dönüşte bembeyaz sayfada kalıyordu). Uygulama açılamazsa web sürümü denenir. İlk açılışta iPhone "WhatsApp'ta aç?" diye sorabilir, "Aç" deyin.
+- **Kaldığınız yerden devam:** Telefonda uygulama kapanıp yeniden açılırsa (WhatsApp'a gidip dönünce iOS sayfayı yenileyebilir) en başa değil, en son bulunduğunuz sayfaya dönülür (6 saat içinde ve oturumun ilk açılışında).

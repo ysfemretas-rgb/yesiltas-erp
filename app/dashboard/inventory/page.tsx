@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -292,7 +293,7 @@ export default function InventoryPage() {
       return
     }
     const message = `Merhaba ${supplier?.contactPerson || supplier?.name},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\n📦 *${item.name}* ürününden stoğumuz azaldı (Mevcut: ${item.quantity}).\nSipariş vermek istiyoruz, fiyat ve stok bilgisi paylaşabilir misiniz?`
-    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(message)}`, "_blank")
+    openWhatsApp("90" + phone, message)
   }
 
   const handleDevicePurchase = async () => {
@@ -397,7 +398,7 @@ export default function InventoryPage() {
       showToast("Bu tedarikçinin telefon numarası kayıtlı değil.", "error")
       return
     }
-    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(orderText(group))}`, "_blank")
+    openWhatsApp("90" + phone, orderText(group))
   }
 
   const copyOrder = async (group: ReturnType<typeof orderGroups>[number]) => {

@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
@@ -191,7 +192,7 @@ export default function WarrantiesPage() {
     message += `\n\u{1F3EA} *Yeşiltaş Teknoloji*\n`
     message += `\u{1F4DE} Bizi tercih ettiğiniz için teşekkür ederiz! \u{1F64F}`
 
-    window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
+    openWhatsApp("90" + cleanPhone, message)
   }
 
   // Auto-calculate end date from start date + warranty duration

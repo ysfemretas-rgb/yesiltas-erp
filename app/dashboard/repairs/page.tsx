@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -15,8 +16,9 @@ import { RepairBoardDialog } from "@/components/repairs/RepairBoardDialog"
 import { REPAIR_STAGES, RepairStage, QC_ITEMS, RepairQuote, QUOTE_LABELS, stageOf, stageLabel, statusForStage, reconcileStage, qcProgress, deliveryState } from "@/lib/repairWorkflow"
 import { printRepairQuote } from "@/lib/repairQuote"
 import { logActivity } from "@/lib/activityLog"
+import { resolveScan } from "@/lib/recordLookup"
 import { Pagination } from "@/components/Pagination"
-import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon } from "lucide-react"
+import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon, ScanLine } from "lucide-react"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
 import { fetchCustomers, createCustomer } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
@@ -102,6 +104,7 @@ function RepairsPageContent() {
   const [estimatedInput, setEstimatedInput] = useState("")
   const [newEstimated, setNewEstimated] = useState("")
   const [boardOpen, setBoardOpen] = useState(false)
+  const [statDialog, setStatDialog] = useState<null | "all" | "waiting" | "in_progress" | "completed" | "revenue" | "remaining" | "credit">(null)
   const [quoteAmount, setQuoteAmount] = useState("")
   const [quoteNote, setQuoteNote] = useState("")
   const [staffList, setStaffList] = useState<StaffMember[]>([])
@@ -167,7 +170,10 @@ function RepairsPageContent() {
         r.phone2.includes(search) ||
         r.device.toLowerCase().includes(search.toLowerCase()) ||
         r.brand.toLowerCase().includes(search.toLowerCase()) ||
-        r.model.toLowerCase().includes(search.toLowerCase())
+        r.model.toLowerCase().includes(search.toLowerCase()) ||
+        (r.repairCode || "").toLowerCase().includes(search.toLowerCase()) ||
+        (r.customerCode || "").toLowerCase().includes(search.toLowerCase()) ||
+        (r.imei || "").includes(search.trim())
       const matchesStatus = statusFilter === "all" || r.status === statusFilter
       return matchesSearch && matchesStatus
     })
@@ -583,26 +589,48 @@ function RepairsPageContent() {
     setIsQrDialogOpen(true)
   }
 
-  const handleRepairQrScan = (scanned: string) => {
+  // Barkod / karekod / yazılan kod: ne olduğunu doğrudan açar.
+  // Tamir kodu (YTT-), IMEI veya karekod bağlantısı -> o tamir kaydı açılır.
+  // Müşteri kodu (YTM-) -> listede o müşterinin tamirleri gösterilir.
+  // Satış (YTS-) / ürün (YTE-) kodu -> ilgili sayfada açılır.
+  const handleRepairQrScan = async (scanned: string) => {
+    const text = scanned.trim()
+    if (!text) return
     let targetId: string | null = null
     try {
-      const url = new URL(scanned)
-      // Yeni etiketler /repair-status/<id> taşıyor; eski basılmış
-      // etiketlerde ise ?open=<id> olabilir — ikisini de destekle.
+      const url = new URL(text)
+      // Yeni etiketler /repair-status/<id> taşıyor; eski basılmış etiketlerde ise ?open=<id> olabilir.
       targetId = url.searchParams.get("open") || url.pathname.split("/repair-status/")[1]?.split(/[/?#]/)[0] || null
     } catch {
-      // URL değil, muhtemelen bir tamir kodu (YTT-0001) — koda göre ara
+      // URL değil: kod veya IMEI olabilir
     }
+    const lower = text.toLowerCase()
     const found = targetId
       ? repairs.find((r) => r.id === targetId)
-      : repairs.find((r) => (r.repairCode || "").toLowerCase() === scanned.trim().toLowerCase())
+      : repairs.find((r) => (r.repairCode || "").toLowerCase() === lower || (r.imei || "") === text)
 
     if (found) {
+      setSearch("")
       openEditDialog(found)
-      showToast(`Bulundu: ${found.customerName}`, "success")
-    } else {
-      showToast("Bu QR koduna ait tamir kaydı bulunamadı.", "error")
+      showToast(`Bulundu: ${found.customerName} — ${found.brand} ${found.model}`.trim(), "success")
+      return
     }
+    if (/^YTM-\d+$/i.test(text)) {
+      setSearch(text.toUpperCase())
+      showToast("Müşteri kodu: bu müşterinin tamirleri listelendi.", "success")
+      return
+    }
+    try {
+      const rec = await resolveScan(text)
+      if (rec) {
+        router.push(rec.href)
+        return
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    setSearch(text)
+    showToast("Bu koda ait kayıt bulunamadı; arama kutusuna yazıldı.", "error")
   }
 
   const resetForm = () => {
@@ -788,7 +816,7 @@ function RepairsPageContent() {
     const q = selectedRepair.quote
     const device = [selectedRepair.brand, selectedRepair.model].filter(Boolean).join(" ")
     const message = `Merhaba *${selectedRepair.customerName}*,\n\n*${device}* cihazınızın incelemesi tamamlandı.\n\n🔍 *Teşhis / yapılacak işlem:* ${q.note || selectedRepair.issue}\n💰 *Tamir ücreti:* ${formatCurrency(q.amount)}${selectedRepair.estimatedDelivery ? `\n📅 *Tahmini teslim:* ${selectedRepair.estimatedDelivery}` : ""}\n\nOnay verirseniz işleme başlayacağız. Onay için bu mesaja *EVET*, vazgeçmek için *HAYIR* yazmanız yeterlidir.\n\n🏪 *Yeşiltaş Teknoloji*`
-    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(message)}`, "_blank")
+    openWhatsApp("90" + phone, message)
   }
 
   const decideQuote = async (decision: "approved" | "rejected") => {
@@ -854,7 +882,7 @@ function RepairsPageContent() {
         ? `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDD27 *${device}* cihazınızın tamir işlemi devam etmektedir. Tamamlandığında size haber vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
         : `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDCE5 *${device}* cihazınız teslim alınmıştır${repair.repairCode ? ` (Kayıt No: ${repair.repairCode})` : ""}. İnceleme sonrası size bilgi vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
 
-    window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
+    openWhatsApp("90" + cleanPhone, message)
   }
 
   return (
@@ -1099,8 +1127,8 @@ function RepairsPageContent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card className="bg-slate-900 border-slate-700">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Card onClick={() => setStatDialog("all")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-400">Toplam Tamir</CardTitle>
           </CardHeader>
@@ -1108,7 +1136,7 @@ function RepairsPageContent() {
             <div className="text-3xl font-bold text-white">{stats.total}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatDialog("waiting")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-400">Bekleyen</CardTitle>
           </CardHeader>
@@ -1116,7 +1144,7 @@ function RepairsPageContent() {
             <div className="text-3xl font-bold text-amber-400">{stats.waiting}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatDialog("in_progress")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-400">Devam Eden</CardTitle>
           </CardHeader>
@@ -1124,7 +1152,15 @@ function RepairsPageContent() {
             <div className="text-3xl font-bold text-blue-400">{stats.inProgress}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatDialog("completed")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-400">Biten</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-emerald-400">{stats.completed}</div>
+          </CardContent>
+        </Card>
+        <Card onClick={() => setStatDialog("revenue")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-400">Toplam Gelir</CardTitle>
           </CardHeader>
@@ -1132,7 +1168,7 @@ function RepairsPageContent() {
             <div className="text-3xl font-bold text-emerald-400">{formatCurrency(stats.totalRevenue)}</div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-700">
+        <Card onClick={() => setStatDialog("remaining")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-400">Bekleyen Tahsilat</CardTitle>
           </CardHeader>
@@ -1141,7 +1177,7 @@ function RepairsPageContent() {
           </CardContent>
         </Card>
         {stats.totalCredit > 0 && (
-          <Card className="bg-slate-900 border-slate-700">
+          <Card onClick={() => setStatDialog("credit")} className="bg-slate-900 border-slate-700 cursor-pointer hover:border-slate-500 transition-colors">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-slate-400">Müşterilerin Bizden Alacağı (Fazla Ödeme)</CardTitle>
             </CardHeader>
@@ -1156,11 +1192,27 @@ function RepairsPageContent() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
-            placeholder="Müşteri, telefon, cihaz, marka, model ara..." 
+            placeholder="Müşteri, telefon, cihaz, kod, IMEI veya barkod..." 
             value={search} 
             onChange={(e) => setSearch(e.target.value)} 
-            className="pl-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+            onKeyDown={(e) => {
+              // Barkod okuyucu kodu yazıp Enter gönderir: kod/IMEI ise doğrudan ilgili kaydı aç
+              if (e.key === "Enter" && /^(YT[MSTE]-\d+|\d{15})$/i.test(search.trim())) {
+                e.preventDefault()
+                handleRepairQrScan(search)
+              }
+            }}
+            className="pl-10 pr-11 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
           />
+          <button
+            type="button"
+            onClick={() => setIsRepairScannerOpen(true)}
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center rounded-md text-amber-400 hover:bg-slate-800"
+            title="Barkod / karekod okut"
+            aria-label="Barkod okut"
+          >
+            <ScanLine className="h-4 w-4" />
+          </button>
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px] bg-slate-900 border-slate-700 text-white">
@@ -1598,6 +1650,55 @@ function RepairsPageContent() {
         onAddNote={handleAddNote}
       />
 
+      {/* Sayaç kutularına basınca açılan liste */}
+      <Dialog open={statDialog !== null} onOpenChange={(o) => { if (!o) setStatDialog(null) }}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto">
+          {(() => {
+            const titles: Record<string, string> = { all: "Tüm Tamirler", waiting: "Bekleyen Tamirler", in_progress: "Devam Eden Tamirler", completed: "Biten Tamirler", revenue: "Gelir Getiren (Biten) Tamirler", remaining: "Tahsilatı Bekleyen Tamirler", credit: "Fazla Ödemesi Olan Tamirler" }
+            const list = repairs.filter((r) =>
+              statDialog === "all" ? true
+              : statDialog === "waiting" ? r.status === "waiting"
+              : statDialog === "in_progress" ? r.status === "in_progress"
+              : statDialog === "completed" ? r.status === "completed"
+              : statDialog === "revenue" ? r.status === "completed" && r.paid > 0
+              : statDialog === "remaining" ? r.remaining > 0
+              : statDialog === "credit" ? r.remaining < 0
+              : false
+            )
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-white">{statDialog ? titles[statDialog] : ""} ({list.length})</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2">
+                  {list.length === 0 && <p className="text-sm text-slate-500">Kayıt yok.</p>}
+                  {list.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => { setStatDialog(null); openEditDialog(r) }}
+                      className="w-full text-left p-3 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-white truncate">{r.customerName}</span>
+                        <span className="text-xs font-mono text-amber-400 shrink-0">{r.repairCode || r.id.slice(0, 8)}</span>
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">{[r.brand, r.model].filter(Boolean).join(" ") || r.device} — {r.issue}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 flex justify-between gap-2">
+                        <span>{REPAIR_STAGES.find(x => x.key === stageOf(r))?.icon} {stageLabel(stageOf(r))} • {r.createdAt}</span>
+                        <span className={r.remaining > 0 ? "text-amber-400" : r.remaining < 0 ? "text-cyan-400" : "text-emerald-400"}>
+                          {statDialog === "revenue" ? formatCurrency(r.paid) : statDialog === "remaining" ? `Kalan ${formatCurrency(r.remaining)}` : statDialog === "credit" ? `Fazla ${formatCurrency(-r.remaining)}` : formatCurrency(r.cost)}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <RepairBoardDialog
         open={boardOpen}
         onOpenChange={setBoardOpen}
@@ -1610,7 +1711,7 @@ function RepairsPageContent() {
       <BarcodeScannerDialog
         open={isRepairScannerOpen}
         onOpenChange={setIsRepairScannerOpen}
-        title="Tamir Kaydı QR Okut"
+        title="Barkod / Karekod Okut"
         onScan={handleRepairQrScan}
       />
 

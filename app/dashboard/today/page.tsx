@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { useEffect, useState } from "react"
 import { localDateStr } from "@/lib/dates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -220,7 +221,7 @@ export default function TodayPage() {
 
   const sendWhatsApp = (item: ReminderItem) => {
     const phone = cleanPhone(item.phone)
-    window.open(`https://wa.me/90${phone}?text=${encodeURIComponent(item.message)}`, "_blank")
+    openWhatsApp("90" + phone, item.message)
   }
 
   const grouped = items.reduce((acc, item) => {

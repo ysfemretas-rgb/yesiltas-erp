@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
@@ -1075,7 +1076,7 @@ Bu işlem geri alınamaz!`)) return
         tarih: sale.date,
       })
 
-      window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
+      openWhatsApp("90" + cleanPhone, message)
     } catch (err) {
       console.error("WhatsApp error:", err)
       showToast("WhatsApp gonderilirken hata olustu!", "error")

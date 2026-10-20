@@ -1,5 +1,6 @@
 "use client"
 
+import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -535,7 +536,7 @@ export default function CustomersPage() {
     })
 
     const cleanPhone = phone.startsWith("0") ? phone.substring(1) : phone
-    window.open(`https://wa.me/90${cleanPhone}?text=${encodeURIComponent(message)}`, "_blank")
+    openWhatsApp("90" + cleanPhone, message)
     setIsWhatsAppOpen(false)
   }
 

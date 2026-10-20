@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign, Upload, MessageCircle, Copy } from "lucide-react"
 import { fetchSuppliers, Supplier } from "@/lib/suppliers"
+import { openWhatsApp } from "@/lib/whatsapp"
 import { Consumable, fetchConsumables, createConsumable, createConsumablesBulk, updateConsumable, deleteConsumable } from "@/lib/consumables"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 
@@ -259,10 +260,7 @@ export default function ConsumablesPage() {
     const sp = supplierOf(items[0])
     const phone = (sp?.phone || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
     const message = quoteMessage(items, sp?.contactPerson || sp?.name || items[0].supplier || "")
-    const url = phone.length >= 10
-      ? `https://wa.me/90${phone}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`
-    window.open(url, "_blank")
+    openWhatsApp(phone.length >= 10 ? "90" + phone : "", message)
   }
 
   const quoteGroups = () => {

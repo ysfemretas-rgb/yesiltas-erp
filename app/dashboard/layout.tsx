@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { 
   LayoutDashboard, 
   ListChecks, 
@@ -63,6 +63,36 @@ interface UserData {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const routerNav = useRouter()
+
+  // Uygulama telefonda arka planda kapanıp yeniden açıldığında (ör. WhatsApp'a gidip dönünce iOS sayfayı
+  // yeniden yükleyebilir) en başa değil, kaldığınız sayfaya dönülür. Sadece oturumun ilk açılışında ve
+  // son sayfa 6 saatten yeniyse çalışır. (Bu etki, aşağıdaki "son sayfayı kaydet" etkisinden ÖNCE tanımlıdır.)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("yt_session_started")) return
+      sessionStorage.setItem("yt_session_started", "1")
+      if (pathname !== "/dashboard" || window.location.search) return
+      const raw = localStorage.getItem("yt_last_route")
+      if (!raw) return
+      const last = JSON.parse(raw)
+      if (last?.p && last.p !== "/dashboard" && String(last.p).startsWith("/dashboard/") && Date.now() - Number(last.t) < 6 * 3600 * 1000) {
+        routerNav.replace(last.p)
+      }
+    } catch {
+      // yoksay
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!pathname || !pathname.startsWith("/dashboard")) return
+    try {
+      localStorage.setItem("yt_last_route", JSON.stringify({ p: pathname, t: Date.now() }))
+    } catch {
+      // yoksay
+    }
+  }, [pathname])
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
