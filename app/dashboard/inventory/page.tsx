@@ -22,13 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
 import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle, Download, ClipboardList, RefreshCw, History as HistoryIcon, Copy, Smartphone } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
@@ -41,6 +35,8 @@ import { logChange } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
 import { StockMovement, fetchStockMovements, logStockMovement } from "@/lib/stockMovements"
 import { printBarcodeLabels } from "@/lib/barcodeLabel"
+import { SearchPicker } from "@/components/SearchPicker"
+import { PRODUCT_TYPE_GROUPS, PHONE_CATALOG, PHONE_BRANDS, findProductType, extraCategories, buildProductName } from "@/lib/productCatalog"
 
 const INVENTORY_IMPORT_FIELDS: ImportField[] = [
   { key: "name", label: "Ürün Adı", required: true, type: "text" },
@@ -108,10 +104,15 @@ export default function InventoryPage() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [customCategory, setCustomCategory] = useState("")
+  // Hızlı ürün seçimi: Tür -> Marka -> Model -> Varyant (ürün adı ve kategori otomatik oluşur)
+  const [qpType, setQpType] = useState("")
+  const [qpBrand, setQpBrand] = useState("")
+  const [qpModel, setQpModel] = useState("")
+  const [qpVariant, setQpVariant] = useState("")
   const [editCustomCategory, setEditCustomCategory] = useState("")
   const { rates, isLoadingRates, fetchRates, isFallback } = useExchangeRates()
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
-    category: "Ekran",
+    category: "Telefon (Sıfır)",
     quantity: 0,
     minQuantity: 5,
     purchasePrice: 0,
@@ -121,6 +122,13 @@ export default function InventoryPage() {
     paymentStatus: "unpaid",
     paidAmount: 0,
   })
+  useEffect(() => {
+    if (!qpType) return
+    const type = findProductType(qpType)
+    const name = buildProductName(type, qpBrand, qpModel, qpVariant)
+    setNewItem((prev) => ({ ...prev, name, category: qpType }))
+  }, [qpType, qpBrand, qpModel, qpVariant])
+
   useEffect(() => {
     let cancelled = false
     fetchInventory()
@@ -294,7 +302,23 @@ export default function InventoryPage() {
       showToast("Bu tedarikçinin telefon numarası kayıtlı değil.", "error")
       return
     }
-    const message = `Merhaba ${supplier?.contactPerson || supplier?.name},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz.\n\n📦 *${item.name}* ürününden stoğumuz azaldı (Mevcut: ${item.quantity}).\nSipariş vermek istiyoruz, fiyat ve stok bilgisi paylaşabilir misiniz?`
+    const lines = [
+      `Merhaba ${supplier?.contactPerson || supplier?.name},`,
+      "",
+      "*Yeşiltaş Teknoloji*'den yazıyoruz.",
+      "",
+      `📦 *Ürün:* ${item.name}`,
+      item.category ? `🏷️ *Tür/Kategori:* ${item.category}` : "",
+      item.productCode ? `🔖 *Ürün kodumuz:* ${item.productCode}` : "",
+      item.supplierBarcode ? `🔢 *Sizdeki kod/barkod:* ${item.supplierBarcode}` : "",
+      `📉 *Mevcut stoğumuz:* ${item.quantity} adet (en az ${item.minQuantity} olmalı)`,
+      `🛒 *İstenen miktar:* yaklaşık ${Math.max(1, (item.minQuantity || 0) * 2 - item.quantity)} adet`,
+      "",
+      "Lütfen şunları bildirir misiniz?",
+      "1️⃣ Bu ürün elinizde var mı?",
+      "2️⃣ Birim fiyatı nedir?",
+    ].filter((l, i, arr) => l !== "" || (arr[i - 1] !== "" && i !== arr.length - 1))
+    const message = lines.join("\n")
     openWhatsApp("90" + phone, message)
   }
 
@@ -391,8 +415,8 @@ export default function InventoryPage() {
 
   const orderText = (group: ReturnType<typeof orderGroups>[number]) =>
     `Merhaba ${group.supplier?.contactPerson || group.name},\n\n*Yeşiltaş Teknoloji*'den sipariş listemiz:\n\n` +
-    group.items.map(g => `📦 ${g.item.name} — ${g.suggest} adet`).join("\n") +
-    `\n\nFiyat ve stok bilgisi paylaşabilir misiniz?`
+    group.items.map(g => `📦 ${g.item.name} (${g.item.category}${g.item.productCode ? `, kod: ${g.item.productCode}` : ""}${g.item.supplierBarcode ? `, sizdeki kod: ${g.item.supplierBarcode}` : ""}) — ${g.suggest} adet`).join("\n") +
+    `\n\nLütfen şunları bildirir misiniz?\n1️⃣ Bu ürünler elinizde var mı?\n2️⃣ Birim fiyatları nedir?`
 
   const sendOrderWhatsApp = (group: ReturnType<typeof orderGroups>[number]) => {
     const phone = (group.supplier?.phone || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
@@ -554,8 +578,9 @@ export default function InventoryPage() {
           }).catch((e) => console.error("Stok alımı kasaya yazılamadı:", e))
         }
       }
-      setNewItem({ category: "Ekran", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
+      setNewItem({ category: "Telefon (Sıfır)", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
       setCustomCategory("")
+      setQpType(""); setQpBrand(""); setQpModel(""); setQpVariant("")
       setIsDialogOpen(false)
       showToast("Ürün eklendi.", "success")
     } catch (e) {
@@ -681,6 +706,36 @@ export default function InventoryPage() {
               <DialogTitle className="text-white">Yeni Stok Ürünü</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                <label className="text-sm font-medium text-slate-300">⚡ Hızlı Ürün Seçimi (Tür → Marka → Model)</label>
+                <Select value={qpType} onValueChange={(v) => { setQpType(v); setQpBrand(""); setQpModel("") }}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue placeholder="Ürün türü seçin (kategori)" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    {PRODUCT_TYPE_GROUPS.map((g) => (
+                      <SelectGroup key={g.name}>
+                        <SelectLabel className="text-slate-500">{g.name}</SelectLabel>
+                        {g.types.map((t) => <SelectItem key={t.label} value={t.label} className="text-white">{t.label}</SelectItem>)}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {qpType && findProductType(qpType)?.modelBased && (
+                  <>
+                    <SearchPicker options={PHONE_BRANDS} value={qpBrand} onChange={(v) => { setQpBrand(v); setQpModel("") }} placeholder="Marka (listeden seç veya yaz)" />
+                    <SearchPicker options={PHONE_CATALOG[qpBrand] || []} value={qpModel} onChange={setQpModel} placeholder={qpBrand ? `${qpBrand} modeli (listeden seç veya yaz)` : "Önce marka seçin"} disabled={!qpBrand} />
+                  </>
+                )}
+                {qpType && (
+                  <Input
+                    value={qpVariant}
+                    onChange={(e) => setQpVariant(e.target.value)}
+                    placeholder={findProductType(qpType)?.modelBased ? "Varyant: renk, depolama, kalite... (ör. 128GB Siyah / Silikon Şeffaf)" : "Ürün açıklaması (ör. 20W Type-C Hızlı Şarj)"}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                )}
+                <p className="text-xs text-slate-500">Seçtikçe aşağıdaki ürün adı ve kategori otomatik dolar; adı sonradan elle de düzeltebilirsiniz. Listede olmayan marka/model yazılarak eklenir.</p>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Ürün Adı <span className="text-red-400">*</span></label>
                 <Input
@@ -701,9 +756,22 @@ export default function InventoryPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-600">
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                      {PRODUCT_TYPE_GROUPS.map((g) => (
+                        <SelectGroup key={g.name}>
+                          <SelectLabel className="text-slate-500">{g.name}</SelectLabel>
+                          {g.types.map((t) => (
+                            <SelectItem key={t.label} value={t.label} className="text-white">{t.label}</SelectItem>
+                          ))}
+                        </SelectGroup>
                       ))}
+                      {extraCategories(categories).length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel className="text-slate-500">📂 Mevcut diğer kategoriler</SelectLabel>
+                          {extraCategories(categories).map((cat) => (
+                            <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
                       <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1079,7 +1147,7 @@ export default function InventoryPage() {
             <div className="space-y-2">
               {lowStockItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-white">{item.name}</span>
+                  <span className="font-medium text-white">{item.name} <span className="text-xs font-normal text-slate-500">({item.category})</span></span>
                   <div className="flex items-center gap-2">
                     <Badge className="bg-red-600">Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
                     {item.supplier && (
@@ -1500,9 +1568,22 @@ export default function InventoryPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-600">
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                      {PRODUCT_TYPE_GROUPS.map((g) => (
+                        <SelectGroup key={g.name}>
+                          <SelectLabel className="text-slate-500">{g.name}</SelectLabel>
+                          {g.types.map((t) => (
+                            <SelectItem key={t.label} value={t.label} className="text-white">{t.label}</SelectItem>
+                          ))}
+                        </SelectGroup>
                       ))}
+                      {extraCategories(categories).length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel className="text-slate-500">📂 Mevcut diğer kategoriler</SelectLabel>
+                          {extraCategories(categories).map((cat) => (
+                            <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
                       <SelectItem value="__new__" className="text-emerald-400">+ Yeni Kategori Ekle</SelectItem>
                     </SelectContent>
                   </Select>

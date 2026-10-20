@@ -252,9 +252,9 @@ export default function ConsumablesPage() {
   const supplierOf = (item: Consumable) => suppliers.find(sp => sp.name.trim().toLowerCase() === (item.supplier || "").trim().toLowerCase())
 
   const quoteMessage = (items: Consumable[], contact: string) =>
-    `Merhaba ${contact},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz. Aşağıdaki sarf malzemelerde stoğumuz azaldı; güncel birim fiyat ve teslim süresi için teklif rica ediyoruz:\n\n` +
-    items.map(i => `🧪 ${i.name} — mevcut ${i.currentStock} ${i.unit}, ihtiyaç yaklaşık ${Math.max(1, (i.minStock || 0) * 2 - i.currentStock)} ${i.unit}`).join("\n") +
-    `\n\nTeşekkür ederiz.`
+    `Merhaba ${contact},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz. Aşağıdaki sarf malzemelerde stoğumuz azaldı:\n\n` +
+    items.map(i => `🧪 ${i.name}${i.category ? ` (${i.category})` : ""} — mevcut ${i.currentStock} ${i.unit}, ihtiyaç yaklaşık ${Math.max(1, (i.minStock || 0) * 2 - i.currentStock)} ${i.unit}`).join("\n") +
+    `\n\nLütfen şunları bildirir misiniz?\n1️⃣ Bu malzemeler elinizde var mı?\n2️⃣ Birim fiyatları nedir?\n\nTeşekkür ederiz.`
 
   // Aynı tedarikçinin ürünleri tek mesajda gider; tedarikçi telefonu kayıtlı değilse WhatsApp'ta kişi seçtirilir
   const requestQuote = (items: Consumable[]) => {

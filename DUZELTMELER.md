@@ -123,3 +123,10 @@
 - **Demirbaşlar:** Toplam Kalem, Toplam Değer
 - **Raporlar:** Toplam Gelir, Toplam Gider, Net Kâr, Toplam İşlem (seçili dönem)
 - Teknik Servis kutuları önceden yapılmıştı; Ana Sayfa kutuları zaten ilgili sayfayı açar.
+
+## v11 — Envanter: ürün türü / marka / model seçici ve net tedarikçi mesajı
+- **⚡ Hızlı Ürün Seçimi (Yeni Stok Ürünü ekranı):** Önce **tür** seçilir (Telefon Sıfır/İkinci El, Kılıf, Ekran Koruyucu, Şarj Aleti, Kulaklık, Yedek Parça – Ekran/Batarya/Kamera/Şarj Soketi/…, Tamir Aleti vb.), modele özel türlerde **marka** ve **model** seçilir. Marka listesi: Apple, Samsung, Xiaomi, POCO, Huawei, Honor, Oppo, Realme, Vivo, OnePlus, Google, Motorola, Nokia, Tecno, Infinix, Casper, General Mobile, Reeder (yüzlerce model). Listede olmayan marka/model yazılarak eklenir ("... olarak kullan"). İsteğe bağlı **varyant** (renk, depolama, kalite) yazılır.
+- Ürün adı ve kategori kendiliğinden oluşur: ör. "Apple iPhone 11 128GB Siyah", "Kılıf — Apple iPhone 11 Silikon Şeffaf", "Ekran (Yedek Parça) — Samsung Galaxy A54". Adı sonradan elle düzeltebilirsiniz.
+- **Kategoriler gruplu:** Cihazlar / Telefon Aksesuarları / Genel Aksesuarlar / Yedek Parça / Diğer başlıkları altında hazır gelir (Yeni ve Düzenle ekranlarında). Eski kategorileriniz ("Ekran" gibi) "Mevcut diğer kategoriler" altında kalır.
+- **Tedarikçiye giden mesaj artık ürünü net anlatıyor:** ürün adı, tür/kategori, ürün kodumuz, sizdeki kod/barkod, mevcut stok, istenen miktar. Sipariş listesi ve kritik stok uyarısı da kategori ve kodu gösterir. Sarf malzeme fiyat isteme mesajına da kategori eklendi.
+- **Tedarikçi mesajlarının sonu artık 2 net soru soruyor:** 1) Bu ürün elinizde var mı? 2) Birim fiyatı nedir? (Envanter tekil mesaj, sipariş listesi ve sarf malzeme fiyat isteme mesajlarında; teslim süresi ve KDV sorulmaz.)
