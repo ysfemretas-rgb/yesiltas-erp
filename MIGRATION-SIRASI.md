@@ -25,3 +25,6 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 
 ## Kontrol
 Çalıştırdıktan sonra Supabase > Database > Policies (veya `select * from pg_policies`) ile politikaları kontrol edin.
+
+## Son kontrol
+Tüm SQL'ler çalıştırıldıktan sonra `supabase-saglik-kontrolu.sql` dosyasını çalıştırın (sadece okur); "❌ EKSİK" satırı varsa ilgili dosyayı çalıştırın. Ardından `TEST-SENARYOLARI.md` ile uygulamayı bir kez uçtan uca deneyin.
