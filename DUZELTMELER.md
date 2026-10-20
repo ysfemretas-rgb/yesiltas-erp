@@ -149,3 +149,14 @@
 - Alış geçmişi: arama (alış no, taraf, ürün, IMEI), tür/ödeme durumu filtresi, sayaç kutuları, alış fişi yazdırma, Excel.
 - Mutabakat Merkezi artık ödenmiş ama kasada gideri olmayan alışları da gösterir.
 - Envanter sayfasındaki "Cihaz Alımı" butonu yerine **Alış Yap** (Alışlar sayfasını açar).
+
+## v14 — Envanterde stok azaltınca tedarikçi borcu da düşer
+- Envanterdeki **+ / −** düğmeleri ve **Düzenle** ekranında stok değiştirme artık "alış düzeltmesi" sayılır: stok artarsa tedarikçi borcu artar, **stok azaltılırsa aynı adet kadar borç da düşer** (yanlış girilen alış geri alınır). Borçlu ürünlerde "borcundan düşüldü" bilgisi çıkar.
+- Satışlar stoğu otomatik düşürür ve tedarikçi borcunu **etkilemez** (mal zaten alınmıştı). Fire/kayıp için stok azaltırsanız da borç düşer; bunu istemiyorsanız stok sayımı yerine Satış/İptal akışını kullanın.
+
+## v14 — Envanter ➕/➖ artık alış/iade akışına bağlı
+- **➕ (Stok Girişi):** düğmeye basınca pencere açılır. "🛒 Tedarikçiden satın alındı" seçilirse tedarikçi, birim alış fiyatı, para birimi ve ödeme durumu (Ödendi/Kısmi/Ödenmedi) sorulur; **Alışlar'a kaydedilir**, ödenmeyen kısım tedarikçi borcu olur, ödenen kasaya gider yazılır. "🔧 Sadece sayım düzeltmesi" seçilirse yalnızca stok artar (alış/borç oluşmaz).
+- **➖ (Stok Çıkışı):** "↩️ Hatalı alış girişini düzelt / tedarikçiye iade" seçilirse ilgili alış kaydı küçülür, **tedarikçi borcu da düşer**; alış zaten ödenmişse fark kasaya "Tedarikçi İadesi" geliri olarak yazılır. "📉 Satış dışı çıkış (kayıp, hasar, sayım farkı)" seçilirse stok azalır, borç aynı kalır. (Satış yapınca stok zaten otomatik düşer; bu ekran satış için değildir.)
+- **Yeni Stok Ürünü ekleme:** tedarikçi seçilip adet girildiyse alış otomatik **Alışlar'a işlenir**; ödeme durumuna göre kasaya gider yazılır ve borç oradan izlenir.
+- Tedarikçiler sayfasındaki borç, Alışlar kayıtlarıyla izlenen adetleri eski ürün-bazlı hesapta tekrar saymaz (çift borç yok).
+- Düzenle ekranındaki "Miktar" değişikliği alış kaydı oluşturmaz (sayım düzeltmesidir); satın alma için ➕ veya Alışlar kullanılır.

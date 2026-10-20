@@ -51,3 +51,8 @@ export function allocatePayment(
 export function supplierNetDebt(legacyUnpaid: number, purchasesRemaining: number, genericPayments: number): number {
   return r2(legacyUnpaid + purchasesRemaining - genericPayments)
 }
+
+// Eski (ürün bazlı) borç hesabında, Alışlar kayıtlarıyla zaten izlenen adetler tekrar sayılmaz.
+export function legacyOutstandingQty(purchasedQty: number, coveredByPurchases: number): number {
+  return Math.max(0, (Number(purchasedQty) || 0) - (Number(coveredByPurchases) || 0))
+}

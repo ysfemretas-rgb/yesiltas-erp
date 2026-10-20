@@ -91,6 +91,46 @@ export interface CreatePurchaseInput {
   note?: string
 }
 
+// Alış üst kaydını yazar (kod çakışırsa yeni kodla birkaç kez dener)
+async function insertPurchaseHeader(h: {
+  code: string
+  kind: "supplier" | "customer"
+  partyName: string
+  partyPhone?: string
+  invoiceNo?: string
+  date: string
+  lines: PurchaseLine[]
+  total: number
+  paid: number
+  note?: string
+}): Promise<Purchase> {
+  let row: any = null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const useCode = attempt === 0 ? h.code : newCode()
+    const { data, error } = await supabase
+      .from("purchases")
+      .insert({
+        purchase_code: useCode,
+        kind: h.kind,
+        party_name: h.partyName.trim(),
+        party_phone: h.partyPhone?.trim() || "",
+        invoice_no: h.invoiceNo?.trim() || "",
+        purchase_date: h.date,
+        items: h.lines,
+        total_try: h.total,
+        paid_amount: h.paid,
+        note: h.note?.trim() || "",
+        created_by: actor(),
+      })
+      .select("*")
+      .single()
+    if (!error) { row = data; break }
+    if ((error as any).code !== "23505") throw error // sadece kod çakışmasında yeniden dene
+  }
+  if (!row) throw new Error("Alış kodu üretilemedi, tekrar deneyin.")
+  return fromRow(row)
+}
+
 export async function createPurchase(input: CreatePurchaseInput): Promise<{ purchase: Purchase; warnings: string[] }> {
   const warnings: string[] = []
   const date = input.date || localDateStr()
@@ -173,31 +213,18 @@ export async function createPurchase(input: CreatePurchaseInput): Promise<{ purc
   // 2) Alış kaydı (üst bilgi + satırlar)
   let purchase: Purchase
   try {
-    let row: any = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const useCode = attempt === 0 ? code : newCode()
-      const { data, error } = await supabase
-        .from("purchases")
-        .insert({
-          purchase_code: useCode,
-          kind: input.kind,
-          party_name: input.partyName.trim(),
-          party_phone: input.partyPhone?.trim() || "",
-          invoice_no: input.invoiceNo?.trim() || "",
-          purchase_date: date,
-          items: finalLines,
-          total_try: total,
-          paid_amount: input.paid,
-          note: input.note?.trim() || "",
-          created_by: actor(),
-        })
-        .select("*")
-        .single()
-      if (!error) { row = data; break }
-      if ((error as any).code !== "23505") throw error // sadece kod çakışmasında yeniden dene
-    }
-    if (!row) throw new Error("Alış kodu üretilemedi, tekrar deneyin.")
-    purchase = fromRow(row)
+    purchase = await insertPurchaseHeader({
+      code,
+      kind: input.kind,
+      partyName: input.partyName,
+      partyPhone: input.partyPhone,
+      invoiceNo: input.invoiceNo,
+      date,
+      lines: finalLines,
+      total,
+      paid: input.paid,
+      note: input.note,
+    })
   } catch (e) {
     await rollback()
     throw e
@@ -284,4 +311,132 @@ export async function paySupplierDebt(supplierName: string, amount: number): Pro
   })
   logActivity("Tedarikçiler", "updated", `${supplierName} — ${amount.toLocaleString("tr-TR")} TL ödeme yapıldı`)
   return { allocated: Math.round((amount - leftover) * 100) / 100, leftover }
+}
+
+// Envanter formundan eklenen ürünün alışını (envantere zaten eklenmiş) Alışlar'a işler. Stok değişmez;
+// sadece alış kaydı ve ödenen kısmın kasa gideri yazılır. (Ürünün eski "ödeme durumu" borç takibi
+// kaldırılıp borç artık bu kayıttan izlenir; çağıran ürünü "paid" işaretlemelidir.)
+export async function recordStockPurchase(
+  item: InventoryItem,
+  opts: { quantity: number; paid: number; rates: { USD: number; EUR: number }; note?: string }
+): Promise<Purchase> {
+  const rate = item.purchaseCurrency === "USD" ? opts.rates.USD : item.purchaseCurrency === "EUR" ? opts.rates.EUR : 1
+  const cost = Math.round(item.purchasePrice * rate * 100) / 100
+  const line: PurchaseLine = {
+    inventoryId: item.id,
+    isNew: true,
+    name: item.name,
+    category: item.category,
+    quantity: opts.quantity,
+    unitPrice: item.purchasePrice,
+    currency: item.purchaseCurrency,
+    rate,
+    unitCostTRY: cost,
+    salePrice: item.salePrice,
+    profitMargin: item.profitMargin,
+    minQuantity: item.minQuantity,
+    imei: item.imei || undefined,
+    productCode: item.productCode,
+  }
+  const total = purchaseTotal([line])
+  const paid = Math.min(total, Math.max(0, opts.paid))
+  const date = localDateStr()
+  const purchase = await insertPurchaseHeader({
+    code: newCode(),
+    kind: "supplier",
+    partyName: item.supplier,
+    date,
+    lines: [line],
+    total,
+    paid,
+    note: opts.note || "Envanterden stok girişi",
+  })
+  if (paid > 0.009) {
+    await createTransaction({
+      type: "expense",
+      category: "Stok Alımı",
+      amount: paid,
+      description: `📦 Alış ${purchase.code}: ${purchase.partyName} — ${item.name} x${opts.quantity}`,
+      date,
+      customer: purchase.partyName,
+      source: "manual",
+    })
+  }
+  logActivity("Envanter", "created", `Alış ${purchase.code}: ${purchase.partyName} — ${total.toLocaleString("tr-TR")} TL`)
+  return purchase
+}
+
+// Yanlış girilmiş / iade edilen alışı geri alır: en yeni alıştan başlayarak alış satırlarındaki adet azaltılır,
+// alış toplamı ve borç düşer; ödenen tutar yeni toplamdan fazlaysa fark kasaya "Tedarikçi İadesi" geliri yazılır.
+// Alışlarla karşılanamayan kısım (eski sistemde girilmiş stok) alınan adetten düşülür (eski borç hesabı).
+// Stok da aynı adet kadar azalır.
+export async function reduceStockPurchase(
+  itemId: string,
+  quantity: number
+): Promise<{ reverted: { code: string; qty: number; refund: number }[]; legacyQty: number }> {
+  if (!(quantity > 0)) throw new Error("Adet 0'dan büyük olmalı.")
+  const { data: inv, error: invErr } = await supabase.from("inventory").select("id, name, supplier, quantity, total_purchased_qty").eq("id", itemId).single()
+  if (invErr || !inv) throw invErr || new Error("Ürün bulunamadı.")
+  const stock = Number(inv.quantity) || 0
+  if (quantity > stock) throw new Error(`Stokta sadece ${stock} adet var.`)
+
+  // Stok önce kontrollü düşülür (yetersizse hiçbir alış kaydı değişmez)
+  await adjustInventoryQuantity(itemId, -quantity, "Alış düzeltmesi / iade", inv.name, true)
+
+  const reverted: { code: string; qty: number; refund: number }[] = []
+  let remaining = quantity
+  try {
+    const { data: rows, error } = await supabase
+      .from("purchases")
+      .select("*")
+      .eq("kind", "supplier")
+      .eq("party_name", inv.supplier || "")
+      .order("purchase_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(200)
+    if (error) throw error
+    for (const row of (rows || []) as any[]) {
+      if (remaining <= 0) break
+      const p = fromRow(row)
+      const idx = p.items.findIndex((l) => l.inventoryId === itemId && l.quantity > 0)
+      if (idx < 0) continue
+      const take = Math.min(p.items[idx].quantity, remaining)
+      const newLines = p.items.map((l, i) => (i === idx ? { ...l, quantity: l.quantity - take } : l)).filter((l) => l.quantity > 0)
+      const newTotal = purchaseTotal(newLines)
+      const newPaid = Math.min(p.paid, newTotal)
+      const refund = Math.round((p.paid - newPaid) * 100) / 100
+      const { error: upErr } = await supabase
+        .from("purchases")
+        .update({
+          items: newLines,
+          total_try: newTotal,
+          paid_amount: newPaid,
+          note: `${p.note ? p.note + " | " : ""}Düzeltme (${localDateStr()}): ${take} adet ${p.items[idx].name} geri alındı`.slice(0, 500),
+        })
+        .eq("id", p.id)
+      if (upErr) throw upErr
+      if (refund > 0.009) {
+        await createTransaction({
+          type: "income",
+          category: "Tedarikçi İadesi",
+          amount: refund,
+          description: `↩️ Alış düzeltmesi/iade ${p.code}: ${p.partyName} — ${p.items[idx].name} x${take}`,
+          date: localDateStr(),
+          customer: p.partyName,
+          source: "manual",
+        })
+      }
+      reverted.push({ code: p.code, qty: take, refund })
+      remaining -= take
+    }
+    // Alınan toplam adet düşer (eski ürün-bazlı borç hesabı ve mutabakat için)
+    const purchased = Number(inv.total_purchased_qty != null ? inv.total_purchased_qty : stock)
+    await updateInventoryItem(itemId, { purchasedQuantity: Math.max(0, purchased - quantity) })
+  } catch (e) {
+    // Alış kayıtları güncellenemediyse stok geri verilir
+    await adjustInventoryQuantity(itemId, quantity, "Alış düzeltmesi başarısız — stok iadesi", inv.name).catch((err) => console.error(err))
+    throw e
+  }
+  logActivity("Envanter", "updated", `${inv.name}: ${quantity} adet alış düzeltmesi/iade (${reverted.map((r) => r.code).join(", ") || "eski stok"})`)
+  return { reverted, legacyQty: Math.max(0, remaining) }
 }

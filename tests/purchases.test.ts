@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { unitCostTRY, suggestedSalePrice, purchaseTotal, paymentStatusOf, allocatePayment, supplierNetDebt } from "../lib/purchaseMath.ts"
+import { unitCostTRY, suggestedSalePrice, purchaseTotal, paymentStatusOf, allocatePayment, supplierNetDebt, legacyOutstandingQty } from "../lib/purchaseMath.ts"
 
 const rates = { USD: 40, EUR: 45 }
 
@@ -37,4 +37,10 @@ test("ödeme en eski alıştan başlayarak dağıtılır, artan tutar kalır", (
 test("tedarikçi net borcu", () => {
   assert.equal(supplierNetDebt(500, 1500, 200), 1800)
   assert.equal(supplierNetDebt(0, 0, 100), -100)
+})
+
+test("eski borç hesabı, Alışlar kayıtlarıyla izlenen adetleri tekrar saymaz", () => {
+  assert.equal(legacyOutstandingQty(10, 4), 6)
+  assert.equal(legacyOutstandingQty(3, 5), 0)
+  assert.equal(legacyOutstandingQty(5, 0), 5)
 })

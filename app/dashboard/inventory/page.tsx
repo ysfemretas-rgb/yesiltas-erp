@@ -30,6 +30,8 @@ import { ImageUploadField } from "@/components/ImageUploadField"
 import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
+import { StockMoveDialog } from "@/components/inventory/StockMoveDialog"
+import { recordStockPurchase } from "@/lib/purchases"
 import { diffFields } from "@/lib/diff"
 import { logChange } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
@@ -85,6 +87,7 @@ export default function InventoryPage() {
   const [listPage, setListPage] = useState(1)
   const PAGE_SIZE = 20
   const [orderOpen, setOrderOpen] = useState(false)
+  const [stockMove, setStockMove] = useState<{ item: InventoryItem; mode: "in" | "out" } | null>(null)
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [purchaseForm, setPurchaseForm] = useState({ sellerName: "", sellerPhone: "", sellerIdNo: "", deviceName: "", imei: "", conditionNote: "", price: "", salePrice: "", addToStock: true })
   const [countOpen, setCountOpen] = useState(false)
@@ -222,11 +225,16 @@ export default function InventoryPage() {
     try {
       // Stok atomik değiştirilir (aynı anda satış yapılıyorsa ezilmez)
       await adjustInventoryQuantity(id, newQuantity - item.quantity, newQuantity > item.quantity ? "Elle artış (+)" : "Elle azalış (-)", item.name)
-      // Stok artışı tedarikçiden alım sayılır; tedarikçi borcu bundan hesaplanır
-      if (newQuantity > item.quantity) {
-        const purchased = (item.purchasedQuantity ?? item.quantity) + (newQuantity - item.quantity)
-        await updateInventoryItem(id, { purchasedQuantity: purchased })
-        setInventory(prev => prev.map(i => i.id === id ? { ...i, purchasedQuantity: purchased } : i))
+      // Elle stok değişimi "alış düzeltmesi" sayılır; tedarikçi borcu alınan toplam adetten hesaplanır:
+      //  • artış  -> alınan adet artar (borç artar)
+      //  • azalış -> alınan adet de aynı kadar azalır (yanlış girilen alış geri alınır, borç düşer)
+      // (Satışlar stoğu otomatik düşürür ve borcu ETKİLEMEZ; bu düzeltme sadece envanterdeki +/- ile yapılır.)
+      const diff = newQuantity - item.quantity
+      const purchased = Math.max(0, (item.purchasedQuantity ?? item.quantity) + diff)
+      await updateInventoryItem(id, { purchasedQuantity: purchased })
+      setInventory(prev => prev.map(i => i.id === id ? { ...i, purchasedQuantity: purchased } : i))
+      if (diff < 0 && item.supplier && item.paymentStatus !== "paid") {
+        showToast(`Stok azaltıldı; ${item.supplier} borcundan da ${-diff} adet düşüldü (alış düzeltmesi).`, "success")
       }
     } catch (e) {
       console.error(e)
@@ -561,8 +569,23 @@ export default function InventoryPage() {
         paidAmount: newItem.paymentStatus === "partial" ? (Number(newItem.paidAmount) || 0) : 0,
       })
       setInventory([item, ...inventory])
-      // Tedarikçiye ödenen kısım kasaya gider olarak yazılır (eskiden hiç yazılmıyordu)
-      if (item.supplier && item.paymentStatus !== "unpaid") {
+      // Tedarikçili ürün: alış "Alışlar"a kaydedilir (borç/ödeme oradan izlenir). Başarısız olursa eski yönteme düşülür.
+      let recorded = false
+      if (item.supplier && item.quantity > 0) {
+        try {
+          const rateNow = item.purchaseCurrency === "USD" ? rates.USD : item.purchaseCurrency === "EUR" ? rates.EUR : 1
+          const totalNow = item.purchasePrice * rateNow * item.quantity
+          const paidNow = item.paymentStatus === "paid" ? totalNow : item.paymentStatus === "partial" ? Math.min(item.paidAmount || 0, totalNow) : 0
+          await recordStockPurchase(item, { quantity: item.quantity, paid: paidNow, rates })
+          // Borç artık alış kaydından izlenir; ürün kaydı "ödendi" işaretlenir (çift sayım olmasın)
+          await updateInventoryItem(item.id, { paymentStatus: "paid", paidAmount: 0 })
+          setInventory((prev) => prev.map((i) => (i.id === item.id ? { ...i, paymentStatus: "paid", paidAmount: 0 } : i)))
+          recorded = true
+        } catch (e) {
+          console.error("Alış kaydı oluşturulamadı (SQL v9 çalıştırıldı mı?); eski borç takibi kullanılıyor:", e)
+        }
+      }
+      if (!recorded && item.supplier && item.paymentStatus !== "unpaid") {
         const rate = item.purchaseCurrency === "USD" ? rates.USD : item.purchaseCurrency === "EUR" ? rates.EUR : 1
         const totalTRY = item.purchasePrice * rate * item.quantity
         const paidTRY = item.paymentStatus === "paid" ? totalTRY : Math.min(item.paidAmount || 0, totalTRY || item.paidAmount || 0)
@@ -615,8 +638,9 @@ export default function InventoryPage() {
     )
     try {
       const original = inventory.find(i => i.id === editingItem.id)
-      const increase = original ? Math.max(0, editingItem.quantity - original.quantity) : 0
-      const purchasedQuantity = (original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity) + increase
+      // Düzenleme ekranında stok değiştirilirse alınan toplam adet de aynı kadar değişir (artış: borç artar, azalış: borç düşer)
+      const stockChange = original ? editingItem.quantity - original.quantity : 0
+      const purchasedQuantity = Math.max(0, (original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity) + stockChange)
       const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice, purchasedQuantity })
       if (original) {
         logChange("Envanter", "updated", `Ürün düzenlendi: ${original.name}${original.productCode ? ` (${original.productCode})` : ""}`, diffFields(
@@ -1290,7 +1314,7 @@ export default function InventoryPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => updateQuantity(item.id, -1)}
+                        onClick={() => setStockMove({ item, mode: "out" })}
                         disabled={item.quantity <= 0}
                         className="border-slate-600 text-slate-300 hover:bg-slate-700"
                       >
@@ -1300,7 +1324,7 @@ export default function InventoryPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => updateQuantity(item.id, 1)}
+                        onClick={() => setStockMove({ item, mode: "in" })}
                         className="border-slate-600 text-slate-300 hover:bg-slate-700"
                       >
                         <PlusIcon className="h-3 w-3" />
@@ -1367,6 +1391,17 @@ export default function InventoryPage() {
           />
         </CardContent>
       </Card>
+
+      <StockMoveDialog
+        item={stockMove?.item || null}
+        mode={stockMove?.mode || "in"}
+        onClose={() => setStockMove(null)}
+        suppliers={suppliers}
+        rates={rates}
+        isFallback={isFallback}
+        onDone={() => { fetchInventory().then(setInventory).catch((e) => console.error(e)) }}
+        notify={showToast}
+      />
 
       {/* İkinci El Cihaz Alımı */}
       <Dialog open={purchaseOpen} onOpenChange={setPurchaseOpen}>
@@ -1606,6 +1641,7 @@ export default function InventoryPage() {
                     onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
                   />
+                  <p className="text-[11px] text-slate-500">Satın alma için listedeki ➕ düğmesini ya da Alışlar sayfasını kullanın; buradaki değişiklik alış kaydı oluşturmaz.</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>

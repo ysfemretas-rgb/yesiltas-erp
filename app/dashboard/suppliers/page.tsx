@@ -19,7 +19,7 @@ import { useExchangeRates } from "@/hooks/useExchangeRates"
 
 import { Supplier, SupplierPayment, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier, fetchSupplierPayments } from "@/lib/suppliers"
 import { Purchase, fetchPurchases, paySupplierDebt } from "@/lib/purchases"
-import { supplierNetDebt } from "@/lib/purchaseMath"
+import { supplierNetDebt, legacyOutstandingQty } from "@/lib/purchaseMath"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
 const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
@@ -86,13 +86,18 @@ export default function SuppliersPage() {
   const supplierStats = (supplierName: string) => {
     const items = inventory.filter((i) => i.supplier === supplierName)
     const orderCount = items.length
+    // Alışlar kayıtlarıyla zaten izlenen adetler eski ürün-bazlı borç hesabında tekrar sayılmaz
+    const coveredQty: Record<string, number> = {}
+    purchases.filter(p => p.kind === "supplier" && p.partyName === supplierName).forEach(p => {
+      p.items.forEach(l => { if (l.inventoryId) coveredQty[l.inventoryId] = (coveredQty[l.inventoryId] || 0) + l.quantity })
+    })
     const purchasedTotal = items.reduce((sum, i) => {
       const priceInTRY = i.purchaseCurrency === "USD" ? i.purchasePrice * rates.USD
         : i.purchaseCurrency === "EUR" ? i.purchasePrice * rates.EUR
         : i.purchasePrice
-      const total = priceInTRY * (i.purchasedQuantity ?? i.quantity)
+      const total = priceInTRY * legacyOutstandingQty(i.purchasedQuantity ?? i.quantity, coveredQty[i.id] || 0)
       const paid = i.paymentStatus === "paid" ? total : i.paymentStatus === "partial" ? (i.paidAmount || 0) : 0
-      return sum + (total - paid)
+      return sum + Math.max(0, total - paid)
     }, 0)
     const extraPaid = payments.filter(p => p.supplierName === supplierName).reduce((sum, p) => sum + p.amount, 0)
     // Alışlar sayfasından yapılan alışların ödenmemiş kalanı da borca eklenir
