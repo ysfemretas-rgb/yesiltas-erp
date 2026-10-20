@@ -1,4 +1,4 @@
-import { supabase, fetchAllRows } from "@/lib/supabase"
+import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 import { logStockMovement } from "@/lib/stockMovements"
 
@@ -112,8 +112,16 @@ export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id" 
   return created
 }
 
+const OPTIONAL_INVENTORY_COLUMNS = ["imei", "total_purchased_qty"]
+
 export async function createInventoryItem(input: Omit<InventoryItem, "id" | "productCode">): Promise<InventoryItem> {
-  const { data, error } = await supabase.from("inventory").insert(toRow({ ...input, purchasedQuantity: input.purchasedQuantity ?? input.quantity })).select("*").single()
+  const row = toRow({ ...input, purchasedQuantity: input.purchasedQuantity ?? input.quantity })
+  if (!row.imei) delete row.imei
+  let { data, error } = await supabase.from("inventory").insert(row).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    console.warn("Envanter tablosunda yeni sütunlar eksik; bunlar olmadan kaydediliyor. SQL migrasyonlarını çalıştırın.", error.message)
+    ;({ data, error } = await supabase.from("inventory").insert(stripColumns(row, OPTIONAL_INVENTORY_COLUMNS)).select("*").single())
+  }
   if (error) throw error
   const created = fromRow(data)
   logActivity("Envanter", "created", `${created.name} eklendi`)
@@ -121,7 +129,12 @@ export async function createInventoryItem(input: Omit<InventoryItem, "id" | "pro
 }
 
 export async function updateInventoryItem(id: string, input: Partial<Omit<InventoryItem, "id" | "productCode">>): Promise<InventoryItem> {
-  const { data, error } = await supabase.from("inventory").update(toRow(input)).eq("id", id).select("*").single()
+  const row = toRow(input)
+  let { data, error } = await supabase.from("inventory").update(row).eq("id", id).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    console.warn("Envanter tablosunda yeni sütunlar eksik; bunlar olmadan güncelleniyor.", error.message)
+    ;({ data, error } = await supabase.from("inventory").update(stripColumns(row, OPTIONAL_INVENTORY_COLUMNS)).eq("id", id).select("*").single())
+  }
   if (error) throw error
   const updated = fromRow(data)
   logActivity("Envanter", "updated", `${updated.name} güncellendi`)
@@ -173,14 +186,16 @@ export async function adjustInventoryQuantity(
   if (!error && data !== null && data !== undefined) {
     result = Number(Array.isArray(data) ? data[0] : data)
   } else if (error && String(error.message || "").includes("INSUFFICIENT_STOCK")) {
-    throw new InsufficientStockError(`${productName || "Ürün"} için yeterli stok yok.`)
+    // Gerçek (veritabanındaki) stok mesajda gösterilir: ekrandaki sayı eski olabilir
+    const { data: cur } = await supabase.from("inventory").select("quantity").eq("id", id).single()
+    throw new InsufficientStockError(`${productName || "Ürün"} için yeterli stok yok (sistemdeki güncel stok: ${cur?.quantity ?? 0}, istenen: ${-delta}).`)
   } else if (error && !isMissingFunction(error)) {
     throw error
   } else {
     // Fonksiyon yok (migrasyon çalıştırılmamış): okuyup yazma yöntemi
     const { data: row, error: readErr } = await supabase.from("inventory").select("quantity, name").eq("id", id).single()
     if (readErr || !row) throw readErr || new Error("Ürün bulunamadı")
-    if (useStrict && (row.quantity ?? 0) + delta < 0) throw new InsufficientStockError(`${productName || row.name || "Ürün"} için yeterli stok yok.`)
+    if (useStrict && (row.quantity ?? 0) + delta < 0) throw new InsufficientStockError(`${productName || row.name || "Ürün"} için yeterli stok yok (sistemdeki güncel stok: ${row.quantity ?? 0}, istenen: ${-delta}).`)
     const next = Math.max(0, (row.quantity ?? 0) + delta)
     const { error: upErr } = await supabase.from("inventory").update({ quantity: next }).eq("id", id)
     if (upErr) throw upErr

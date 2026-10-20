@@ -1,4 +1,4 @@
-import { supabase, fetchAllRows } from "@/lib/supabase"
+import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 import type { RepairQc, RepairQuote } from "@/lib/repairWorkflow"
@@ -189,8 +189,24 @@ export async function fetchRepairs(): Promise<Repair[]> {
   return (data || []).map(fromRow)
 }
 
+const OPTIONAL_REPAIR_COLUMNS = ["stage", "estimated_delivery", "qc", "quote", "technician", "parts", "parts_cost", "signature"]
+
 export async function createRepair(input: Omit<Repair, "id" | "repairCode">): Promise<Repair> {
-  const { data, error } = await supabase.from("devices").insert(toRow(input)).select("*").single()
+  const row = toRow(input)
+  // Boş değerleri göndermeyelim: yeni sütunlar olmasa bile sıradan tamir kaydı açılabilsin
+  if (!row.stage) delete row.stage
+  if (!row.estimated_delivery) delete row.estimated_delivery
+  if (!row.technician) delete row.technician
+  if (Array.isArray(row.parts) && row.parts.length === 0) delete row.parts
+  if (!row.parts_cost) delete row.parts_cost
+  if (!row.signature) delete row.signature
+  if (row.qc === null || row.qc === undefined) delete row.qc
+  if (row.quote === null || row.quote === undefined) delete row.quote
+  let { data, error } = await supabase.from("devices").insert(row).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    console.warn("Tamir tablosunda yeni sütunlar eksik; bunlar olmadan kaydediliyor. SQL migrasyonlarını çalıştırın.", error.message)
+    ;({ data, error } = await supabase.from("devices").insert(stripColumns(row, OPTIONAL_REPAIR_COLUMNS)).select("*").single())
+  }
   if (error) throw error
   const created = fromRow(data)
   logActivity("Teknik Servis", "created", `${created.customerName} — ${created.brand} ${created.model} kaydı eklendi`)
@@ -198,7 +214,12 @@ export async function createRepair(input: Omit<Repair, "id" | "repairCode">): Pr
 }
 
 export async function updateRepair(id: string, input: Partial<Omit<Repair, "id" | "repairCode">>): Promise<Repair> {
-  const { data, error } = await supabase.from("devices").update(toRow(input)).eq("id", id).select("*").single()
+  const row = toRow(input)
+  let { data, error } = await supabase.from("devices").update(row).eq("id", id).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    console.warn("Tamir tablosunda yeni sütunlar eksik; bunlar olmadan güncelleniyor.", error.message)
+    ;({ data, error } = await supabase.from("devices").update(stripColumns(row, OPTIONAL_REPAIR_COLUMNS)).eq("id", id).select("*").single())
+  }
   if (error) throw error
   const updated = fromRow(data)
   logActivity("Teknik Servis", "updated", `${updated.customerName} — ${updated.brand} ${updated.model} güncellendi`)

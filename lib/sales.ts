@@ -1,4 +1,4 @@
-import { supabase, fetchAllRows } from "@/lib/supabase"
+import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface SaleItem {
@@ -143,8 +143,23 @@ export async function fetchSales(): Promise<Sale[]> {
   return (data || []).map(fromRow)
 }
 
+// Sonradan eklenen (isteğe bağlı) sütunlar
+const OPTIONAL_SALE_COLUMNS = ["payments", "installments", "refunds", "trade_in", "extra_cost", "extra_cost_note"]
+
 export async function createSale(input: Omit<Sale, "id" | "saleCode">): Promise<Sale> {
-  const { data, error } = await supabase.from("sales").insert(toRow(input)).select("*").single()
+  const row = toRow(input)
+  // Boş/varsayılan değerleri hiç göndermeyelim: yeni sütunlar olmasa bile sıradan satış kaydedilebilsin
+  if (Array.isArray(row.payments) && row.payments.length === 0) delete row.payments
+  if (Array.isArray(row.installments) && row.installments.length === 0) delete row.installments
+  if (Array.isArray(row.refunds) && row.refunds.length === 0) delete row.refunds
+  if (row.trade_in === null) delete row.trade_in
+  if (!row.extra_cost) delete row.extra_cost
+  if (!row.extra_cost_note) delete row.extra_cost_note
+  let { data, error } = await supabase.from("sales").insert(row).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    console.warn("Satış tablosunda yeni sütunlar eksik; bunlar olmadan kaydediliyor. SQL migrasyonlarını çalıştırın.", error.message)
+    ;({ data, error } = await supabase.from("sales").insert(stripColumns(row, OPTIONAL_SALE_COLUMNS)).select("*").single())
+  }
   if (error) throw error
   const created = fromRow(data)
   logActivity("Satışlar", "created", `${created.customerName} — ${created.totalAmount.toLocaleString("tr-TR")} TL satış eklendi`)
@@ -152,7 +167,12 @@ export async function createSale(input: Omit<Sale, "id" | "saleCode">): Promise<
 }
 
 export async function updateSale(id: string, input: Partial<Omit<Sale, "id" | "saleCode">>): Promise<Sale> {
-  const { data, error } = await supabase.from("sales").update(toRow(input)).eq("id", id).select("*").single()
+  const row = toRow(input)
+  let { data, error } = await supabase.from("sales").update(row).eq("id", id).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    console.warn("Satış tablosunda yeni sütunlar eksik; bunlar olmadan güncelleniyor.", error.message)
+    ;({ data, error } = await supabase.from("sales").update(stripColumns(row, OPTIONAL_SALE_COLUMNS)).eq("id", id).select("*").single())
+  }
   if (error) throw error
   const updated = fromRow(data)
   logActivity("Satışlar", "updated", `${updated.customerName} satışı güncellendi`)

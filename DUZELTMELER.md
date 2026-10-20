@@ -130,3 +130,10 @@
 - **Kategoriler gruplu:** Cihazlar / Telefon Aksesuarları / Genel Aksesuarlar / Yedek Parça / Diğer başlıkları altında hazır gelir (Yeni ve Düzenle ekranlarında). Eski kategorileriniz ("Ekran" gibi) "Mevcut diğer kategoriler" altında kalır.
 - **Tedarikçiye giden mesaj artık ürünü net anlatıyor:** ürün adı, tür/kategori, ürün kodumuz, sizdeki kod/barkod, mevcut stok, istenen miktar. Sipariş listesi ve kritik stok uyarısı da kategori ve kodu gösterir. Sarf malzeme fiyat isteme mesajına da kategori eklendi.
 - **Tedarikçi mesajlarının sonu artık 2 net soru soruyor:** 1) Bu ürün elinizde var mı? 2) Birim fiyatı nedir? (Envanter tekil mesaj, sipariş listesi ve sarf malzeme fiyat isteme mesajlarında; teslim süresi ve KDV sorulmaz.)
+
+## v12 — "Stok var ama satış yapılamıyor" düzeltmesi
+- Satış, ekrandaki (eski kalabilen) stok sayısına göre reddedilmez; stok yeterliliği **veritabanında** kontrol edilir. Yetersizse mesaj gerçek stoğu gösterir ("sistemdeki güncel stok: N").
+- **Çift dokunma koruması:** "Satışı Tamamla" basılınca buton "Kaydediliyor..." olur ve ikinci basış yok sayılır. (Yavaş bağlantıda ikinci basış, birinci işlemin düştüğü stoğu görüp "stok yok" hatası veriyordu.)
+- Satış penceresi açılırken stok yeniden çekilir.
+- Satış kaydedilemezse gerçek hata nedeni toast'ta görünür.
+- **Eksik SQL sütunları artık satışı/tamiri engellemez:** yeni sürümlerle eklenen sütunlar (ek maliyet, taksit, takas, aşama, IMEI vb.) veritabanında henüz yoksa kayıt, bu sütunlar olmadan yapılır (o özelliğin verisi kaydedilmez). SQL dosyalarını çalıştırınca tam özellikler açılır.

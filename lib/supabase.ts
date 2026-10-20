@@ -30,3 +30,18 @@ export async function fetchAllRows(
   }
   return all
 }
+
+// Yeni sürümlerle eklenen sütunlar (ör. extra_cost, stage, imei) veritabanına henüz eklenmemişse
+// ("Could not find the ... column") kayıt işlemi tamamen başarısız olmasın diye, o sütunlar
+// çıkarılıp işlem bir kez daha denenir. Bu durumda yeni özelliğe ait veri kaydedilmez ama satış/tamir
+// kaydı yapılabilir. (İlgili SQL migrasyonunu çalıştırınca her şey normale döner.)
+export function isMissingColumnError(err: any): boolean {
+  const msg = String(err?.message || "")
+  return err?.code === "PGRST204" || err?.code === "42703" || /could not find the .* column|column .* does not exist/i.test(msg)
+}
+
+export function stripColumns(row: Record<string, unknown>, cols: string[]): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...row }
+  cols.forEach((c) => delete copy[c])
+  return copy
+}

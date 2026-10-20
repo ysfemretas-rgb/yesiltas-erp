@@ -5,7 +5,7 @@ import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -497,7 +497,28 @@ export default function SalesPage() {
     }))
   }
 
+  // Satış penceresi her açıldığında güncel stok çekilir (ekrandaki sayı eski kalmasın)
+  useEffect(() => {
+    if (showNewSale) fetchInventory().then(setProducts).catch((e) => console.error("Stok yenilenemedi:", e))
+  }, [showNewSale])
+
+  // Çift dokunma koruması: "Satışı Tamamla"ya iki kez basılırsa (telefonda yavaş bağlantıda sık olur)
+  // ikinci işlem birincinin stoğunu görüp "stok yok" hatası veriyordu.
+  const [savingSale, setSavingSale] = useState(false)
+  const savingRef = useRef(false)
   const handleCompleteSale = async () => {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSavingSale(true)
+    try {
+      await doCompleteSale()
+    } finally {
+      savingRef.current = false
+      setSavingSale(false)
+    }
+  }
+
+  const doCompleteSale = async () => {
     if (!selectedCustomer || cart.length === 0) return
     const customer = customers.find(c => c.id === selectedCustomer)
     if (!customer) return
@@ -507,15 +528,7 @@ export default function SalesPage() {
       return
     }
 
-    // Stok son kez kontrol edilir (sayfa açıkken başka biri satmış olabilir)
-    const shortage = cart.find(item => {
-      const p = products.find(prod => prod.id === item.productId)
-      return !p || item.quantity > p.quantity
-    })
-    if (shortage) {
-      showToast(`${shortage.name} için yeterli stok yok.`, "error")
-      return
-    }
+    // NOT: Stok yeterliliği ekrandaki (eski olabilen) sayıya göre DEĞİL, aşağıda veritabanında kontrol edilir.
 
     if (isSplit && splitSum <= 0) {
       showToast("Çoklu ödeme için en az bir tutar girin.", "error")
@@ -624,7 +637,8 @@ export default function SalesPage() {
     } catch (e) {
       console.error(e)
       await rollbackStock()
-      showToast("Satış kaydedilemedi; stok geri verildi. Lütfen tekrar deneyin.", "error")
+      const detail = (e as any)?.message ? ` (${String((e as any).message).slice(0, 160)})` : ""
+      showToast(`Satış kaydedilemedi; stok geri verildi.${detail}`, "error")
       return
     }
 
@@ -1526,10 +1540,10 @@ Bu işlem geri alınamaz!`)) return
                   )}
                   <Button
                     onClick={handleCompleteSale}
-                    disabled={!selectedCustomer || cart.length === 0 || Number(saleDiscount) > maxCartDiscount}
+                    disabled={savingSale || !selectedCustomer || cart.length === 0 || Number(saleDiscount) > maxCartDiscount}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    ✅ {paymentMethod === "unpaid" ? "Satışı Kaydet (Ödenmedi)" : "Satışı Tamamla"}
+                    {savingSale ? "⏳ Kaydediliyor..." : <>✅ {paymentMethod === "unpaid" ? "Satışı Kaydet (Ödenmedi)" : "Satışı Tamamla"}</>}
                   </Button>
                 </div>
               </div>
