@@ -169,6 +169,32 @@ function isMissingFunction(err: any): boolean {
 // strict=true ve delta<0 ise stok yetersizse işlem REDDEDİLİR (InsufficientStockError); satış gibi
 // stoktan düşen işlemler bunu kullanır. Böylece iki kişi aynı son ürünü satamaz.
 // supabase-fixes-v2/v6 migrasyonlarındaki fonksiyonlar kullanılır; yoksa istemci tarafı kontrole düşer.
+// Stoktan KONTROLLÜ düşme (satış gibi): önce güncel stok okunur; yeterliyse "stok hâlâ aynıysa" koşuluyla
+// güncellenir. İki kişi aynı anda satarsa ikincisi koşulu tutturamaz ve yeniden dener / reddedilir.
+// Bu yöntem hiçbir SQL fonksiyonuna bağlı değildir ve stoğu SIFIRA düşürmeye (son ürünü satmaya) izin verir.
+async function decrementStockChecked(id: string, need: number, productName: string): Promise<number> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await supabase.from("inventory").select("quantity, name").eq("id", id).single()
+    if (error || !row) throw error || new Error("Ürün bulunamadı")
+    const name = productName || row.name || "Ürün"
+    const current = row.quantity === null || row.quantity === undefined ? null : Number(row.quantity)
+    const q = current ?? 0
+    if (q < need) {
+      throw new InsufficientStockError(`${name} için yeterli stok yok (sistemdeki güncel stok: ${q}, istenen: ${need}).`)
+    }
+    let upd = supabase.from("inventory").update({ quantity: q - need }).eq("id", id)
+    upd = current === null ? upd.is("quantity", null) : upd.eq("quantity", q)
+    const { data: updated, error: upErr } = await upd.select("quantity")
+    if (upErr) throw upErr
+    if (updated && updated.length > 0) return Number(updated[0].quantity)
+    // Bu arada başka bir işlem stoğu değiştirdi: baştan oku ve tekrar dene
+  }
+  throw new Error(`${productName || "Ürün"} stoğu aynı anda başka bir işlemle değiştirildi; lütfen tekrar deneyin.`)
+}
+
+// Stoğu göreli (+/-) olarak değiştirir. strict=true ve delta<0 ise stok yetersizse işlem REDDEDİLİR
+// (InsufficientStockError); satış gibi stoktan düşen işlemler bunu kullanır. Artış ve diğer değişimler
+// veritabanındaki atomik fonksiyonu (supabase-fixes-v2) kullanır; yoksa okuyup yazma yöntemine düşülür.
 export async function adjustInventoryQuantity(
   id: string,
   delta: number,
@@ -179,23 +205,21 @@ export async function adjustInventoryQuantity(
   if (!delta) return null
   let result: number | null = null
 
-  const useStrict = strict && delta < 0
-  const fnName = useStrict ? "adjust_inventory_quantity_strict" : "adjust_inventory_quantity"
-  const { data, error } = await supabase.rpc(fnName, { p_id: id, p_delta: delta })
+  if (strict && delta < 0) {
+    result = await decrementStockChecked(id, -delta, productName)
+    logStockMovement(id, productName, delta, reason)
+    return result
+  }
 
+  const { data, error } = await supabase.rpc("adjust_inventory_quantity", { p_id: id, p_delta: delta })
   if (!error && data !== null && data !== undefined) {
     result = Number(Array.isArray(data) ? data[0] : data)
-  } else if (error && String(error.message || "").includes("INSUFFICIENT_STOCK")) {
-    // Gerçek (veritabanındaki) stok mesajda gösterilir: ekrandaki sayı eski olabilir
-    const { data: cur } = await supabase.from("inventory").select("quantity").eq("id", id).single()
-    throw new InsufficientStockError(`${productName || "Ürün"} için yeterli stok yok (sistemdeki güncel stok: ${cur?.quantity ?? 0}, istenen: ${-delta}).`)
   } else if (error && !isMissingFunction(error)) {
     throw error
   } else {
     // Fonksiyon yok (migrasyon çalıştırılmamış): okuyup yazma yöntemi
     const { data: row, error: readErr } = await supabase.from("inventory").select("quantity, name").eq("id", id).single()
     if (readErr || !row) throw readErr || new Error("Ürün bulunamadı")
-    if (useStrict && (row.quantity ?? 0) + delta < 0) throw new InsufficientStockError(`${productName || row.name || "Ürün"} için yeterli stok yok (sistemdeki güncel stok: ${row.quantity ?? 0}, istenen: ${-delta}).`)
     const next = Math.max(0, (row.quantity ?? 0) + delta)
     const { error: upErr } = await supabase.from("inventory").update({ quantity: next }).eq("id", id)
     if (upErr) throw upErr

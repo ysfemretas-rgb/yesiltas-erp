@@ -598,7 +598,7 @@ export default function SalesPage() {
       }
     } catch (e) {
       await rollbackStock()
-      showToast(e instanceof InsufficientStockError ? e.message : "Stok ayrılırken bir sorun oluştu; satış yapılmadı.", "error")
+      showToast(e instanceof InsufficientStockError ? e.message : `Stok ayrılırken bir sorun oluştu; satış yapılmadı. (${String((e as any)?.message || e).slice(0, 160)})`, "error")
       return
     }
     setProducts(prev => prev.map(p => {

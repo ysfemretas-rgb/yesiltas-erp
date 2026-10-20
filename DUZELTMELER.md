@@ -137,3 +137,4 @@
 - Satış penceresi açılırken stok yeniden çekilir.
 - Satış kaydedilemezse gerçek hata nedeni toast'ta görünür.
 - **Eksik SQL sütunları artık satışı/tamiri engellemez:** yeni sürümlerle eklenen sütunlar (ek maliyet, taksit, takas, aşama, IMEI vb.) veritabanında henüz yoksa kayıt, bu sütunlar olmadan yapılır (o özelliğin verisi kaydedilmez). SQL dosyalarını çalıştırınca tam özellikler açılır.
+- **Son ürün (stok 1) artık satılabilir, stok 0'a düşer ("tükendi" olur):** Satışta stok düşme yöntemi değiştirildi; veritabanındaki özel SQL fonksiyonuna bağlı değil. Güncel stok okunur, yeterliyse "stok hâlâ aynıysa" koşuluyla düşürülür (aynı anda iki satış yapılırsa ikincisi reddedilir). Hata olursa gerçek hata metni ekranda görünür.
