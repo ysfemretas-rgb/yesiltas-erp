@@ -31,7 +31,8 @@ import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
 import { StockMoveDialog } from "@/components/inventory/StockMoveDialog"
-import { recordStockPurchase, fetchPurchases, Purchase, findPurchaseLinesAtPrice, correctPurchasePrices } from "@/lib/purchases"
+import { recordStockPurchase, fetchPurchases, Purchase, findPurchaseLinesAtPrice, correctPurchasePrices, createPurchase, reduceStockPurchase } from "@/lib/purchases"
+import { rateFor, unitCostTRY } from "@/lib/purchaseMath"
 import { diffFields } from "@/lib/diff"
 import { logChange } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
@@ -626,6 +627,10 @@ export default function InventoryPage() {
       showToast("Lütfen ürün adını girin!", "error")
       return
     }
+    if (!(Number(editingItem.quantity) >= 0)) {
+      showToast("Adet 0 ya da daha büyük olmalı.", "error")
+      return
+    }
     if (editingItem.imei && editingItem.quantity > 0) {
       const conflict = await findActiveImeiConflict(editingItem.imei, editingItem.id)
       if (conflict) {
@@ -640,20 +645,34 @@ export default function InventoryPage() {
       editingItem.profitMargin,
       rates
     )
+    const original = inventory.find(i => i.id === editingItem.id)
+    const stockChange = original ? editingItem.quantity - original.quantity : 0
+    const supplierName = (original?.supplier || "").trim()
+    // Tedarikçili üründe adet değişirse Alışlar kaydı ve tedarikçi borcu da AYNI İŞLEMLE düzeltilir
+    // (iki yerde ayrı ayrı düzeltme ve uyuşmazlık olmasın). "İptal" = sadece sayım/kayıp düzeltmesi: alış ve borç değişmez.
+    let linked = false
+    if (original && stockChange !== 0 && supplierName) {
+      const n = Math.abs(stockChange)
+      linked = stockChange < 0
+        ? confirm(`Stok ${n} adet azalıyor.\n\nBu, hatalı girilen / iade edilen alışın düzeltmesi mi?\n\nTamam: Alış kaydı ve ${supplierName} borcu da ${n} adet düşer (Alışlar ile aynı kalır).\nİptal: Sadece stok azalır (kayıp, hasar, sayım); alış kaydı ve borç DEĞİŞMEZ.`)
+        : confirm(`Stok ${n} adet artıyor.\n\nBu, tedarikçiden aldığınız ek ürün mü?\n\nTamam: Alışlar'a yeni alış kaydı eklenir ve ${supplierName} borcu artar (ödemeyi Alışlar'dan yaparsınız).\nİptal: Sadece stok artar (sayım düzeltmesi); alış kaydı ve borç DEĞİŞMEZ.`)
+    }
     try {
-      const original = inventory.find(i => i.id === editingItem.id)
-      // Düzenleme ekranında stok değiştirilirse alınan toplam adet de aynı kadar değişir (artış: borç artar, azalış: borç düşer)
-      const stockChange = original ? editingItem.quantity - original.quantity : 0
-      const purchasedQuantity = Math.max(0, (original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity) + stockChange)
-      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, category: resolvedCategory, salePrice, purchasedQuantity })
+      const baseQty = Number(original?.purchasedQuantity ?? original?.quantity ?? editingItem.quantity)
+      // Alışlara bağlı düzeltmede adedi Alışlar işlemi değiştirir: burada adet ve alınan toplam adet aynı kalır.
+      // Tedarikçili üründe sadece sayım/kayıp düzeltmesinde de alınan toplam adet değişmez (borç değişmez).
+      // Tedarikçisiz üründe eski davranış: alınan toplam adet stokla birlikte değişir.
+      const quantityNow = linked && original ? original.quantity : editingItem.quantity
+      const purchasedQuantity = supplierName ? baseQty : Math.max(0, baseQty + stockChange)
+      const updated = await updateInventoryItem(editingItem.id, { ...editingItem, quantity: quantityNow, category: resolvedCategory, salePrice, purchasedQuantity })
       if (original) {
         logChange("Envanter", "updated", `Ürün düzenlendi: ${original.name}${original.productCode ? ` (${original.productCode})` : ""}`, diffFields(
           original as any,
           updated as any,
-          [{ key: "name", label: "Ad" }, { key: "salePrice", label: "Satış fiyatı" }, { key: "purchasePrice", label: "Alış fiyatı" }, { key: "purchaseCurrency", label: "Para birimi" }, { key: "profitMargin", label: "Kâr marjı %" }, { key: "quantity", label: "Stok" }, { key: "minQuantity", label: "Min. stok" }, { key: "supplier", label: "Tedarikçi" }, { key: "imei", label: "IMEI" }]
+          [{ key: "name", label: "Ad" }, { key: "salePrice", label: "Satış fiyatı" }, { key: "purchasePrice", label: "Alış fiyatı" }, { key: "purchaseCurrency", label: "Para birimi" }, { key: "quantity", label: "Stok" }, { key: "minQuantity", label: "Min. stok" }, { key: "supplier", label: "Tedarikçi" }]
         ))
       }
-      if (original && editingItem.quantity !== original.quantity) {
+      if (original && !linked && editingItem.quantity !== original.quantity) {
         logStockMovement(editingItem.id, editingItem.name, editingItem.quantity - original.quantity, "Ürün düzenleme")
       }
       setInventory(inventory.map(item => item.id === updated.id ? updated : item))
@@ -661,7 +680,7 @@ export default function InventoryPage() {
       setEditingItem(null)
       setEditCustomCategory("")
       let doneMsg = "Ürün güncellendi."
-      // Alış fiyatı/para birimi düzeltildiyse: tedarikçi borcu Alışlar kayıtlarından hesaplanır, o kayıtlar da düzeltilsin
+      // 1) Alış fiyatı/para birimi düzeltildiyse: tedarikçi borcu Alışlar kayıtlarından hesaplanır, o kayıtlar da düzeltilsin
       if (original && (Number(original.purchasePrice) !== Number(updated.purchasePrice) || original.purchaseCurrency !== updated.purchaseCurrency)) {
         try {
           const groups = await findPurchaseLinesAtPrice(updated.id, original.purchasePrice, original.purchaseCurrency)
@@ -684,6 +703,40 @@ export default function InventoryPage() {
           console.error(e)
           doneMsg = `Ürün güncellendi ancak alış kaydı düzeltilemedi: ${e?.message || "Alışlar sayfasından ✏️ Fiyatı düzelt ile düzeltin."}`
         }
+      }
+      // 2) Adet değiştiyse ve "alış düzeltmesi" seçildiyse: stok, Alışlar kaydı ve borç birlikte değişir
+      if (linked && original) {
+        try {
+          const n = Math.abs(stockChange)
+          if (stockChange < 0) {
+            const r = await reduceStockPurchase(updated.id, n)
+            const refund = r.reverted.reduce((sum, x) => sum + x.refund, 0)
+            doneMsg += ` Stok ${n} adet düştü; alış kaydı ve ${supplierName} borcu da düzeltildi${refund > 0.009 ? ` (${formatCurrency(refund)} tedarikçi iadesi kasaya gelir yazıldı)` : ""}.`
+          } else {
+            if (updated.purchaseCurrency !== "TRY" && isFallback) throw new Error("Güncel döviz kuru alınamadı; dövizli alış şu an kaydedilemez.")
+            const rate = rateFor(updated.purchaseCurrency, rates)
+            const { purchase, warnings } = await createPurchase({
+              kind: "supplier",
+              partyName: supplierName,
+              partyPhone: suppliers.find((sp) => sp.name.trim().toLowerCase() === supplierName.toLowerCase())?.phone,
+              lines: [{
+                isNew: false, inventoryId: updated.id, name: updated.name, category: updated.category, quantity: n,
+                unitPrice: updated.purchasePrice, currency: updated.purchaseCurrency, rate,
+                unitCostTRY: unitCostTRY(updated.purchasePrice, updated.purchaseCurrency, rates),
+                salePrice: 0, profitMargin: updated.profitMargin, minQuantity: updated.minQuantity, productCode: updated.productCode,
+              }],
+              paid: 0,
+              note: "Envanter düzenlemesinden stok girişi (+)",
+            })
+            warnings.forEach((w) => showToast(w, "error"))
+            doneMsg += ` Stok ${n} adet arttı; alış kaydı ${purchase.code} oluşturuldu, ${supplierName} borcu ${formatCurrency(purchase.total)} eklendi (ödemeyi Alışlar'dan yapın).`
+          }
+        } catch (e: any) {
+          console.error(e)
+          doneMsg = `Ürün güncellendi ancak adet düzeltmesi yapılamadı: ${e?.message || "Envanter ➕/➖ düğmeleriyle düzeltin."} (Stok eskisi gibi kaldı.)`
+        }
+        const fresh = await fetchInventory().catch(() => null)
+        if (fresh) setInventory(fresh)
       }
       showToast(doneMsg, "success")
     } catch (e) {
@@ -1646,7 +1699,7 @@ export default function InventoryPage() {
                     onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
                   />
-                  <p className="text-[11px] text-slate-500">Satın alma için listedeki ➕ düğmesini ya da Alışlar sayfasını kullanın; buradaki değişiklik alış kaydı oluşturmaz.</p>
+                  <p className="text-[11px] text-slate-500">Tedarikçili üründe adedi değiştirip kaydederken sorulur: Alışlar kaydı ve tedarikçi borcu da aynı anda düzelsin mi (Alışlar ile uyuşmazlık olmaz).</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>
