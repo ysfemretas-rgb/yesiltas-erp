@@ -55,7 +55,24 @@ function fromRow(r: any): Purchase {
     partyPhone: r.party_phone ?? "",
     invoiceNo: r.invoice_no ?? "",
     date: r.purchase_date ? String(r.purchase_date).slice(0, 10) : "",
-    items: Array.isArray(r.items) ? r.items : [],
+    // Bozuk/eksik satırlar sayfayı çökertmesin diye sayısal alanlar güvenli hale getirilir
+    items: Array.isArray(r.items)
+      ? r.items
+          .filter((l: any) => l && typeof l === "object")
+          .map((l: any) => ({
+            ...l,
+            name: String(l.name ?? ""),
+            category: String(l.category ?? ""),
+            quantity: Number(l.quantity) || 0,
+            unitPrice: Number(l.unitPrice) || 0,
+            currency: l.currency === "USD" || l.currency === "EUR" ? l.currency : "TRY",
+            rate: Number(l.rate) || 1,
+            unitCostTRY: Number(l.unitCostTRY) || 0,
+            salePrice: Number(l.salePrice) || 0,
+            profitMargin: Number(l.profitMargin) || 0,
+            minQuantity: Number(l.minQuantity) || 0,
+          }))
+      : [],
     total: Number(r.total_try) || 0,
     paid: Number(r.paid_amount) || 0,
     note: r.note ?? "",

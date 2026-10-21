@@ -1,5 +1,6 @@
 "use client"
 
+import { APP_VERSION } from "@/lib/version"
 import { WhatsAppSheet } from "@/components/WhatsAppSheet"
 import { useState, useEffect } from "react"
 import Link from "next/link"
@@ -354,6 +355,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )
             })}
           </nav>
+          <div className="px-4 py-1 text-[10px] text-slate-600">Sürüm {APP_VERSION}</div>
 
           <div className="border-t p-2">
             <Button

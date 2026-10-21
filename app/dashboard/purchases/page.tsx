@@ -46,6 +46,11 @@ export default function PurchasesPage() {
   const [detail, setDetail] = useState<Purchase | null>(null)
   const [statKey, setStatKey] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
+  // Yanlış girilen alış fiyatı / para birimi düzeltme
+  const [fix, setFix] = useState<{ index: number } | null>(null)
+  const [fixPrice, setFixPrice] = useState("")
+  const [fixCur, setFixCur] = useState<"TRY" | "USD" | "EUR">("TRY")
+  const [fixSaving, setFixSaving] = useState(false)
 
   const reload = async () => {
     const [p, inv] = await Promise.all([fetchPurchases(), fetchInventory()])
@@ -133,11 +138,7 @@ export default function PurchasesPage() {
     }
   }
 
-  // Yanlış girilen alış fiyatı / para birimi düzeltme
-  const [fix, setFix] = useState<{ index: number } | null>(null)
-  const [fixPrice, setFixPrice] = useState("")
-  const [fixCur, setFixCur] = useState<"TRY" | "USD" | "EUR">("TRY")
-  const [fixSaving, setFixSaving] = useState(false)
+  // Yanlış girilen alış fiyatı / para birimi düzeltme (kancalar erken return'dan ÖNCE olmalı)
   const openFix = (idx: number) => {
     if (!detail) return
     setFix({ index: idx })
