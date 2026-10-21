@@ -10,7 +10,7 @@ import { localDateStr } from "@/lib/dates"
 import { createTransaction } from "@/lib/finance"
 import { InventoryItem, createInventoryItem, updateInventoryItem, adjustInventoryQuantity, findActiveImeiConflict } from "@/lib/inventory"
 import { logStockMovement } from "@/lib/stockMovements"
-import { Currency, paymentStatusOf, purchaseTotal, allocatePayment } from "@/lib/purchaseMath"
+import { Currency, paymentStatusOf, purchaseTotal, allocatePayment, rateFor } from "@/lib/purchaseMath"
 
 export interface PurchaseLine {
   inventoryId?: string // mevcut ürüne stok eklemek için; yeni ürünse kayıttan sonra doldurulur
@@ -449,4 +449,88 @@ export async function reduceStockPurchase(
   }
   logActivity("Envanter", "updated", `${inv.name}: ${quantity} adet alış düzeltmesi/iade (${reverted.map((r) => r.code).join(", ") || "eski stok"})`)
   return { reverted, legacyQty: Math.max(0, remaining) }
+}
+
+
+// Ürünün alış fiyatı/para birimi Envanter'de düzeltildiğinde: o ürüne ait, ESKİ fiyat ve para birimiyle kayıtlı
+// tedarikçi alış satırlarını bulur (fiyatı farklı olan başka alışlara dokunulmaz).
+export async function findPurchaseLinesAtPrice(
+  itemId: string,
+  price: number,
+  currency: string
+): Promise<{ purchase: Purchase; indexes: number[] }[]> {
+  const all = await fetchPurchases()
+  const out: { purchase: Purchase; indexes: number[] }[] = []
+  for (const p of all) {
+    if (p.kind !== "supplier") continue
+    const indexes = p.items
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.inventoryId === itemId && Math.abs(Number(l.unitPrice) - Number(price)) < 0.005 && l.currency === currency)
+      .map(({ i }) => i)
+    if (indexes.length > 0) out.push({ purchase: p, indexes })
+  }
+  return out
+}
+
+// Yanlış girilen alış fiyatını / para birimini düzeltir (örn. TL yerine yanlışlıkla USD seçildiyse).
+// Alış toplamı, kalan borç (tedarikçi borcu) ve ürünün alış fiyatı birlikte güncellenir.
+// Ödenen tutar yeni toplamdan büyükse fazlası kasaya "Tedarikçi İadesi" geliri olarak yazılır (kasa tutarlı kalır).
+export async function correctPurchasePrices(
+  purchase: Purchase,
+  edits: { index: number; unitPrice: number; currency: "TRY" | "USD" | "EUR" }[],
+  rates: { USD: number; EUR: number },
+  isFallback = false
+): Promise<{ newTotal: number; refund: number }> {
+  if (purchase.kind !== "supplier") throw new Error("Fiyat düzeltme sadece tedarikçiden alışlarda yapılır.")
+  if (edits.length === 0) throw new Error("Değişiklik yok.")
+  const changedItems: { inventoryId: string; oldPrice: number; oldCurrency: string; newPrice: number; newCurrency: string }[] = []
+  const newLines = purchase.items.map((l, i) => {
+    const e = edits.find((x) => x.index === i)
+    if (!e) return l
+    if (!(e.unitPrice >= 0)) throw new Error("Geçerli bir fiyat girin.")
+    const sameCurrency = e.currency === l.currency
+    if (e.currency !== "TRY" && !sameCurrency && isFallback) throw new Error("Güncel döviz kuru alınamadı; dövizli düzeltme şu an yapılamaz.")
+    // Para birimi aynı kaldıysa alış anındaki kur korunur; para birimi değiştiyse güncel kur kullanılır
+    const rate = e.currency === "TRY" ? 1 : sameCurrency && l.rate > 0 ? l.rate : rateFor(e.currency, rates)
+    const cost = Math.round(e.unitPrice * rate * 100) / 100
+    if (l.inventoryId) changedItems.push({ inventoryId: l.inventoryId, oldPrice: l.unitPrice, oldCurrency: l.currency, newPrice: e.unitPrice, newCurrency: e.currency })
+    return { ...l, unitPrice: e.unitPrice, currency: e.currency, rate, unitCostTRY: cost }
+  })
+  const newTotal = purchaseTotal(newLines)
+  const newPaid = Math.min(purchase.paid, newTotal)
+  const refund = Math.round((purchase.paid - newPaid) * 100) / 100
+  const { error } = await supabase
+    .from("purchases")
+    .update({
+      items: newLines,
+      total_try: newTotal,
+      paid_amount: newPaid,
+      note: `${purchase.note ? purchase.note + " | " : ""}Fiyat düzeltmesi (${localDateStr()}): ${(Math.round(purchase.total * 100) / 100).toLocaleString("tr-TR")} TL → ${newTotal.toLocaleString("tr-TR")} TL`.slice(0, 500),
+    })
+    .eq("id", purchase.id)
+  if (error) throw error
+  if (refund > 0.009) {
+    await createTransaction({
+      type: "income",
+      category: "Tedarikçi İadesi",
+      amount: refund,
+      description: `↩️ Alış fiyat düzeltmesi ${purchase.code}: ${purchase.partyName} — fazla ödeme iadesi`,
+      date: localDateStr(),
+      customer: purchase.partyName,
+      source: "manual",
+    })
+  }
+  // Ürünün kayıtlı alış fiyatı, o alışın fiyatıyla aynıysa (sonradan değiştirilmediyse) yeni fiyata çekilir
+  for (const c of changedItems) {
+    try {
+      const { data: inv } = await supabase.from("inventory").select("purchase_price, purchase_currency").eq("id", c.inventoryId).single()
+      if (inv && Number(inv.purchase_price) === Number(c.oldPrice) && String(inv.purchase_currency || "TRY") === c.oldCurrency) {
+        await updateInventoryItem(c.inventoryId, { purchasePrice: c.newPrice, purchaseCurrency: c.newCurrency as "TRY" | "USD" | "EUR" })
+      }
+    } catch (e) {
+      console.error("Ürün alış fiyatı güncellenemedi:", e)
+    }
+  }
+  logActivity("Alışlar", "updated", `${purchase.code} (${purchase.partyName}) fiyat düzeltmesi: ${purchase.total} TL → ${newTotal} TL${refund > 0.009 ? `, ${refund} TL iade kasaya yazıldı` : ""}`)
+  return { newTotal, refund }
 }

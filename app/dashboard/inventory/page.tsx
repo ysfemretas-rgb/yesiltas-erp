@@ -31,7 +31,7 @@ import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
 import { StockMoveDialog } from "@/components/inventory/StockMoveDialog"
-import { recordStockPurchase, fetchPurchases, Purchase } from "@/lib/purchases"
+import { recordStockPurchase, fetchPurchases, Purchase, findPurchaseLinesAtPrice, correctPurchasePrices } from "@/lib/purchases"
 import { diffFields } from "@/lib/diff"
 import { logChange } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
@@ -120,7 +120,7 @@ export default function InventoryPage() {
     quantity: 0,
     minQuantity: 5,
     purchasePrice: 0,
-    purchaseCurrency: "USD",
+    purchaseCurrency: "TRY",
     profitMargin: 30,
     salePrice: 0,
     paymentStatus: "unpaid",
@@ -605,7 +605,7 @@ export default function InventoryPage() {
           }).catch((e) => console.error("Stok alımı kasaya yazılamadı:", e))
         }
       }
-      setNewItem({ category: "Telefon (Sıfır)", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "USD", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
+      setNewItem({ category: "Telefon (Sıfır)", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "TRY", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
       setCustomCategory("")
       setQpType(""); setQpBrand(""); setQpModel(""); setQpVariant("")
       setIsDialogOpen(false)
@@ -660,7 +660,32 @@ export default function InventoryPage() {
       setIsEditOpen(false)
       setEditingItem(null)
       setEditCustomCategory("")
-      showToast("Ürün güncellendi.", "success")
+      let doneMsg = "Ürün güncellendi."
+      // Alış fiyatı/para birimi düzeltildiyse: tedarikçi borcu Alışlar kayıtlarından hesaplanır, o kayıtlar da düzeltilsin
+      if (original && (Number(original.purchasePrice) !== Number(updated.purchasePrice) || original.purchaseCurrency !== updated.purchaseCurrency)) {
+        try {
+          const groups = await findPurchaseLinesAtPrice(updated.id, original.purchasePrice, original.purchaseCurrency)
+          if (groups.length > 0) {
+            const codes = groups.map((g) => g.purchase.code).join(", ")
+            const oldTxt = `${original.purchasePrice} ${original.purchaseCurrency}`
+            const newTxt = `${updated.purchasePrice} ${updated.purchaseCurrency}`
+            if (confirm(`Bu ürünün alış kaydı eski fiyatla kayıtlı (${oldTxt}): ${codes}\n\nTedarikçi borcu bu kayıtlardan hesaplanır. Alış kaydı ve borç da yeni fiyata (${newTxt}) göre düzeltilsin mi?`)) {
+              let refundTotal = 0
+              for (const g of groups) {
+                const r = await correctPurchasePrices(g.purchase, g.indexes.map((index) => ({ index, unitPrice: updated.purchasePrice, currency: updated.purchaseCurrency })), rates, isFallback)
+                refundTotal += r.refund
+              }
+              doneMsg = `Ürün güncellendi; alış kaydı (${codes}) ve tedarikçi borcu da düzeltildi.${refundTotal > 0.009 ? ` ${formatCurrency(refundTotal)} fazla ödeme kasaya iade geliri yazıldı.` : ""}`
+            } else {
+              doneMsg = "Ürün güncellendi (alış kaydı eski fiyatla kaldı; gerekirse Alışlar > Detay > ✏️ Fiyatı düzelt)."
+            }
+          }
+        } catch (e: any) {
+          console.error(e)
+          doneMsg = `Ürün güncellendi ancak alış kaydı düzeltilemedi: ${e?.message || "Alışlar sayfasından ✏️ Fiyatı düzelt ile düzeltin."}`
+        }
+      }
+      showToast(doneMsg, "success")
     } catch (e) {
       console.error(e)
       showToast("Ürün güncellenirken bir sorun oluştu.", "error")

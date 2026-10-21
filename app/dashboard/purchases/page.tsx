@@ -14,7 +14,7 @@ import { Search, Truck, Smartphone, Printer, Banknote, Download } from "lucide-r
 import { NewPurchaseDialog } from "@/components/purchases/NewPurchaseDialog"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Pagination } from "@/components/Pagination"
-import { Purchase, fetchPurchases, payPurchase } from "@/lib/purchases"
+import { Purchase, fetchPurchases, payPurchase, correctPurchasePrices } from "@/lib/purchases"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 import { Supplier, fetchSuppliers } from "@/lib/suppliers"
 import { fetchCustomers } from "@/lib/customers"
@@ -130,6 +130,40 @@ export default function PurchasesPage() {
         price: p.total,
         date: p.date,
       })
+    }
+  }
+
+  // Yanlış girilen alış fiyatı / para birimi düzeltme
+  const [fix, setFix] = useState<{ index: number } | null>(null)
+  const [fixPrice, setFixPrice] = useState("")
+  const [fixCur, setFixCur] = useState<"TRY" | "USD" | "EUR">("TRY")
+  const [fixSaving, setFixSaving] = useState(false)
+  const openFix = (idx: number) => {
+    if (!detail) return
+    setFix({ index: idx })
+    setFixPrice(String(detail.items[idx].unitPrice))
+    setFixCur(detail.items[idx].currency as "TRY" | "USD" | "EUR")
+  }
+  const saveFix = async () => {
+    if (!detail || !fix) return
+    const price = Number(String(fixPrice).replace(",", "."))
+    if (!(price >= 0) || fixPrice.trim() === "") return showToast("Geçerli bir fiyat girin.", "error")
+    const line = detail.items[fix.index]
+    if (price === line.unitPrice && fixCur === line.currency) { setFix(null); return }
+    if (!confirm(`${line.name}\nEski: ${line.unitPrice.toLocaleString("tr-TR")} ${line.currency}  →  Yeni: ${price.toLocaleString("tr-TR")} ${fixCur}\n\nAlış toplamı ve tedarikçi borcu buna göre güncellenir. Devam edilsin mi?`)) return
+    setFixSaving(true)
+    try {
+      const r = await correctPurchasePrices(detail, [{ index: fix.index, unitPrice: price, currency: fixCur }], rates, isFallback)
+      const fresh = await fetchPurchases()
+      setPurchases(fresh)
+      setDetail(fresh.find((x) => x.id === detail.id) || null)
+      setFix(null)
+      showToast(`Fiyat düzeltildi. Yeni alış toplamı: ${money(r.newTotal)}${r.refund > 0.009 ? ` • ${money(r.refund)} fazla ödeme kasaya iade geliri yazıldı` : ""}.`, "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Fiyat düzeltilemedi.", "error")
+    } finally {
+      setFixSaving(false)
     }
   }
 
@@ -269,7 +303,7 @@ export default function PurchasesPage() {
                 <div className="space-y-1">
                   {detail.items.map((i, idx) => (
                     <div key={idx} className="p-2 rounded bg-slate-800 border border-slate-700">
-                      <div className="flex justify-between gap-2"><span>{i.name} <span className="text-slate-500">x{i.quantity}</span></span><span className="text-amber-300 shrink-0">{money(i.quantity * i.unitCostTRY)}</span></div>
+                      <div className="flex justify-between gap-2"><span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{detail.kind === "supplier" && <button type="button" onClick={() => openFix(idx)} className="ml-2 text-[11px] text-sky-400 underline" title="Yanlış girilen fiyatı / para birimini düzelt">✏️ Fiyatı düzelt</button>}</span><span className="text-amber-300 shrink-0">{money(i.quantity * i.unitCostTRY)}</span></div>
                       <div className="text-xs text-slate-400">{i.unitPrice.toLocaleString("tr-TR")} {i.currency}{i.currency !== "TRY" ? ` (kur ${i.rate})` : ""}{i.productCode ? ` • ${i.productCode}` : ""}{i.imei ? ` • IMEI ${i.imei}` : ""}{i.salePrice > 0 ? ` • satış ${money(i.salePrice)}` : ""}</div>
                     </div>
                   ))}
@@ -291,6 +325,32 @@ export default function PurchasesPage() {
                 </div>
               </div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!fix} onOpenChange={(o) => { if (!o) setFix(null) }}>
+        <DialogContent className="max-w-sm bg-slate-900 border-slate-700 text-white">
+          <DialogHeader><DialogTitle className="text-white">✏️ Alış Fiyatını Düzelt</DialogTitle></DialogHeader>
+          {detail && fix && (
+            <div className="space-y-3 text-sm">
+              <p className="text-slate-300">{detail.items[fix.index].name} <span className="text-slate-500">x{detail.items[fix.index].quantity}</span></p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Birim alış fiyatı</label>
+                  <Input type="number" inputMode="decimal" value={fixPrice} onChange={(e) => setFixPrice(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Para birimi</label>
+                  <select value={fixCur} onChange={(e) => setFixCur(e.target.value as "TRY" | "USD" | "EUR")} className="w-full h-10 rounded-md bg-slate-800 border border-slate-600 text-white px-2">
+                    <option value="TRY">₺ TL</option>
+                    <option value="USD">$ USD</option>
+                    <option value="EUR">€ EUR</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400">Yeni satır toplamı: {money((detail.items[fix.index].quantity || 0) * (Math.round((Number(String(fixPrice).replace(",", ".")) || 0) * (fixCur === "TRY" ? 1 : fixCur === detail.items[fix.index].currency && detail.items[fix.index].rate > 0 ? detail.items[fix.index].rate : fixCur === "USD" ? rates.USD : rates.EUR) * 100) / 100))}. Alış toplamı ve tedarikçi borcu buna göre değişir; ödenen tutar yeni toplamdan fazlaysa fazlası kasaya iade geliri olarak yazılır.</p>
+              <Button disabled={fixSaving} onClick={saveFix} className="w-full bg-sky-600 hover:bg-sky-700">{fixSaving ? "Kaydediliyor..." : "Düzelt"}</Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>

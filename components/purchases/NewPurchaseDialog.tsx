@@ -63,8 +63,9 @@ function LineEditor({
   // Mevcut ürün seçilince son alış fiyatı ve para birimi önerilir
   useEffect(() => {
     if (existing) {
-      setUnitPrice(String(existing.purchasePrice || ""))
-      setCurrency(existing.purchaseCurrency)
+      // Para birimi TL ile başlar; önceki alış dövizliyse fiyat boş kalır (dövizli fiyat TL gibi dolmasın)
+      setCurrency("TRY")
+      setUnitPrice(existing.purchaseCurrency === "TRY" && existing.purchasePrice ? String(existing.purchasePrice) : "")
     }
   }, [existingLabel])
 
