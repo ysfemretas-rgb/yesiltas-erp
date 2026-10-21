@@ -115,3 +115,25 @@ test("risk bilgisi: en eski açık borcun yaşı hesaplanır, iptal ve eşantiyo
   assert.equal(info.oldestDate, "2026-08-01")
   assert.equal(info.ageDays, 61)
 })
+
+import { netTotals } from "../lib/financeTotals.ts"
+
+test("kasa toplamları: iptal/iade ters kayıtları brüt gelir ve gideri şişirmez, net değişmez", () => {
+  const txs = [
+    { type: "income" as const, amount: 100, category: "Satış" },
+    { type: "expense" as const, amount: 100, category: "Satış İptali" }, // iptal: gelirden düşer
+    { type: "expense" as const, amount: 40, category: "Eşantiyon/Bedelsiz Verilen" },
+    { type: "income" as const, amount: 40, category: "Eşantiyon İptali" }, // giderden düşer
+    { type: "income" as const, amount: 50, category: "Satış" },
+    { type: "expense" as const, amount: 20, category: "Satış İadesi" },
+    { type: "expense" as const, amount: 300, category: "Stok Alımı" },
+    { type: "income" as const, amount: 300, category: "Tedarikçi İadesi" },
+  ]
+  const t = netTotals(txs)
+  assert.equal(t.income, 30) // 100-100+50-20
+  assert.equal(t.expense, 0) // 40-40+300-300
+  assert.equal(t.net, 30)
+  // brüt net ile aynı
+  const gross = txs.reduce((s, x) => s + (x.type === "income" ? x.amount : -x.amount), 0)
+  assert.equal(t.net, gross)
+})

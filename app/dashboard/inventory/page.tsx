@@ -31,7 +31,7 @@ import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
 import { StockMoveDialog } from "@/components/inventory/StockMoveDialog"
-import { recordStockPurchase } from "@/lib/purchases"
+import { recordStockPurchase, fetchPurchases, Purchase } from "@/lib/purchases"
 import { diffFields } from "@/lib/diff"
 import { logChange } from "@/lib/activityLog"
 import { Pagination } from "@/components/Pagination"
@@ -84,6 +84,7 @@ export default function InventoryPage() {
   const [isSupplierBarcodeScannerOpen, setIsSupplierBarcodeScannerOpen] = useState(false)
   const [isNewSupplierBarcodeScannerOpen, setIsNewSupplierBarcodeScannerOpen] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [supplierPurchases, setSupplierPurchases] = useState<Purchase[]>([])
   const [listPage, setListPage] = useState(1)
   const PAGE_SIZE = 20
   const [orderOpen, setOrderOpen] = useState(false)
@@ -145,6 +146,7 @@ export default function InventoryPage() {
       .finally(() => {
         if (!cancelled) setIsLoaded(true)
       })
+    fetchPurchases().then((p) => setSupplierPurchases(p.filter((x) => x.kind === "supplier"))).catch((e) => console.error("Alışlar yüklenemedi:", e))
     fetchSuppliers()
       .then((data) => { if (!cancelled) setSuppliers(data) })
       .catch((e) => console.error("Tedarikçiler yüklenemedi:", e))
@@ -205,7 +207,8 @@ export default function InventoryPage() {
     return matchesSearch && matchesCategory
   })
 
-  const lowStockItems = inventoryWithPrices.filter(item => item.quantity <= item.minQuantity)
+  // Min. stok 0 = uyarı yok (ör. ikinci el cihazlar); 0 stoğa düşmek kritik sayılmaz
+  const lowStockItems = inventoryWithPrices.filter(item => item.minQuantity > 0 && item.quantity <= item.minQuantity)
   const totalPurchaseValue = inventoryWithPrices.reduce((sum, item) => {
     let priceInTRY = item.purchasePrice
     if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
@@ -408,7 +411,7 @@ export default function InventoryPage() {
 
   // Kritik stoktaki ürünleri tedarikçiye göre gruplar (sipariş listesi)
   const orderGroups = () => {
-    const low = inventory.filter(i => i.quantity <= i.minQuantity)
+    const low = inventory.filter(i => i.minQuantity > 0 && i.quantity <= i.minQuantity)
     const map = new Map<string, InventoryItem[]>()
     low.forEach(i => {
       const key = i.supplier || "Tedarikçi seçilmemiş"
@@ -569,6 +572,7 @@ export default function InventoryPage() {
         paidAmount: newItem.paymentStatus === "partial" ? (Number(newItem.paidAmount) || 0) : 0,
       })
       setInventory([item, ...inventory])
+      if (item.quantity > 0) logStockMovement(item.id, item.name, item.quantity, "Yeni ürün — ilk stok")
       // Tedarikçili ürün: alış "Alışlar"a kaydedilir (borç/ödeme oradan izlenir). Başarısız olursa eski yönteme düşülür.
       let recorded = false
       if (item.supplier && item.quantity > 0) {
@@ -1150,7 +1154,7 @@ export default function InventoryPage() {
     onClick: () => { setStatKey(null); setSearchTerm(i.productCode || i.name) },
   })
   const inStock = inventoryWithPrices.filter(i => i.quantity > 0)
-  defs.all = { title: "Tüm Ürünler", rows: inventoryWithPrices.map(i => rowOf(i, `${i.quantity} adet`, i.quantity <= i.minQuantity ? "text-red-400" : "text-white")) }
+  defs.all = { title: "Tüm Ürünler", rows: inventoryWithPrices.map(i => rowOf(i, `${i.quantity} adet`, i.minQuantity > 0 && i.quantity <= i.minQuantity ? "text-red-400" : "text-white")) }
   defs.low = { title: "Kritik Stoktaki Ürünler", rows: lowStockItems.map(i => rowOf(i, `${i.quantity}/${i.minQuantity}`, "text-red-400")) }
   defs.cost = { title: "Stok Maliyeti (ürün bazında)", summary: `Toplam: ${money(totalPurchaseValue)}`, rows: inStock.map(i => rowOf(i, money(costTRY(i) * i.quantity), "text-amber-400")).sort((a, b) => 0) }
   defs.saleValue = { title: "Stok Satış Değeri (ürün bazında)", summary: `Toplam: ${money(totalSaleValue)}`, rows: inStock.map(i => rowOf(i, money(i.salePrice * i.quantity), "text-emerald-400")) }
@@ -1242,7 +1246,7 @@ export default function InventoryPage() {
             )}
             {filteredItems.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map((item) => {
               const stockPercent = item.minQuantity > 0 ? Math.min(100, (item.quantity / item.minQuantity) * 100) : 100
-              const isLowStock = item.quantity <= item.minQuantity
+              const isLowStock = item.minQuantity > 0 && item.quantity <= item.minQuantity
               const purchaseInTRY = item.purchaseCurrency === "USD"
                 ? item.purchasePrice * rates.USD
                 : item.purchaseCurrency === "EUR"
@@ -1279,9 +1283,21 @@ export default function InventoryPage() {
                         {item.supplier && (
                           <span className="flex items-center gap-1">
                             • {item.supplier}
-                            {item.paymentStatus === "paid" && <Badge className="bg-emerald-900/50 text-emerald-300 border-emerald-700 text-[10px] px-1.5 py-0">Ödendi</Badge>}
-                            {item.paymentStatus === "partial" && <Badge className="bg-amber-900/50 text-amber-300 border-amber-700 text-[10px] px-1.5 py-0">Kısmi Ödendi</Badge>}
-                            {item.paymentStatus === "unpaid" && <Badge className="bg-red-900/50 text-red-300 border-red-700 text-[10px] px-1.5 py-0">Ödenmedi</Badge>}
+                            {(() => {
+                              // Alışlar sayfasından izlenen ürünlerde ödeme durumu alış kayıtlarından gösterilir
+                              // (ürün kaydındaki eski "ödeme durumu" alanı çift borç olmasın diye "ödendi" tutulur)
+                              const mine = supplierPurchases.filter((p) => p.items.some((l) => l.inventoryId === item.id))
+                              const status = mine.length > 0
+                                ? (mine.some((p) => p.total - p.paid > 0.009) ? (mine.some((p) => p.paid > 0.009 && p.total - p.paid > 0.009) ? "partial" : "unpaid") : "paid")
+                                : item.paymentStatus
+                              return (
+                                <>
+                                  {status === "paid" && <Badge className="bg-emerald-900/50 text-emerald-300 border-emerald-700 text-[10px] px-1.5 py-0">Ödendi</Badge>}
+                                  {status === "partial" && <Badge className="bg-amber-900/50 text-amber-300 border-amber-700 text-[10px] px-1.5 py-0">Kısmi Ödendi</Badge>}
+                                  {status === "unpaid" && <Badge className="bg-red-900/50 text-red-300 border-red-700 text-[10px] px-1.5 py-0">Ödenmedi</Badge>}
+                                </>
+                              )
+                            })()}
                           </span>
                         )}
                         {item.location && <span>• {item.location}</span>}

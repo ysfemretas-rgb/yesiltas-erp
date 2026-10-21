@@ -9,10 +9,12 @@ interface ToastProps {
 }
 
 export function Toast({ message, type, onClose }: ToastProps) {
+  // Hata mesajları daha uzun kalır (okunabilsin); dokununca kapanır
+  const duration = type === 'error' ? 12000 : 3000
   useEffect(() => {
-    const timer = setTimeout(onClose, 3000)
+    const timer = setTimeout(onClose, duration)
     return () => clearTimeout(timer)
-  }, [onClose])
+  }, [onClose, message, duration])
 
   const colors = {
     success: 'bg-emerald-500',
@@ -21,7 +23,12 @@ export function Toast({ message, type, onClose }: ToastProps) {
   }
 
   return (
-    <div className={`fixed top-4 right-4 z-50 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in`}>
+    // z-[200]: açık pencerelerin (z-50) ÜSTÜNDE görünsün; eskiden pencerenin arkasında kalıp okunamıyordu
+    <div
+      role="alert"
+      onClick={onClose}
+      className={`fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-[200] ${colors[type]} text-white px-5 py-3 rounded-lg shadow-lg animate-fade-in cursor-pointer break-words`}
+    >
       {message}
     </div>
   )

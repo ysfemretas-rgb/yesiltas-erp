@@ -22,6 +22,7 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 | 8 | `supabase-fixes-v7-migration.sql` | **Evet** | ek maliyet (gerçek kâr), kasa sayımı, ödeme takvimi tabloları |
 | 9 | `supabase-fixes-v8-migration.sql` | **Evet** | servis iş akışı: aşama, tahmini teslim, kalite kontrol, teklif |
 | 10 | `supabase-fixes-v9-migration.sql` | **Evet** | Alışlar sayfası (tedarikçiden ve müşteriden alış kayıtları) |
+| 11 | `supabase-fixes-v10-migration.sql` | **Evet** | taksit planı sütunu düzeltmesi (taksitli satış için) |
 
 ## Kontrol
 Çalıştırdıktan sonra Supabase > Database > Policies (veya `select * from pg_policies`) ile politikaları kontrol edin.

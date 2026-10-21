@@ -1,3 +1,4 @@
+import { dbDateToLocal } from "@/lib/dates"
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
@@ -20,7 +21,7 @@ function fromRow(row: any): Transaction {
     amount: Number(row.amount) || 0,
     type: (row.type as Transaction["type"]) ?? "income",
     category: row.category ?? "",
-    date: row.transaction_date ?? (row.created_at ? String(row.created_at).slice(0, 10) : ""),
+    date: row.transaction_date ?? dbDateToLocal(row.created_at),
     customer: row.customer ?? "",
     source: (row.related_table as Transaction["source"]) ?? "manual",
     sourceId: row.related_id ?? undefined,
@@ -47,7 +48,7 @@ export async function deleteTransactionsBySource(source: "repair" | "sale", sour
 }
 
 export async function fetchTransactions(): Promise<Transaction[]> {
-  const data = await fetchAllRows("transactions", "transaction_date", false)
+  const data = await fetchAllRows("transactions", "transaction_date", false, "created_at")
 
   if ((!data || data.length === 0) && typeof window !== "undefined" && !localStorage.getItem("yt_migrated_finance")) {
     const legacyRaw = localStorage.getItem("yt_finance")

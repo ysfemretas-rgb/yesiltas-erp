@@ -1278,7 +1278,7 @@ function RepairsPageContent() {
                       )}
                       <div className="flex gap-1 justify-end mt-1">
                         {getStatusBadge(repair.status)}
-                        {getPaymentBadge(repair.paymentType, repair.remaining)}
+                        {getPaymentBadge(repair.paymentType, repair.remaining, repair.paid)}
                       </div>
                       <div className="text-[11px] text-slate-400 text-right mt-1">
                         {REPAIR_STAGES.find(x => x.key === stageOf(repair))?.icon} {stageLabel(stageOf(repair))}

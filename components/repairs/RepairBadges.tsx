@@ -18,9 +18,13 @@ export function getRepairStatusBadge(status: string) {
   }
 }
 
-export function getRepairPaymentBadge(type: string, remaining: number) {
+export function getRepairPaymentBadge(type: string, remaining: number, paid: number = 0) {
   if (remaining < 0) {
     return <Badge className="bg-cyan-600"><Wallet className="h-3 w-3 mr-1" />Alacaklı ({formatCurrency(-remaining)})</Badge>
+  }
+  // Kısmi/ödenmemiş olarak açılmış ama sonradan tamamı tahsil edilmiş (Tahsil Et) tamir artık "Ödendi" görünür
+  if (remaining <= 0 && paid > 0 && (type === "partial" || type === "unpaid")) {
+    return <Badge className="bg-emerald-600"><Banknote className="h-3 w-3 mr-1" />Ödendi</Badge>
   }
   if (remaining > 0 && type !== "unpaid") {
     return <Badge className="bg-amber-600"><Wallet className="h-3 w-3 mr-1" />Kısmi ({formatCurrency(remaining)} kaldı)</Badge>

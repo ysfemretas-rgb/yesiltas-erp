@@ -11,17 +11,16 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 export async function fetchAllRows(
   table: string,
   orderColumn: string,
-  ascending = false
+  ascending = false,
+  thenBy?: string // aynı değerlerde (ör. aynı tarihli kayıtlar) ikinci sıralama sütunu, ör. created_at
 ): Promise<any[]> {
   const pageSize = 1000
   const all: any[] = []
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase
-      .from(table)
-      .select("*")
-      .order(orderColumn, { ascending })
-      .order("id", { ascending }) // aynı tarihli kayıtlar sayfa geçişinde kaybolmasın/tekrarlanmasın
-      .range(from, from + pageSize - 1)
+    let q = supabase.from(table).select("*").order(orderColumn, { ascending })
+    if (thenBy && thenBy !== orderColumn) q = q.order(thenBy, { ascending })
+    // son çare benzersiz sıralama: aynı değerli kayıtlar sayfa geçişinde kaybolmasın/tekrarlanmasın
+    const { data, error } = await q.order("id", { ascending }).range(from, from + pageSize - 1)
     if (error) throw error
     const rows = data || []
     all.push(...rows)

@@ -1,3 +1,4 @@
+import { dbDateToLocal } from "@/lib/dates"
 import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
@@ -61,8 +62,8 @@ function fromRow(row: any): Repair {
     paymentType: (row.payment_type as Repair["paymentType"]) ?? "unpaid",
     notes: row.notes ?? "",
     imei: row.imei ?? undefined,
-    createdAt: row.received_date ? String(row.received_date).slice(0, 10) : "",
-    completedAt: row.completed_date ? String(row.completed_date).slice(0, 10) : undefined,
+    createdAt: dbDateToLocal(row.received_date),
+    completedAt: row.completed_date ? dbDateToLocal(row.completed_date) : undefined,
     technician: row.technician ?? "",
     parts: Array.isArray(row.parts) ? row.parts : [],
     partsCost: Number(row.parts_cost) || 0,
@@ -153,8 +154,8 @@ export async function fetchRepairPublic(id: string): Promise<PublicRepairView | 
     paymentType: row.payment_type ?? "unpaid",
     notes: row.notes ?? "",
     imei: row.imei ?? undefined,
-    createdAt: row.received_date ? String(row.received_date).slice(0, 10) : "",
-    completedAt: row.completed_date ? String(row.completed_date).slice(0, 10) : undefined,
+    createdAt: dbDateToLocal(row.received_date),
+    completedAt: row.completed_date ? dbDateToLocal(row.completed_date) : undefined,
   }
 }
 

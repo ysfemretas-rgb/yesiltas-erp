@@ -1,3 +1,4 @@
+import { dbDateToLocal } from "@/lib/dates"
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
@@ -21,7 +22,7 @@ function fromRow(row: any): Task {
     status: (row.status as Task["status"]) ?? "pending",
     priority: (row.priority as Task["priority"]) ?? "medium",
     dueDate: row.due_date ?? "",
-    createdAt: row.created_at ? String(row.created_at).slice(0, 10) : "",
+    createdAt: dbDateToLocal(row.created_at),
   }
 }
 

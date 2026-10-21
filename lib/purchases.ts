@@ -9,6 +9,7 @@ import { logActivity } from "@/lib/activityLog"
 import { localDateStr } from "@/lib/dates"
 import { createTransaction } from "@/lib/finance"
 import { InventoryItem, createInventoryItem, updateInventoryItem, adjustInventoryQuantity, findActiveImeiConflict } from "@/lib/inventory"
+import { logStockMovement } from "@/lib/stockMovements"
 import { Currency, paymentStatusOf, purchaseTotal, allocatePayment } from "@/lib/purchaseMath"
 
 export interface PurchaseLine {
@@ -187,10 +188,12 @@ export async function createPurchase(input: CreatePurchaseInput): Promise<{ purc
           imei: l.imei?.trim() || undefined,
         })
         applied.push({ id: item.id, qty: l.quantity, name: item.name })
+        // Yeni ürünün ilk stoğu da stok hareket geçmişinde görünsün
+        logStockMovement(item.id, item.name, l.quantity, `Alış ${code}`)
         finalLines.push({ ...l, inventoryId: item.id, productCode: item.productCode })
       } else {
         if (!l.inventoryId) throw new Error(`${l.name}: mevcut ürün bulunamadı.`)
-        const { data: cur, error: curErr } = await supabase.from("inventory").select("quantity, total_purchased_qty, product_code").eq("id", l.inventoryId).single()
+        const { data: cur, error: curErr } = await supabase.from("inventory").select("quantity, total_purchased_qty, product_code, supplier").eq("id", l.inventoryId).single()
         if (curErr || !cur) throw curErr || new Error(`${l.name}: ürün bulunamadı.`)
         await adjustInventoryQuantity(l.inventoryId, l.quantity, `Alış ${code}`, l.name)
         applied.push({ id: l.inventoryId, qty: l.quantity, name: l.name })
@@ -199,7 +202,14 @@ export async function createPurchase(input: CreatePurchaseInput): Promise<{ purc
           purchaseCurrency: l.currency,
           purchasedQuantity: (cur.total_purchased_qty != null ? Number(cur.total_purchased_qty) : Number(cur.quantity) || 0) + l.quantity,
         }
-        if (supplierName) patch.supplier = supplierName
+        // Ürünün ana tedarikçisi yoksa bu tedarikçi atanır. O zamana kadar tedarikçisiz (borç takibi olmayan) eski stok,
+        // yeni tedarikçiye "sahte eski borç" yazılmasın diye eski ödeme durumu "ödendi" yapılır.
+        // Ürünün zaten başka/aynı bir ana tedarikçisi varsa değiştirilmez (eski borç ataması korunur).
+        if (supplierName && !String(cur.supplier || "").trim()) {
+          patch.supplier = supplierName
+          patch.paymentStatus = "paid"
+          patch.paidAmount = 0
+        }
         if (l.salePrice > 0) patch.salePrice = l.salePrice
         await updateInventoryItem(l.inventoryId, patch)
         finalLines.push({ ...l, productCode: cur.product_code || l.productCode })

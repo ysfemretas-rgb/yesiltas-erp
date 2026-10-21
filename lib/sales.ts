@@ -1,3 +1,4 @@
+import { dbDateToLocal } from "@/lib/dates"
 import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
@@ -75,10 +76,12 @@ function fromRow(row: any): Sale {
     paid: Number(row.paid_amount) || 0,
     remaining: Number(row.remaining_amount) || 0,
     paymentMethod: row.payment_method ?? "cash",
-    date: row.sale_date ?? (row.created_at ? String(row.created_at).slice(0, 10) : ""),
+    date: row.sale_date ?? dbDateToLocal(row.created_at),
     status: (row.sale_status as Sale["status"]) ?? "completed",
     payments: Array.isArray(row.payments) ? row.payments : [],
-    installments: Array.isArray(row.installments) ? row.installments : [],
+    // NOT: Eski tabloda zaten "installments" adlı bir TAM SAYI sütunu (taksit adedi) vardı; taksit planı bu yüzden
+    // ayrı bir "installment_plan" (jsonb) sütununda tutulur.
+    installments: Array.isArray(row.installment_plan) ? row.installment_plan : [],
     refunds: Array.isArray(row.refunds) ? row.refunds : [],
     tradeIn: row.trade_in ?? null,
     extraCost: Number(row.extra_cost) || 0,
@@ -105,7 +108,7 @@ function toRow(s: Partial<Sale>) {
   if (s.date !== undefined) row.sale_date = s.date || null
   if (s.status !== undefined) row.sale_status = s.status
   if (s.payments !== undefined) row.payments = s.payments
-  if (s.installments !== undefined) row.installments = s.installments
+  if (s.installments !== undefined) row.installment_plan = s.installments
   if (s.refunds !== undefined) row.refunds = s.refunds
   if (s.tradeIn !== undefined) row.trade_in = s.tradeIn
   if (s.extraCost !== undefined) row.extra_cost = s.extraCost
@@ -144,13 +147,13 @@ export async function fetchSales(): Promise<Sale[]> {
 }
 
 // Sonradan eklenen (isteğe bağlı) sütunlar
-const OPTIONAL_SALE_COLUMNS = ["payments", "installments", "refunds", "trade_in", "extra_cost", "extra_cost_note"]
+const OPTIONAL_SALE_COLUMNS = ["payments", "installment_plan", "refunds", "trade_in", "extra_cost", "extra_cost_note"]
 
 export async function createSale(input: Omit<Sale, "id" | "saleCode">): Promise<Sale> {
   const row = toRow(input)
   // Boş/varsayılan değerleri hiç göndermeyelim: yeni sütunlar olmasa bile sıradan satış kaydedilebilsin
   if (Array.isArray(row.payments) && row.payments.length === 0) delete row.payments
-  if (Array.isArray(row.installments) && row.installments.length === 0) delete row.installments
+  if (Array.isArray(row.installment_plan) && row.installment_plan.length === 0) delete row.installment_plan
   if (Array.isArray(row.refunds) && row.refunds.length === 0) delete row.refunds
   if (row.trade_in === null) delete row.trade_in
   if (!row.extra_cost) delete row.extra_cost

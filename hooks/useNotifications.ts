@@ -68,7 +68,7 @@ export function useNotifications() {
 
     if (invR.status === 'fulfilled') {
       invR.value.forEach((item) => {
-        if (item.quantity <= item.minQuantity) {
+        if (item.minQuantity > 0 && item.quantity <= item.minQuantity) {
           list.push({
             id: `inv-${item.id}`,
             message: `📦 Stok azaldı: ${item.name} (${item.quantity} adet kaldı)`,

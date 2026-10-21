@@ -22,6 +22,7 @@ import { fetchCustomers, createCustomer, addDebt, deleteDebtsBySource } from "@/
 import { fetchRepairs, Repair } from "@/lib/repairs"
 import { openDebtInfo } from "@/lib/customerDebt"
 import { diffFields } from "@/lib/diff"
+import { logStockMovement } from "@/lib/stockMovements"
 import { logChange } from "@/lib/activityLog"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource, reverseTransactionsBySource, syncTransactionsToNet } from "@/lib/finance"
@@ -678,6 +679,7 @@ export default function SalesPage() {
             paidAmount: 0,
             imei: tradeImei.trim() || undefined,
           } as any)
+          logStockMovement(tradeItem.id, tradeItem.name, 1, `Takas ${sale.saleCode || ""}`.trim())
           const tradeIn: TradeIn = { name: tradeName.trim(), imei: tradeImei.trim() || undefined, value: tradeVal, productId: tradeItem.id }
           savedSale = await updateSale(sale.id, { tradeIn })
           setProducts(prev => [tradeItem, ...prev])
@@ -1665,6 +1667,9 @@ Bu işlem geri alınamaz!`)) return
                 {viewSale.status !== "cancelled" && (
                   <Button size="sm" variant="outline" className="border-blue-600 text-blue-400" onClick={() => { const sl = viewSale; setViewSale(null); openEditSale(sl) }}><Pencil className="w-3 h-3 mr-1" />Düzenle</Button>
                 )}
+                {isManager && (
+                  <Button size="sm" variant="outline" className="border-red-600 text-red-400 hover:bg-red-500/10" onClick={() => { const id = viewSale.id; setViewSale(null); handleDeleteSale(id) }}><Trash2 className="w-3 h-3 mr-1" />Kalıcı Sil</Button>
+                )}
               </div>
             </div>
           )}
@@ -1876,6 +1881,14 @@ Bu işlem geri alınamaz!`)) return
                     <Button 
                       size="sm" 
                       variant="outline" 
+                      className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-500/10" 
+                      onClick={() => setViewSale(sale)}
+                    >
+                      <Eye className="w-3 h-3 mr-1" />Detay / İade
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
                       className="border-blue-600 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10" 
                       onClick={() => openEditSale(sale)}
                       disabled={sale.status === "cancelled"}
@@ -1916,16 +1929,6 @@ Bu işlem geri alınamaz!`)) return
                       onClick={() => handleCancelSale(sale.id)}
                     >
                       <Ban className="w-3 h-3 mr-1" />İptal
-                    </Button>
-                    )}
-                    {isManager && (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-red-600 text-red-400 hover:text-red-300 hover:bg-red-500/10" 
-                      onClick={() => handleDeleteSale(sale.id)}
-                    >
-                      <Trash2 className="w-3 h-3 mr-1" />Sil
                     </Button>
                     )}
                   </div>

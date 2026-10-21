@@ -13,7 +13,7 @@ with checks as (
   select 'sütun: ' || v.t || '.' || v.c,
          exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = v.t and column_name = v.c)
   from (values
-    ('sales','customer_id'),('sales','payments'),('sales','installments'),('sales','refunds'),('sales','trade_in'),('sales','extra_cost'),('sales','extra_cost_note'),
+    ('sales','customer_id'),('sales','payments'),('sales','installment_plan'),('sales','refunds'),('sales','trade_in'),('sales','extra_cost'),('sales','extra_cost_note'),
     ('customers','birth_date'),
     ('inventory','imei'),('inventory','total_purchased_qty'),
     ('devices','parts'),('devices','parts_cost'),('devices','technician'),('devices','signature'),('devices','stage'),('devices','estimated_delivery'),('devices','qc'),('devices','quote')
@@ -24,6 +24,16 @@ with checks as (
   select 'fonksiyon: ' || v.f,
          exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = v.f)
   from (values ('adjust_inventory_quantity'),('get_repair_public'),('protect_profile_columns'),('assign_sale_code')) as v(f)
+
+  union all
+  -- Sütun TİPLERİ (aynı adlı eski sütun farklı tipteyse kayıt başarısız olur)
+  select 'tip: ' || v.t || '.' || v.c || ' = ' || v.ty,
+         exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = v.t and column_name = v.c and data_type = v.ty)
+  from (values
+    ('sales','payments','jsonb'),('sales','installment_plan','jsonb'),('sales','refunds','jsonb'),('sales','trade_in','jsonb'),('sales','extra_cost','numeric'),
+    ('devices','parts','jsonb'),('devices','qc','jsonb'),('devices','quote','jsonb'),('devices','parts_cost','numeric'),('devices','estimated_delivery','date'),
+    ('inventory','imei','text'),('inventory','total_purchased_qty','numeric'),('customers','birth_date','date'),('purchases','items','jsonb')
+  ) as v(t,c,ty)
 
   union all
   select 'tetikleyici: trg_protect_profile_columns (rol yükseltme koruması)',

@@ -29,6 +29,7 @@ import { Plus, TrendingUp, TrendingDown, DollarSign, Filter, Trash2, Wrench, Sho
 import { exportToExcel } from "@/lib/exportExcel"
 import { Pagination } from "@/components/Pagination"
 import { printDayClose } from "@/lib/dayClose"
+import { netTotals } from "@/lib/financeTotals"
 import { diffFields } from "@/lib/diff"
 import { logChange } from "@/lib/activityLog"
 import { ReconcileDialog } from "@/components/finance/ReconcileDialog"
@@ -109,11 +110,14 @@ export default function FinancePage() {
       "Tutar (TL)": t.type === "income" ? t.amount : -t.amount,
     })))
   }
-  const todayIncome = transactions.filter(t => t.type === "income" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
-  const todayExpense = transactions.filter(t => t.type === "expense" && t.date === todayStr).reduce((sum, t) => sum + t.amount, 0)
-  const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
-  const totalExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-  const balance = totalIncome - totalExpense
+  // İptal/iade ters kayıtları brüt gelir-gideri şişirmez (net aynı kalır)
+  const todayTotals = netTotals(transactions.filter(t => t.date === todayStr))
+  const allTotals = netTotals(transactions)
+  const todayIncome = todayTotals.income
+  const todayExpense = todayTotals.expense
+  const totalIncome = allTotals.income
+  const totalExpense = allTotals.expense
+  const balance = allTotals.net
 
   const incomeByCategory = transactions
     .filter(t => t.type === "income")

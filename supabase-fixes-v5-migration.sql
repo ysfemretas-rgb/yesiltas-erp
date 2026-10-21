@@ -6,7 +6,8 @@
 
 -- Satışlar
 alter table sales add column if not exists payments jsonb default '[]'::jsonb;
-alter table sales add column if not exists installments jsonb default '[]'::jsonb;
+-- (Eski tabloda "installments" TAM SAYI sütunu zaten vardı; taksit planı bu yüzden installment_plan'da tutulur)
+alter table sales add column if not exists installment_plan jsonb default '[]'::jsonb;
 alter table sales add column if not exists refunds jsonb default '[]'::jsonb;
 alter table sales add column if not exists trade_in jsonb;
 

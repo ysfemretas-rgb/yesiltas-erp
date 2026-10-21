@@ -88,7 +88,8 @@ export default function SuppliersPage() {
     const orderCount = items.length
     // Alışlar kayıtlarıyla zaten izlenen adetler eski ürün-bazlı borç hesabında tekrar sayılmaz
     const coveredQty: Record<string, number> = {}
-    purchases.filter(p => p.kind === "supplier" && p.partyName === supplierName).forEach(p => {
+    // (hangi tedarikçiden alınmış olursa olsun: o adetler zaten Alışlar kayıtlarında borç olarak izlenir)
+    purchases.filter(p => p.kind === "supplier").forEach(p => {
       p.items.forEach(l => { if (l.inventoryId) coveredQty[l.inventoryId] = (coveredQty[l.inventoryId] || 0) + l.quantity })
     })
     const purchasedTotal = items.reduce((sum, i) => {

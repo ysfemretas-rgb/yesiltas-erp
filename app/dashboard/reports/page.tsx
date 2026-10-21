@@ -1,5 +1,6 @@
 "use client"
 
+import { netTotals } from "@/lib/financeTotals"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -242,8 +243,10 @@ export default function ReportsPage() {
   const filteredSales = filterByDate(salesData)
 
   // Genel istatistikler
-  const totalIncome = filteredFinance.filter(f => f.type === "income").reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
-  const totalExpense = filteredFinance.filter(f => f.type === "expense").reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
+  // İptal/iade ters kayıtları brüt gelir-gideri şişirmez (net aynı kalır)
+  const finTotals = netTotals(filteredFinance.map(f => ({ type: f.type, amount: Number(f.amount) || 0, category: f.category })))
+  const totalIncome = finTotals.income
+  const totalExpense = finTotals.expense
   const netProfit = totalIncome - totalExpense
 
   // Bu ay / geçen ay karşılaştırması (seçili tarih aralığından bağımsız,

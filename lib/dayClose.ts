@@ -1,6 +1,7 @@
 // Gün sonu kasa özeti (resmi antetli). Seçilen günün tüm kasa hareketlerini gelir/gider
 // kategorilerine göre toplar ve tarayıcı yazdırma penceresinde açar.
 import type { Transaction } from "@/lib/finance"
+import { netTotals } from "@/lib/financeTotals"
 import { esc, money, readCompany, docStyles, toolbarHtml, letterheadHtml, footerHtml, openPrintWindow } from "@/lib/printTheme"
 
 export function printDayClose(date: string, all: Transaction[]) {
@@ -8,8 +9,9 @@ export function printDayClose(date: string, all: Transaction[]) {
   const list = all.filter(t => t.date === date)
   const income = list.filter(t => t.type === "income")
   const expense = list.filter(t => t.type === "expense")
-  const totalIncome = income.reduce((s, t) => s + t.amount, 0)
-  const totalExpense = expense.reduce((s, t) => s + t.amount, 0)
+  const dayTotals = netTotals(list)
+  const totalIncome = dayTotals.income
+  const totalExpense = dayTotals.expense
 
   const byCategory = (items: Transaction[]) => {
     const map = new Map<string, number>()

@@ -1,4 +1,5 @@
 // IMEI ile cihazın yaşam döngüsü: alış/takas, stok kaydı, tamirler ve satış.
+import { dbDateToLocal } from "@/lib/dates"
 import { supabase } from "@/lib/supabase"
 
 export interface HistoryEvent {
@@ -45,12 +46,12 @@ export async function fetchDeviceHistory(imeiRaw: string): Promise<DeviceHistory
     events.push({ date: String(s.sale_date || "").slice(0, 10), kind: "takas", title: `Takas alındı (${s.sale_code || "satış"})`, detail: `${s.customer_name || "—"} müşterisinden ${(s as any).trade_in?.name || "cihaz"} takasla alındı`, amount: value })
   }
   for (const i of inv.data || []) {
-    events.push({ date: String(i.created_at || "").slice(0, 10), kind: "stok", title: `Stok kaydı: ${i.name}`, detail: `${i.product_code || ""} • stok ${i.quantity ?? 0} • alış ${money(Number(i.purchase_price) || 0)} • satış fiyatı ${money(Number(i.sale_price) || 0)}` })
+    events.push({ date: dbDateToLocal(i.created_at), kind: "stok", title: `Stok kaydı: ${i.name}`, detail: `${i.product_code || ""} • stok ${i.quantity ?? 0} • alış ${money(Number(i.purchase_price) || 0)} • satış fiyatı ${money(Number(i.sale_price) || 0)}` })
   }
   for (const r of repairs.data || []) {
     const parts = Number(r.parts_cost) || 0
     partsTotal += parts
-    events.push({ date: String(r.received_date || "").slice(0, 10), kind: "tamir", title: `Tamir ${r.repair_code || ""}`.trim(), detail: `${r.customer_name || "—"} • ${r.brand || ""} ${r.model || ""} • ücret ${money(Number(r.cost) || 0)}${parts ? ` • parça maliyeti ${money(parts)}` : ""}`, amount: undefined })
+    events.push({ date: dbDateToLocal(r.received_date), kind: "tamir", title: `Tamir ${r.repair_code || ""}`.trim(), detail: `${r.customer_name || "—"} • ${r.brand || ""} ${r.model || ""} • ücret ${money(Number(r.cost) || 0)}${parts ? ` • parça maliyeti ${money(parts)}` : ""}`, amount: undefined })
   }
   for (const s of salesByItem.data || []) {
     if (s.sale_status === "cancelled") continue

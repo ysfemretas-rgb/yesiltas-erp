@@ -1,7 +1,7 @@
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 import { createTransaction } from "@/lib/finance"
-import { localDateStr } from "@/lib/dates"
+import { localDateStr, dbDateToLocal } from "@/lib/dates"
 import { allocateInstallments } from "@/lib/money"
 
 export interface Debt {
@@ -51,7 +51,7 @@ function debtFromRow(row: any): Debt {
     id: row.id,
     amount: Number(row.total_amount) || 0,
     description: row.description ?? "",
-    date: row.created_at ? String(row.created_at).slice(0, 10) : "",
+    date: dbDateToLocal(row.created_at),
     status: statusMap[row.status] ?? "unpaid",
     source: row.source_type ? sourceMap[row.source_type] : "manual",
     sourceId: row.source_id ?? undefined,
@@ -270,7 +270,7 @@ export async function collectBalance(
 ): Promise<{ paid: number; remaining: number; collected: number }> {
   const table = kind === "sale" ? "sales" : "devices"
   const nameCol = "customer_name"
-  const selectCols = kind === "sale" ? `paid_amount, remaining_amount, ${nameCol}, installments` : `paid_amount, remaining_amount, ${nameCol}`
+  const selectCols = kind === "sale" ? `paid_amount, remaining_amount, ${nameCol}, installment_plan` : `paid_amount, remaining_amount, ${nameCol}`
   const { data: row, error } = await supabase.from(table).select(selectCols).eq("id", id).single() as { data: any; error: any }
   if (error || !row) throw error || new Error("Kayıt bulunamadı")
   const currentRemaining = Number(row.remaining_amount) || 0
@@ -281,8 +281,8 @@ export async function collectBalance(
 
   const updatePayload: Record<string, unknown> = { paid_amount: newPaid, remaining_amount: newRemaining }
   // Taksitli satışta tahsilat en eski taksitten başlayarak taksitlere dağıtılır
-  if (kind === "sale" && Array.isArray(row.installments) && row.installments.length > 0) {
-    updatePayload.installments = allocateInstallments(row.installments, collected)
+  if (kind === "sale" && Array.isArray(row.installment_plan) && row.installment_plan.length > 0) {
+    updatePayload.installment_plan = allocateInstallments(row.installment_plan, collected)
   }
   const { error: upErr } = await supabase.from(table).update(updatePayload).eq("id", id)
   if (upErr) throw upErr
