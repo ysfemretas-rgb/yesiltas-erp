@@ -138,7 +138,7 @@ export function reconcile(input: { sales: RSale[]; repairs: RRepair[]; transacti
         kind: "purchase-finance",
         severity: "high",
         title: `Alım belgesi ${p.docCode} — kasada gider kaydı yok`,
-        detail: `${p.deviceName}: ${money(p.price)} ödeme yapılmış görünüyor ama kasada karşılığı bulunamadı. Finans'tan gider ekleyin.`,
+        detail: `${p.deviceName}: ${money(p.price)} ödeme yapılmış görünüyor ama kasada karşılığı bulunamadı. Kasa'dan gider ekleyin.`,
       })
     }
   }
@@ -153,7 +153,7 @@ export function reconcile(input: { sales: RSale[]; repairs: RRepair[]; transacti
         kind: "purchase-finance",
         severity: "high",
         title: `Alış ${a.code} — kasada gider kaydı yok`,
-        detail: `${a.partyName}: ${money(a.paid)} ödeme yapılmış görünüyor ama kasada karşılığı bulunamadı. Finans'tan gider ekleyin.`,
+        detail: `${a.partyName}: ${money(a.paid)} ödeme yapılmış görünüyor ama kasada karşılığı bulunamadı. Kasa'dan gider ekleyin.`,
       })
     }
   }

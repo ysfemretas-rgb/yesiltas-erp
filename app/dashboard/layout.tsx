@@ -25,7 +25,7 @@ const menuItems = [
   { href: "/dashboard/purchases", icon: PackagePlus, label: "Alışlar", color: "text-sky-400" },
   { href: "/dashboard/assets", icon: Package2, label: "Demirbaşlar", color: "text-slate-400" },
   { href: "/dashboard/consumables", icon: FlaskConical, label: "Sarf Malzeme", color: "text-lime-400" },
-  { href: "/dashboard/finance", icon: DollarSign, label: "Finans", color: "text-green-400" },
+  { href: "/dashboard/finance", icon: DollarSign, label: "Kasa", color: "text-green-400" },
   { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
   { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
   { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },

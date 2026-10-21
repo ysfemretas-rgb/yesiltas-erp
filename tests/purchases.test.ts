@@ -44,3 +44,19 @@ test("eski borç hesabı, Alışlar kayıtlarıyla izlenen adetleri tekrar sayma
   assert.equal(legacyOutstandingQty(3, 5), 0)
   assert.equal(legacyOutstandingQty(5, 0), 5)
 })
+
+import { parseCategories, joinCategories, allCategories } from "../lib/supplierCategories.ts"
+
+test("tedarikçi kategorileri: virgülle ayrılmış metin <-> liste", () => {
+  assert.deepEqual(parseCategories("Ekran, Batarya ,Ekran"), ["Ekran", "Batarya"])
+  assert.deepEqual(parseCategories(""), [])
+  assert.deepEqual(parseCategories(undefined), [])
+  assert.equal(joinCategories(["Ekran", " Batarya ", "Ekran", ""]), "Ekran, Batarya")
+  assert.deepEqual(parseCategories(joinCategories(["Kılıf", "Ekran"])), ["Kılıf", "Ekran"])
+})
+
+test("tüm kategoriler: varsayılanlar + kullanılanlar + yeni eklenen, tekrarsız", () => {
+  const list = allCategories([{ category: "Ekran, Lehim" }, { category: "Kılıf" }, { category: "Diğer" }], ["Aksesuar", "Lehim"])
+  assert.deepEqual(list.slice(0, 6), ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"])
+  assert.deepEqual(list.slice(6), ["Aksesuar", "Kılıf", "Lehim"])
+})

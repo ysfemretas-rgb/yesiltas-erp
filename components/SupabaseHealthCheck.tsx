@@ -14,6 +14,14 @@ import { fetchConsumables } from "@/lib/consumables"
 import { fetchStaff } from "@/lib/staff"
 import { fetchSales } from "@/lib/sales"
 import { fetchRepairs } from "@/lib/repairs"
+import { fetchFixedAssets } from "@/lib/fixedAssets"
+import { fetchPurchases } from "@/lib/purchases"
+import { fetchSupplierPayments } from "@/lib/suppliers"
+import { fetchDevicePurchases } from "@/lib/devicePurchases"
+import { fetchTasks } from "@/lib/tasks"
+import { fetchCashCounts } from "@/lib/cashCounts"
+import { fetchScheduledPayments } from "@/lib/scheduledPayments"
+import { fetchActivityLog } from "@/lib/activityLog"
 
 type CheckResult = {
   label: string
@@ -26,12 +34,29 @@ const MODULES: { label: string; run: () => Promise<any[]> }[] = [
   { label: "Garantiler", run: fetchWarranties },
   { label: "Randevular", run: fetchAppointments },
   { label: "Müşteriler", run: fetchCustomers },
-  { label: "Finans", run: fetchTransactions },
+  { label: "Kasa", run: fetchTransactions },
   { label: "Envanter", run: fetchInventory },
   { label: "Sarf Malzeme", run: fetchConsumables },
   { label: "Personel", run: fetchStaff },
   { label: "Satışlar", run: fetchSales },
   { label: "Teknik Servis", run: fetchRepairs },
+  { label: "Demirbaşlar", run: fetchFixedAssets },
+  { label: "Alışlar", run: fetchPurchases },
+  { label: "Tedarikçi Ödemeleri", run: fetchSupplierPayments },
+  { label: "Cihaz Alımları", run: fetchDevicePurchases },
+  { label: "Görevler", run: fetchTasks },
+  { label: "Kasa Sayımları", run: () => fetchCashCounts(30) },
+  { label: "Ödeme Takvimi", run: fetchScheduledPayments },
+  // Stok hareketleri: tablonun beklenen sütunları gerçekten var mı (eksikse hareket geçmişi boş kalır)
+  {
+    label: "Stok Hareketleri",
+    run: async () => {
+      const { data, error } = await supabase.from("stock_movements").select("id, product_id, product_name, delta, reason, user_name, created_at").limit(1000)
+      if (error) throw error
+      return data || []
+    },
+  },
+  { label: "Aktivite Logu", run: () => fetchActivityLog(100) },
 ]
 
 export function SupabaseHealthCheck() {

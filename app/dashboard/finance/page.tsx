@@ -257,7 +257,7 @@ export default function FinancePage() {
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-white">💰 Finans Yönetimi</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">💰 Kasa</h1>
         <div className="flex items-center gap-2 flex-wrap">
         <Button variant="outline" onClick={() => printDayClose(todayStr, transactions)} className="border-slate-600 text-slate-300 hover:text-white">
           📊 Gün Sonu
@@ -274,7 +274,7 @@ export default function FinancePage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700 text-white">
             <DialogHeader>
-              <DialogTitle className="text-white">Yeni Finansal İşlem</DialogTitle>
+              <DialogTitle className="text-white">Yeni Kasa İşlemi</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">

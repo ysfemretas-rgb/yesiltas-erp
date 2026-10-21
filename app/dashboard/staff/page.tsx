@@ -24,7 +24,7 @@ const ALL_PERMISSIONS = [
   { key: "Satışlar", label: "Satışlar" },
   { key: "Envanter", label: "Envanter" },
   { key: "Sarf Malzemeler", label: "Sarf Malzemeler" },
-  { key: "Finans", label: "Finans" },
+  { key: "Finans", label: "Kasa" },
   { key: "Garantiler", label: "Garantiler" },
   { key: "Müşteriler", label: "Müşteriler" },
   { key: "Görevler", label: "Görevler" },

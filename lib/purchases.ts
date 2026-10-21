@@ -254,7 +254,7 @@ export async function createPurchase(input: CreatePurchaseInput): Promise<{ purc
       })
     } catch (e) {
       console.error("Alış kasaya yazılamadı:", e)
-      warnings.push("Ödeme kasaya yazılamadı; Finans'tan gider ekleyin (Mutabakat bu eksiği gösterir).")
+      warnings.push("Ödeme kasaya yazılamadı; Kasa'dan gider ekleyin (Mutabakat bu eksiği gösterir).")
     }
   }
 

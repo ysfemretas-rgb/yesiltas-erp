@@ -31,6 +31,7 @@ import {
 import { Plus, Package, AlertTriangle, Search, Minus, Plus as PlusIcon, Pencil, Trash2, Save, DollarSign, Upload, MessageCircle, Copy } from "lucide-react"
 import { fetchSuppliers, Supplier } from "@/lib/suppliers"
 import { openWhatsApp } from "@/lib/whatsapp"
+import { SupplierSelect } from "@/components/SupplierSelect"
 import { Consumable, fetchConsumables, createConsumable, createConsumablesBulk, updateConsumable, deleteConsumable } from "@/lib/consumables"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 
@@ -427,12 +428,7 @@ export default function ConsumablesPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
-                <Input
-                  value={newItem.supplier || ""}
-                  onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
-                  placeholder="Tedarikçi adı"
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
+                <SupplierSelect suppliers={suppliers} value={newItem.supplier || ""} onChange={(v) => setNewItem({ ...newItem, supplier: v })} />
               </div>
               <Button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Kaydet
@@ -831,11 +827,7 @@ export default function ConsumablesPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Tedarikçi</label>
-                <Input
-                  value={editingItem.supplier}
-                  onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
-                  className="bg-slate-800 border-slate-600 text-white"
-                />
+                <SupplierSelect suppliers={suppliers} value={editingItem.supplier || ""} onChange={(v) => setEditingItem({ ...editingItem, supplier: v })} />
               </div>
               <Button onClick={handleUpdateItem} className="w-full bg-blue-600 hover:bg-blue-700">
                 <Save className="mr-2 h-4 w-4" />Güncelle

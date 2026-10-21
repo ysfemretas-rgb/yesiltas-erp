@@ -114,7 +114,7 @@ export default function InventoryPage() {
   const [qpModel, setQpModel] = useState("")
   const [qpVariant, setQpVariant] = useState("")
   const [editCustomCategory, setEditCustomCategory] = useState("")
-  const { rates, isLoadingRates, fetchRates, isFallback } = useExchangeRates()
+  const { rates, isFallback } = useExchangeRates()
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Telefon (Sıfır)",
     quantity: 0,
@@ -702,7 +702,7 @@ export default function InventoryPage() {
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-white">📦 Stok Yönetimi</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">📦 Envanter</h1>
         <div className="flex gap-2 flex-wrap">
           <Button onClick={exportInventory} variant="outline" className="border-slate-600 text-slate-300">
             <Download className="mr-2 h-4 w-4" />Excel'e Aktar
@@ -1052,42 +1052,6 @@ export default function InventoryPage() {
         onImport={handleExcelImport}
         templateHint="Excel dosyanızda şu sütunlar olmalı: Ürün Adı, SKU, Kategori, Stok, Min. Stok, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Kâr Marjı (%), Tedarikçi, Konum. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
       />
-
-      {/* Exchange Rates Card */}
-      <Card className="bg-slate-900 border-slate-700">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-emerald-400" />
-                <span className="text-white font-medium">Canlı Döviz Kurları</span>
-              </div>
-              <div className="flex gap-3 text-sm">
-                <Badge className="bg-blue-900/50 text-blue-300 border-blue-700">
-                  $1 = {formatCurrency(rates.USD)}
-                </Badge>
-                <Badge className="bg-purple-900/50 text-purple-300 border-purple-700">
-                  €1 = {formatCurrency(rates.EUR)}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {rates.lastUpdated && (
-                <span className="text-xs text-slate-500">Güncelleme: {rates.lastUpdated}</span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={fetchRates}
-                disabled={isLoadingRates}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800"
-              >
-                {isLoadingRates ? "Yükleniyor..." : "Kur Güncelle"}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid gap-4 md:grid-cols-5">
         <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">

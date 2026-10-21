@@ -17,6 +17,7 @@ import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { FixedAsset, fetchFixedAssets, createFixedAsset, createFixedAssetsBulk, updateFixedAsset, deleteFixedAsset, deleteFixedAssetsBulk } from "@/lib/fixedAssets"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { fetchSuppliers, Supplier } from "@/lib/suppliers"
+import { SupplierSelect } from "@/components/SupplierSelect"
 import { openWhatsApp } from "@/lib/whatsapp"
 
 function formatCurrency(amount: number) {
@@ -440,8 +441,7 @@ export default function FixedAssetsPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-slate-300">Tedarikçi (nereden aldınız)</Label>
-              <Input list="asset-suppliers" value={newAsset.supplier || ""} onChange={(e) => setNewAsset({ ...newAsset, supplier: e.target.value })} placeholder="Listeden seçin ya da yazın" className="bg-slate-800 border-slate-600 text-white" />
-              <datalist id="asset-suppliers">{suppliers.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+              <SupplierSelect suppliers={suppliers} value={newAsset.supplier || ""} onChange={(v) => setNewAsset({ ...newAsset, supplier: v })} />
             </div>
             <div className="space-y-1">
               <Label className="text-slate-300">Not</Label>
@@ -515,8 +515,7 @@ export default function FixedAssetsPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-slate-300">Tedarikçi (nereden aldınız)</Label>
-                <Input list="asset-suppliers" value={editingAsset.supplier || ""} onChange={(e) => setEditingAsset({ ...editingAsset, supplier: e.target.value })} placeholder="Listeden seçin ya da yazın" className="bg-slate-800 border-slate-600 text-white" />
-                <datalist id="asset-suppliers">{suppliers.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+                <SupplierSelect suppliers={suppliers} value={editingAsset.supplier || ""} onChange={(v) => setEditingAsset({ ...editingAsset, supplier: v })} />
               </div>
               <div className="space-y-1">
                 <Label className="text-slate-300">Not</Label>

@@ -191,3 +191,11 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 - **Tedarikçiler > "Ürünleri" düğmesi:** O tedarikçiden aldığımız envanter, sarf malzeme ve demirbaşları listeler; istediklerinizi seçip tek mesajda WhatsApp'tan fiyat/stok sorarsınız.
 - Sarf malzemede zaten "Fiyat İste" vardı (kritik stok → tedarikçi); tedarikçi alanı doluysa aynı şekilde çalışır.
 - Not: WhatsApp mesajı otomatik hazırlanır ama gönderme düğmesine sizin basmanız gerekir (tam otomatik gönderim ücretli WhatsApp Business API gerektirir).
+
+## v17 — Tedarikçi seçimi ve çoklu kategori
+- **Sarf Malzeme ve Demirbaş formlarında Tedarikçi artık açılır listeden seçilir** (elle yazmak gerekmez). Listede olmayan eski bir değer varsa "(kayıtlı değil)" ile görünür, kaybolmaz.
+- **Tedarikçi eklerken/düzenlerken Kategori çoklu seçim:** Kategoriler dokunarak açılıp kapanan etiketlerdir; bir tedarikçi birden çok kategoride olabilir. **"Yeni kategori ekle"** kutusuyla istediğiniz kategoriyi ekleyebilirsiniz; kaydedilen kategori diğer tedarikçilerde de seçenek olarak görünür. Hiçbiri seçilmezse "Diğer" kaydedilir.
+- Tedarikçi kartında her kategori ayrı etiket olarak görünür; Kategori filtresi ve "Kategori" kutusu çoklu kategoriyle çalışır (kutu, kullanılan kategorileri ve her birindeki tedarikçi sayısını gösterir). Eski tek kategorili kayıtlar aynen çalışır; SQL değişikliği gerekmez.
+- **Ayarlar > Bağlantı Durumu** artık 10 yerine 19 modülü kontrol eder: Demirbaşlar, Alışlar, Tedarikçi Ödemeleri, Cihaz Alımları, Görevler, Kasa Sayımları, Ödeme Takvimi, Stok Hareketleri (sütun kontrolü dahil), Aktivite Logu eklendi.
+- **Envanter sayfası:** "Canlı Döviz Kurları" kutusu kaldırıldı (kurlar yine arka planda otomatik alınır ve fiyat hesaplarında kullanılır; ürün ekleme penceresinde güncel kur satırı duruyor). Sayfa başlığı "Stok Yönetimi" yerine **"Envanter"** oldu.
+- **"Finans" sayfası "Kasa" oldu:** Menüdeki adı, sayfa başlığı ("💰 Kasa"), "Yeni Kasa İşlemi" penceresi, personel yetki listesindeki adı ve uyarı metinleri güncellendi. Arka plandaki yetki anahtarı ("Finans") aynı kaldığı için mevcut kullanıcıların yetkileri bozulmaz; eski aktivite kayıtlarında modül adı "Finans" olarak görünmeye devam eder.

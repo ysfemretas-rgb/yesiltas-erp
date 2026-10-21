@@ -4,12 +4,12 @@ Gerçek işlerde kullanmadan önce **küçük tutarlı** kayıtlarla bu senaryol
 
 ## 0) Hazırlık
 1. Supabase SQL Editor'de `supabase-saglik-kontrolu.sql` dosyasını çalıştırın → hiçbir satırda ❌ olmamalı (olan satır için `MIGRATION-SIRASI.md`'deki ilgili SQL'i çalıştırın).
-2. Yönetici hesabıyla giriş yapın; **Finans > 🔎 Mutabakat** açın. Eski kayıtlardan kalan farklar çıkabilir (not alın); yeni yapacağınız testlerin fark üretmemesi gerekir.
+2. Yönetici hesabıyla giriş yapın; **Kasa > 🔎 Mutabakat** açın. Eski kayıtlardan kalan farklar çıkabilir (not alın); yeni yapacağınız testlerin fark üretmemesi gerekir.
 
 ## 1) Satış
 | # | Adım | Beklenen |
 |---|---|---|
-| 1.1 | Stoğu 2 olan ürünü nakit sat | Stok 1; Finans'a gelir; Mutabakat temiz |
+| 1.1 | Stoğu 2 olan ürünü nakit sat | Stok 1; Kasa'a gelir; Mutabakat temiz |
 | 1.2 | Stoğu **1** olan ürünü sat | Satış olur, stok **0 (tükendi)** |
 | 1.3 | Stoğu 0 olan ürünü sepete eklemeye çalış | "stokta yok" uyarısı |
 | 1.4 | Kısmi ödemeli satış (ör. 1000'in 400'ü) | Müşteri borcu 600; kasaya 400 gelir |

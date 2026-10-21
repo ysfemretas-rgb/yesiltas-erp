@@ -21,9 +21,10 @@ import { Supplier, SupplierPayment, fetchSuppliers, createSupplier, updateSuppli
 import { Purchase, fetchPurchases, paySupplierDebt } from "@/lib/purchases"
 import { supplierNetDebt, legacyOutstandingQty } from "@/lib/purchaseMath"
 import { SupplierProductsDialog } from "@/components/suppliers/SupplierProductsDialog"
+import { CategoryMultiSelect } from "@/components/suppliers/CategoryMultiSelect"
+import { parseCategories, allCategories } from "@/lib/supplierCategories"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
-const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
 
 export default function SuppliersPage() {
   const { toast, showToast, hideToast } = useToast()
@@ -38,6 +39,7 @@ export default function SuppliersPage() {
   const [payments, setPayments] = useState<SupplierPayment[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [productsOf, setProductsOf] = useState<Supplier | null>(null)
+  const [extraCats, setExtraCats] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -46,7 +48,7 @@ export default function SuppliersPage() {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({
-    category: "Ekran",
+    category: "",
     rating: 5,
     status: "active",
     totalOrders: 0,
@@ -150,7 +152,7 @@ export default function SuppliersPage() {
   const filteredSuppliers = suppliers.filter((s) => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.contactPerson || "").toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = filterCategory === "all" || s.category === filterCategory
+    const matchesCategory = filterCategory === "all" || parseCategories(s.category).includes(filterCategory)
     const matchesStatus = filterStatus === "all" || s.status === filterStatus
     return matchesSearch && matchesCategory && matchesStatus
   })
@@ -180,7 +182,7 @@ export default function SuppliersPage() {
         balance: 0,
       })
       setSuppliers([supplier, ...suppliers])
-      setNewSupplier({ category: "Ekran", rating: 5, status: "active", totalOrders: 0 })
+      setNewSupplier({ category: "", rating: 5, status: "active", totalOrders: 0 })
       setIsDialogOpen(false)
       showToast("Tedarikçi eklendi.", "success")
     } catch (err) {
@@ -356,21 +358,14 @@ export default function SuppliersPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-2 col-span-2">
                     <label className="text-sm font-medium text-slate-300">Kategori</label>
-                    <Select
-                      value={newSupplier.category}
-                      onValueChange={(value) => setNewSupplier({ ...newSupplier, category: value })}
-                    >
-                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-700 border-slate-600">
-                        {CATEGORIES.map((cat) => (
-                          <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <CategoryMultiSelect
+                      value={newSupplier.category || ""}
+                      onChange={(v) => setNewSupplier({ ...newSupplier, category: v })}
+                      options={allCategories(suppliers, extraCats)}
+                      onCreate={(c) => setExtraCats((prev) => [...prev, c])}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-300">Değerlendirme (1-5)</label>
@@ -471,7 +466,7 @@ export default function SuppliersPage() {
               <Truck className="h-4 w-4 text-orange-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-400">{CATEGORIES.length}</div>
+              <div className="text-2xl font-bold text-orange-400">{new Set(suppliers.flatMap((sp) => parseCategories(sp.category))).size}</div>
             </CardContent>
           </Card>
         </div>
@@ -493,7 +488,8 @@ export default function SuppliersPage() {
   const debtors = suppliers.filter(sp => supplierStats(sp.name).debt > 0).sort((a, b) => supplierStats(b.name).debt - supplierStats(a.name).debt)
   defs.debt = { title: "Tedarikçilere Borcumuz", summary: `Toplam: ${money(totalSupplierDebt)}`, rows: debtors.map(sp => rowOf(sp, money(supplierStats(sp.name).debt), "text-amber-400")) }
   defs.credit = { title: "Tedarikçilerden Alacağımız", summary: `Toplam: ${money(totalSupplierCredit)}`, rows: suppliers.filter(sp => supplierStats(sp.name).credit > 0).map(sp => rowOf(sp, money(supplierStats(sp.name).credit), "text-cyan-400")) }
-  defs.cats = { title: "Kategoriye Göre Tedarikçiler", rows: suppliers.map(sp => rowOf(sp, sp.category || "—", "text-orange-300")).sort((a, b) => a.right!.localeCompare(b.right!, "tr")) }
+  const usedCats = Array.from(new Set(suppliers.flatMap((sp) => parseCategories(sp.category)))).sort((a, b) => a.localeCompare(b, "tr"))
+  defs.cats = { title: "Kategoriler (tedarikçi sayısı)", rows: usedCats.map((c) => ({ id: c, title: c, right: `${suppliers.filter((sp) => parseCategories(sp.category).includes(c)).length} tedarikçi`, rightClass: "text-orange-300", onClick: () => { setStatKey(null); setFilterCategory(c) } })) }
   const def = statKey ? defs[statKey] : null
   return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
 })()}
@@ -521,7 +517,7 @@ export default function SuppliersPage() {
                   </SelectTrigger>
                   <SelectContent className="bg-slate-700 border-slate-600">
                     <SelectItem value="all" className="text-white">Tüm Kategoriler</SelectItem>
-                    {CATEGORIES.map((cat) => (
+                    {allCategories(suppliers, extraCats).map((cat) => (
                       <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
                     ))}
                   </SelectContent>
@@ -550,7 +546,7 @@ export default function SuppliersPage() {
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-semibold text-lg text-white">{supplier.name}</span>
                           {getStatusBadge(supplier.status)}
-                          <Badge variant="outline" className="border-slate-500 text-slate-300 text-xs">{supplier.category}</Badge>
+                          {parseCategories(supplier.category).map((c) => <Badge key={c} variant="outline" className="border-slate-500 text-slate-300 text-xs">{c}</Badge>)}
                         </div>
                         <div className="flex items-center gap-1 text-sm text-slate-400">
                           <span className="font-medium text-slate-300">Yetkili:</span> {supplier.contactPerson}
@@ -651,16 +647,14 @@ export default function SuppliersPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-2">
                   <label className="text-sm font-medium text-slate-300">Kategori</label>
-                  <Select value={newSupplier.category} onValueChange={(value) => setNewSupplier({...newSupplier, category: value})}>
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-slate-700 border-slate-600">
-                      {CATEGORIES.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="text-white">{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CategoryMultiSelect
+                    value={newSupplier.category || ""}
+                    onChange={(v) => setNewSupplier({ ...newSupplier, category: v })}
+                    options={allCategories(suppliers, extraCats)}
+                    onCreate={(c) => setExtraCats((prev) => [...prev, c])}
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Değerlendirme</label>

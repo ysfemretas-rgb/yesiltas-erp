@@ -558,7 +558,7 @@ function RepairsPageContent() {
         await deleteTransactionsBySource("repair", id).catch((err) => { console.error(err); financeFailed = true })
         setRepairs(repairs.filter((r) => r.id !== id))
         setNotes(notes.filter((n) => n.repairId !== id))
-        if (financeFailed) showToast("Tamir silindi ancak kasa kayıtları silinemedi; Finans sayfasından kontrol edin.", "error")
+        if (financeFailed) showToast("Tamir silindi ancak kasa kayıtları silinemedi; Kasa sayfasından kontrol edin.", "error")
         else showToast("Tamir kaydı silindi.", "success")
       } catch (e) {
         console.error(e)
