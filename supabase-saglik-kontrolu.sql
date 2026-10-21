@@ -32,6 +32,7 @@ with checks as (
   from (values
     ('sales','payments','jsonb'),('sales','installment_plan','jsonb'),('sales','refunds','jsonb'),('sales','trade_in','jsonb'),('sales','extra_cost','numeric'),
     ('devices','parts','jsonb'),('devices','qc','jsonb'),('devices','quote','jsonb'),('devices','parts_cost','numeric'),('devices','estimated_delivery','date'),
+    ('stock_movements','product_id','uuid'),('stock_movements','product_name','text'),('stock_movements','delta','integer'),('stock_movements','reason','text'),('stock_movements','user_name','text'),('stock_movements','created_at','timestamp with time zone'),
     ('inventory','imei','text'),('inventory','total_purchased_qty','numeric'),('customers','birth_date','date'),('purchases','items','jsonb')
   ) as v(t,c,ty)
 

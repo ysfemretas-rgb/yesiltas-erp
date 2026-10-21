@@ -1,5 +1,6 @@
 "use client"
 
+import { WhatsAppSheet } from "@/components/WhatsAppSheet"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -61,6 +62,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // WhatsApp'a gidip dönünce sayfa yeniden yüklendiyse kaydırma konumu geri getirilir (içerik <main> kutusunda kayar)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("yt_scroll")
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      if (saved?.p !== window.location.pathname || Date.now() - Number(saved.t) > 15 * 60 * 1000) return
+      const apply = () => {
+        const main = document.querySelector("main")
+        if (main) main.scrollTop = Number(saved.y) || 0
+      }
+      // liste verileri geç yüklenebilir: birkaç kez dene
+      const timers = [200, 600, 1200, 2200].map((ms) => setTimeout(apply, ms))
+      const clear = setTimeout(() => sessionStorage.removeItem("yt_scroll"), 2600)
+      return () => { timers.forEach(clearTimeout); clearTimeout(clear) }
+    } catch {
+      // yoksay
+    }
+  }, [pathname])
 
   useEffect(() => {
     if (!pathname || !pathname.startsWith("/dashboard")) return
@@ -437,6 +458,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="p-4 lg:p-6">{children}</div>
+          <WhatsAppSheet />
         </main>
       </div>
     </div>

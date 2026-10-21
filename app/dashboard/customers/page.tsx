@@ -542,6 +542,15 @@ export default function CustomersPage() {
     setIsWhatsAppOpen(false)
   }
 
+  // Liste yenilenince (ör. Tahsil Et sonrası) açık duran borç/detay penceresindeki müşteri de güncellensin
+  useEffect(() => {
+    setSelectedCustomer((prev) => {
+      if (!prev) return prev
+      const fresh = customers.find((c) => c.id === prev.id)
+      return fresh && fresh !== prev ? fresh : prev
+    })
+  }, [customers])
+
   const manualDebtsOf = (customer: Customer) => (customer.debts || []).filter(d => (d.source ?? "manual") === "manual")
 
   // Satış / tamir bakiyesini (kısmen ya da tamamen) tahsil eder; kasaya gelir yazılır.

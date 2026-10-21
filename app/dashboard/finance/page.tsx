@@ -429,6 +429,7 @@ export default function FinancePage() {
           </CardContent>
         </Card>
       </div>
+      <p className="text-xs text-slate-500 -mt-3">Toplam Gelir / Gider; satış iptali, iade, eşantiyon iptali ve tedarikçi iadesi gibi ters kayıtlar ilgili tarafa mahsup edilmiş değerlerdir (kayıt listesinde bu satırlar ayrı görünür). Net bakiye aynıdır.</p>
 
 {(() => {
   const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n)
