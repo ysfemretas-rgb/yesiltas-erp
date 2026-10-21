@@ -16,6 +16,8 @@ import { useIsManager } from "@/hooks/useIsManager"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { FixedAsset, fetchFixedAssets, createFixedAsset, createFixedAssetsBulk, updateFixedAsset, deleteFixedAsset, deleteFixedAssetsBulk } from "@/lib/fixedAssets"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
+import { fetchSuppliers, Supplier } from "@/lib/suppliers"
+import { openWhatsApp } from "@/lib/whatsapp"
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
@@ -37,6 +39,7 @@ const IMPORT_FIELDS: ImportField[] = [
   { key: "purchaseCurrency", label: "Para Birimi", type: "text", defaultValue: "TRY" },
   { key: "purchaseDate", label: "Alış Tarihi", type: "date" },
   { key: "location", label: "Konum", type: "text" },
+  { key: "supplier", label: "Tedarikçi", type: "text" },
   { key: "notes", label: "Not", type: "text" },
 ]
 
@@ -48,6 +51,7 @@ export default function FixedAssetsPage() {
 
   const [statKey, setStatKey] = useState<string | null>(null)
   const [assets, setAssets] = useState<FixedAsset[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -68,6 +72,7 @@ export default function FixedAssetsPage() {
   })
 
   useEffect(() => {
+    fetchSuppliers().then((s) => setSuppliers(s)).catch((e) => console.error("Tedarikçiler yüklenemedi:", e))
     fetchFixedAssets()
       .then((data) => setAssets(data))
       .catch((e) => {
@@ -104,6 +109,7 @@ export default function FixedAssetsPage() {
         purchaseCurrency: newAsset.purchaseCurrency || "TRY",
         purchaseDate: newAsset.purchaseDate || localDateStr(),
         location: newAsset.location || "",
+        supplier: newAsset.supplier || "",
         notes: newAsset.notes || "",
       })
       setAssets([asset, ...assets])
@@ -173,6 +179,21 @@ export default function FixedAssetsPage() {
     }
   }
 
+  // Aynı üründen tekrar almak için: kayıtlı tedarikçiye WhatsApp'tan mesaj hazırlar (gönder'e siz basarsınız)
+  const reorderAsset = (a: FixedAsset) => {
+    if (!a.supplier) {
+      showToast("Bu demirbaşın tedarikçisi yok. Düzenle ekranından 'Tedarikçi' alanını doldurun.", "error")
+      return
+    }
+    const sp = suppliers.find((s) => s.name.trim().toLowerCase() === a.supplier!.trim().toLowerCase())
+    const phone = (sp?.phone || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
+    const message =
+      `Merhaba ${sp?.contactPerson || sp?.name || a.supplier},\n\n*Yeşiltaş Teknoloji*'den yazıyoruz. Daha önce sizden aldığımız şu üründen tekrar almak istiyoruz:\n\n` +
+      `🛠️ ${a.name}${a.category ? ` (${a.category})` : ""}\n\nLütfen şunları bildirir misiniz?\n1️⃣ Bu ürün elinizde var mı?\n2️⃣ Birim fiyatı nedir?\n\nTeşekkür ederiz.`
+    if (!sp) showToast("Tedarikçi kayıtlı değil; WhatsApp'ta kişiyi kendiniz seçeceksiniz.", "error")
+    openWhatsApp(phone.length >= 10 ? "90" + phone : "", message)
+  }
+
   const handleExcelImport = async (rows: Record<string, any>[]) => {
     const validCurrency = (c: any): "TRY" | "USD" | "EUR" => ["TRY", "USD", "EUR"].includes(String(c).toUpperCase()) ? String(c).toUpperCase() as any : "TRY"
     const inputs = rows.map(r => ({
@@ -183,6 +204,7 @@ export default function FixedAssetsPage() {
       purchaseCurrency: validCurrency(r.purchaseCurrency),
       purchaseDate: r.purchaseDate || "",
       location: String(r.location || ""),
+      supplier: String(r.supplier || "").trim(),
       notes: String(r.notes || ""),
     })).filter(r => r.name)
     const created = await createFixedAssetsBulk(inputs)
@@ -319,7 +341,7 @@ export default function FixedAssetsPage() {
                       <div>
                         <div className="text-sm font-medium text-white">{a.name} {a.quantity > 1 && <span className="text-slate-500">x{a.quantity}</span>}</div>
                         <div className="text-xs text-slate-400 mt-0.5">
-                          {a.category} {a.location && `· 📍 ${a.location}`} {a.purchaseDate && `· 📅 ${a.purchaseDate}`}
+                          {a.category} {a.location && `· 📍 ${a.location}`} {a.purchaseDate && `· 📅 ${a.purchaseDate}`} {a.supplier && `· 🚚 ${a.supplier}`}
                         </div>
                         {a.notes && <div className="text-xs text-slate-500 mt-0.5">{a.notes}</div>}
                       </div>
@@ -334,6 +356,9 @@ export default function FixedAssetsPage() {
                         </div>
                       )}
                       <div className="flex gap-1 justify-end mt-1">
+                        <Button size="sm" variant="outline" onClick={() => reorderAsset(a)} title="Aynı üründen tekrar almak için tedarikçiye WhatsApp'tan fiyat/stok sor" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 h-7 px-2">
+                          💬
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => { setEditingAsset(a); setIsEditOpen(true) }} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-7 px-2">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -414,6 +439,11 @@ export default function FixedAssetsPage() {
               <Input value={newAsset.location || ""} onChange={(e) => setNewAsset({ ...newAsset, location: e.target.value })} placeholder="Örn: Depo, Servis Masası" className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <div className="space-y-1">
+              <Label className="text-slate-300">Tedarikçi (nereden aldınız)</Label>
+              <Input list="asset-suppliers" value={newAsset.supplier || ""} onChange={(e) => setNewAsset({ ...newAsset, supplier: e.target.value })} placeholder="Listeden seçin ya da yazın" className="bg-slate-800 border-slate-600 text-white" />
+              <datalist id="asset-suppliers">{suppliers.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+            </div>
+            <div className="space-y-1">
               <Label className="text-slate-300">Not</Label>
               <Input value={newAsset.notes || ""} onChange={(e) => setNewAsset({ ...newAsset, notes: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             </div>
@@ -484,6 +514,11 @@ export default function FixedAssetsPage() {
                 <Input value={editingAsset.location} onChange={(e) => setEditingAsset({ ...editingAsset, location: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
               </div>
               <div className="space-y-1">
+                <Label className="text-slate-300">Tedarikçi (nereden aldınız)</Label>
+                <Input list="asset-suppliers" value={editingAsset.supplier || ""} onChange={(e) => setEditingAsset({ ...editingAsset, supplier: e.target.value })} placeholder="Listeden seçin ya da yazın" className="bg-slate-800 border-slate-600 text-white" />
+                <datalist id="asset-suppliers">{suppliers.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+              </div>
+              <div className="space-y-1">
                 <Label className="text-slate-300">Not</Label>
                 <Input value={editingAsset.notes} onChange={(e) => setEditingAsset({ ...editingAsset, notes: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
               </div>
@@ -537,7 +572,7 @@ export default function FixedAssetsPage() {
         title="Demirbaşları Excel ile Yükle"
         fields={IMPORT_FIELDS}
         onImport={handleExcelImport}
-        templateHint="Excel dosyanızda şu sütunlar olmalı: Ürün Adı, Kategori, Adet, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Alış Tarihi, Konum, Not. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
+        templateHint="Excel dosyanızda şu sütunlar olmalı: Ürün Adı, Kategori, Adet, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Alış Tarihi, Konum, Tedarikçi, Not. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
       />
     </div>
   )

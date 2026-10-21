@@ -23,6 +23,7 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 | 9 | `supabase-fixes-v8-migration.sql` | **Evet** | servis iş akışı: aşama, tahmini teslim, kalite kontrol, teklif |
 | 10 | `supabase-fixes-v9-migration.sql` | **Evet** | Alışlar sayfası (tedarikçiden ve müşteriden alış kayıtları) |
 | 11 | `supabase-fixes-v10-migration.sql` | **Evet** | taksit planı sütunu düzeltmesi (taksitli satış için) |
+| 12 | `supabase-fixes-v11-migration.sql` | **Evet** | demirbaşlara tedarikçi bilgisi (tekrar sipariş / fiyat isteme için) |
 
 ## Kontrol
 Çalıştırdıktan sonra Supabase > Database > Policies (veya `select * from pg_policies`) ile politikaları kontrol edin.

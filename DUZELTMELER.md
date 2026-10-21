@@ -183,3 +183,11 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 - **Stok hareket geçmişi boş kalıyorsa:** `supabase-stok-hareketleri-onar.sql` (tablo doluysa silmez). Sağlık kontrolü artık bu tablonun sütunlarını da denetler.
 - **iPhone ana ekran uygulamasında WhatsApp (yeni yaklaşım):** ERP ana ekrandan açıldığında, kodla başka adrese geçmek iOS'un X düğmeli "uygulama içi tarayıcı" penceresini açıyordu. Bu modda WhatsApp gönderimi artık küçük bir pencerede yapılır: mesaj gösterilir/düzenlenir, **"📲 WhatsApp'ta Aç"** gerçek bir bağlantıdır (dokununca doğrudan WhatsApp açılır); olmazsa **"📋 Mesajı Kopyala"** ve **"📤 Paylaş"** yedekleri vardır. Safari, Android ve bilgisayarda davranış aynıdır. (Ana ekran uygulamasında hangi düğmenin sorunsuz çalıştığı test edilecek.)
 - **WhatsApp'tan dönünce sayfa başa atıyordu:** WhatsApp'a geçmeden önce kaydırma konumu saklanır; sayfa yeniden yüklenirse aynı konuma geri kaydırılır (içerik <main> kutusunda kaydığı için window değil o kutu kullanılır).
+- **Sarf malzeme Excel yüklemede Min. Stok 0 → 10 oluyordu:** Artık Excel'de 0 yazılan Min. Stok 0 kalır (boş bırakılırsa 10).
+
+## v16 — Tedarikçi hafızası (SQL: `supabase-fixes-v11-migration.sql`)
+- **Demirbaşlara "Tedarikçi" alanı:** Ekleme/Düzenleme ekranında ve Excel'de ("Tedarikçi" sütunu). Kartta 🚚 ile görünür.
+- **Demirbaş kartında 💬 düğmesi:** Aynı üründen tekrar almak için kayıtlı tedarikçiye WhatsApp'ta hazır mesaj açar (ürün adı + "elinizde var mı? birim fiyatı nedir?"). Gönder'e siz basarsınız.
+- **Tedarikçiler > "Ürünleri" düğmesi:** O tedarikçiden aldığımız envanter, sarf malzeme ve demirbaşları listeler; istediklerinizi seçip tek mesajda WhatsApp'tan fiyat/stok sorarsınız.
+- Sarf malzemede zaten "Fiyat İste" vardı (kritik stok → tedarikçi); tedarikçi alanı doluysa aynı şekilde çalışır.
+- Not: WhatsApp mesajı otomatik hazırlanır ama gönderme düğmesine sizin basmanız gerekir (tam otomatik gönderim ücretli WhatsApp Business API gerektirir).

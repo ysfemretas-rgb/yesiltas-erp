@@ -1,4 +1,4 @@
-import { supabase, fetchAllRows } from "@/lib/supabase"
+import { supabase, fetchAllRows, isMissingColumnError, stripColumns } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 
 export interface FixedAsset {
@@ -11,6 +11,7 @@ export interface FixedAsset {
   purchaseDate: string
   location: string
   notes: string
+  supplier?: string // Nereden alındı (tedarikçi hafızası: tekrar sipariş/fiyat isterken kullanılır)
 }
 
 function fromRow(row: any): FixedAsset {
@@ -24,6 +25,7 @@ function fromRow(row: any): FixedAsset {
     purchaseDate: row.purchase_date ?? "",
     location: row.location ?? "",
     notes: row.notes ?? "",
+    supplier: row.supplier ?? "",
   }
 }
 
@@ -37,6 +39,7 @@ function toRow(a: Partial<FixedAsset>) {
   if (a.purchaseDate !== undefined) row.purchase_date = a.purchaseDate || null
   if (a.location !== undefined) row.location = a.location
   if (a.notes !== undefined) row.notes = a.notes
+  if (a.supplier !== undefined) row.supplier = a.supplier
   return row
 }
 
@@ -46,7 +49,12 @@ export async function fetchFixedAssets(): Promise<FixedAsset[]> {
 }
 
 export async function createFixedAsset(input: Omit<FixedAsset, "id">): Promise<FixedAsset> {
-  const { data, error } = await supabase.from("fixed_assets").insert(toRow(input)).select("*").single()
+  const row = toRow(input)
+  if (!row.supplier) delete row.supplier
+  let { data, error } = await supabase.from("fixed_assets").insert(row).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    ;({ data, error } = await supabase.from("fixed_assets").insert(stripColumns(row, ["supplier"])).select("*").single())
+  }
   if (error) throw error
   const created = fromRow(data)
   logActivity("Demirbaşlar", "created", `${created.name} eklendi`)
@@ -56,7 +64,12 @@ export async function createFixedAsset(input: Omit<FixedAsset, "id">): Promise<F
 // Excel'den toplu yükleme için — her satırı tek tek loglamak yerine tek bir
 // özet log kaydı oluşturur.
 export async function createFixedAssetsBulk(inputs: Omit<FixedAsset, "id">[]): Promise<FixedAsset[]> {
-  const { data, error } = await supabase.from("fixed_assets").insert(inputs.map(toRow)).select("*")
+  const rows = inputs.map(toRow).map((r) => { if (!r.supplier) delete r.supplier; return r })
+  let { data, error } = await supabase.from("fixed_assets").insert(rows).select("*")
+  if (error && isMissingColumnError(error)) {
+    // supplier sütunu henüz yoksa (SQL v11 çalışmadıysa) tedarikçisiz yüklenir
+    ;({ data, error } = await supabase.from("fixed_assets").insert(rows.map((r) => stripColumns(r, ["supplier"]))).select("*"))
+  }
   if (error) throw error
   const created = (data || []).map(fromRow)
   logActivity("Demirbaşlar", "created", `Excel ile ${created.length} demirbaş toplu eklendi`)
@@ -64,7 +77,11 @@ export async function createFixedAssetsBulk(inputs: Omit<FixedAsset, "id">[]): P
 }
 
 export async function updateFixedAsset(id: string, input: Partial<Omit<FixedAsset, "id">>): Promise<FixedAsset> {
-  const { data, error } = await supabase.from("fixed_assets").update(toRow(input)).eq("id", id).select("*").single()
+  const row = toRow(input)
+  let { data, error } = await supabase.from("fixed_assets").update(row).eq("id", id).select("*").single()
+  if (error && isMissingColumnError(error)) {
+    ;({ data, error } = await supabase.from("fixed_assets").update(stripColumns(row, ["supplier"])).eq("id", id).select("*").single())
+  }
   if (error) throw error
   const updated = fromRow(data)
   logActivity("Demirbaşlar", "updated", `${updated.name} güncellendi`)

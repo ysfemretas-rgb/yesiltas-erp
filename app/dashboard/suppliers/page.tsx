@@ -20,6 +20,7 @@ import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { Supplier, SupplierPayment, fetchSuppliers, createSupplier, updateSupplier, deleteSupplier, fetchSupplierPayments } from "@/lib/suppliers"
 import { Purchase, fetchPurchases, paySupplierDebt } from "@/lib/purchases"
 import { supplierNetDebt, legacyOutstandingQty } from "@/lib/purchaseMath"
+import { SupplierProductsDialog } from "@/components/suppliers/SupplierProductsDialog"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
 const CATEGORIES = ["Ekran", "Batarya", "Kapak", "Port", "Yapıştırıcı", "Diğer"]
@@ -36,6 +37,7 @@ export default function SuppliersPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [payments, setPayments] = useState<SupplierPayment[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
+  const [productsOf, setProductsOf] = useState<Supplier | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -598,6 +600,9 @@ export default function SuppliersPage() {
                       <Button size="sm" variant="outline" className="border-emerald-600 text-emerald-400 hover:bg-emerald-900/30" onClick={() => handleWhatsApp(supplier.phone, supplier.contactPerson || supplier.name)}>
                         <MessageCircle className="h-3 w-3 mr-1" />WhatsApp
                       </Button>
+                      <Button size="sm" variant="outline" className="border-purple-600 text-purple-400 hover:bg-purple-900/30" onClick={() => setProductsOf(supplier)}>
+                        <Package className="h-3 w-3 mr-1" />Ürünleri
+                      </Button>
                       <Button size="sm" variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-900/30" onClick={() => handleMap(supplier.address)}>
                         <ExternalLink className="h-3 w-3 mr-1" />Harita
                       </Button>
@@ -727,6 +732,7 @@ export default function SuppliersPage() {
           </Dialog>
         )}
       </div>
+      <SupplierProductsDialog supplier={productsOf} inventory={inventory} onClose={() => setProductsOf(null)} />
     </div>
   )
 }

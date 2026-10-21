@@ -144,7 +144,8 @@ export default function ConsumablesPage() {
       name: String(r.name || "").trim(),
       category: String(r.category || "Diğer"),
       currentStock: Number(r.currentStock) || 0,
-      minStock: Number(r.minStock) || 10,
+      // Excel'de Min. Stok 0 yazılırsa 0 kalır (eskiden "0 || 10" yüzünden 10'a dönüyordu); boşsa 10
+      minStock: Number.isNaN(Number(r.minStock)) ? 10 : Number(r.minStock),
       unit: String(r.unit || "Adet"),
       purchasePrice: Number(r.purchasePrice) || 0,
       purchaseCurrency: validCurrency(r.purchaseCurrency),

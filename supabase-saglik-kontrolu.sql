@@ -16,7 +16,7 @@ with checks as (
     ('sales','customer_id'),('sales','payments'),('sales','installment_plan'),('sales','refunds'),('sales','trade_in'),('sales','extra_cost'),('sales','extra_cost_note'),
     ('customers','birth_date'),
     ('inventory','imei'),('inventory','total_purchased_qty'),
-    ('devices','parts'),('devices','parts_cost'),('devices','technician'),('devices','signature'),('devices','stage'),('devices','estimated_delivery'),('devices','qc'),('devices','quote')
+    ('fixed_assets','supplier'),('devices','parts'),('devices','parts_cost'),('devices','technician'),('devices','signature'),('devices','stage'),('devices','estimated_delivery'),('devices','qc'),('devices','quote')
   ) as v(t,c)
 
   union all
