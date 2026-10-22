@@ -420,7 +420,7 @@ export default function CustomersPage() {
         phone2: newCustomer.phone2 || "",
         email: newCustomer.email || "",
         address: newCustomer.address || "",
-        city: newCustomer.city || selectedCustomer.city,
+        city: newCustomer.city !== undefined ? newCustomer.city : selectedCustomer.city,
         notes: newCustomer.notes || "",
         birthDate: newCustomer.birthDate || "",
       })
@@ -1130,7 +1130,7 @@ export default function CustomersPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Müşteri Düzenle</DialogTitle>
           </DialogHeader>
@@ -1158,6 +1158,20 @@ export default function CustomersPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300">E-posta</label>
               <Input value={newCustomer.email || ""} onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Şehir</label>
+                <Input value={newCustomer.city || ""} onChange={(e) => setNewCustomer({...newCustomer, city: e.target.value})} placeholder="Ankara" className="bg-slate-800 border-slate-700 text-white" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Adres</label>
+                <Input value={newCustomer.address || ""} onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})} placeholder="İlçe, Semt" className="bg-slate-800 border-slate-700 text-white" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Notlar</label>
+              <Input value={newCustomer.notes || ""} onChange={(e) => setNewCustomer({...newCustomer, notes: e.target.value})} placeholder="Müşteri hakkında not..." className="bg-slate-800 border-slate-700 text-white" />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300">Doğum Tarihi</label>

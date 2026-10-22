@@ -1,2 +1,2 @@
 // Canlıda hangi sürümün çalıştığını görmek için (menünün altında ve hata ekranında gösterilir)
-export const APP_VERSION = "v33"
+export const APP_VERSION = "v34"

@@ -171,9 +171,37 @@ export async function createCustomer(input: Partial<Customer>): Promise<Customer
   return created
 }
 
+// Satış ve tamir kayıtlarında müşterinin adı/telefonu KOPYA olarak saklanır. Müşteri düzeltilince bu kopyalar da güncellenir
+// (yanlış yazılmış telefon satış kaydında ve WhatsApp'ta eski kalmasın). Hata olursa müşteri güncellemesini bozmaz.
+async function syncCustomerCopies(id: string, before: any, after: any): Promise<void> {
+  try {
+    const name = after.name ?? ""
+    const phone = after.phone ?? ""
+    const salePatch = { customer_name: name, customer_phone: phone }
+    // Satışlar: müşteriye bağlı olanların hepsi (id ya da müşteri koduyla)
+    await supabase.from("sales").update(salePatch).eq("customer_id", id)
+    if (after.customer_code) await supabase.from("sales").update(salePatch).eq("customer_code", after.customer_code)
+    // Bağlantısı olmayan eski satışlar: eski ad + eski telefonla eşleşenler
+    if (before?.name) {
+      await supabase.from("sales").update(salePatch).is("customer_id", null).is("customer_code", null).eq("customer_name", before.name).eq("customer_phone", before.phone ?? "")
+    }
+    // Tamirler: ad ve (eski telefonla aynıysa) telefon
+    if (after.customer_code) {
+      await supabase.from("devices").update({ customer_name: name }).eq("customer_code", after.customer_code)
+      if (before?.phone && phone && before.phone !== phone) {
+        await supabase.from("devices").update({ phone1: phone }).eq("customer_code", after.customer_code).eq("phone1", before.phone)
+      }
+    }
+  } catch (e) {
+    console.error("Müşteri kopyaları güncellenemedi:", e)
+  }
+}
+
 export async function updateCustomer(id: string, input: Partial<Customer>): Promise<Customer> {
+  const { data: before } = await supabase.from("customers").select("name, phone, customer_code").eq("id", id).maybeSingle()
   const { data, error } = await supabase.from("customers").update(customerToRow(input)).eq("id", id).select("*").single()
   if (error) throw error
+  await syncCustomerCopies(id, before, data)
   const { data: debtRows } = await supabase.from("debts").select("*").eq("customer_id", id)
   const updated = customerFromRow(data, (debtRows || []).map(debtFromRow))
   logActivity("Müşteriler", "updated", `${updated.name} güncellendi`)

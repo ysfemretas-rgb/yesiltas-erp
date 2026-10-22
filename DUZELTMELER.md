@@ -210,3 +210,8 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 ## v33 — Alışlar'da adet düzeltme ve silme
 - **🔢 Adedi düzelt** (alış detayında, her ürün satırında; tedarikçiden alışlar): Stok, alış toplamı ve tedarikçi borcu birlikte düzelir. Adet azalırsa ödenen fazlası kasaya "Tedarikçi İadesi" geliri yazılır; satılmış ürünün adedi azaltılamaz (stok yetersizse reddedilir). Stok işlemi başarısız olursa alış kaydı değişmez, alış kaydı güncellenemezse stok geri alınır.
 - **🗑️ Alışı Sil** (sadece yönetici): Ürünler stoktan düşer (stok yetersizse hiçbir şey silinmez, nedeni yazılır), ödenen tutar kasaya "Tedarikçi İadesi" geliri olarak yazılır (kasa geçmişi silinmez), borç alış kalkınca otomatik düşer. Alışla oluşan yeni ürünün kartı Envanter'de 0 stokla kalır. İşlem Aktivite Logu'na yazılır.
+
+## v34 — Müşteri düzeltmeleri
+- **Müşteri telefonu/adı düzeltilince satış ve tamir kayıtları da güncellenir:** Satışta müşterinin adı ve telefonu kopya olarak saklandığı için, yanlış yazılıp sonradan düzeltilen numara satış kaydında ve WhatsApp'ta eski kalıyordu. Artık müşteri kaydedilince (değişiklik olmasa da "Güncelle"ye basmak yeterli) o müşteriye bağlı bütün satışlardaki ad/telefon yenilenir; müşteriye bağlı olmayan eski satışlar eski ad+telefon eşleşmesiyle bulunur. Tamirlerde ad güncellenir, telefon ise eski numarayla aynıysa güncellenir.
+- **Satışlardan WhatsApp:** Müşteri kayıtlıysa mesaj GÜNCEL müşteri telefonuna gider (satıştaki kopya yalnızca müşteri bulunamazsa kullanılır).
+- **Müşteri Düzenle penceresine Şehir, Adres ve Notlar alanları eklendi** (adres değiştirilemiyordu); pencere küçük ekranda kaydırılabilir.

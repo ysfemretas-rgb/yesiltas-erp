@@ -1049,16 +1049,15 @@ Bu işlem geri alınamaz!`)) return
       let phone = ""
       let customerName = sale.customerName || "Müşteri"
 
-      if (sale.customerPhone) {
-        phone = sale.customerPhone
+      // Müşteri kayıtlıysa GÜNCEL müşteri bilgisi kullanılır (telefon sonradan düzeltilmiş olabilir);
+      // satış kaydındaki kopya ancak müşteri bulunamazsa kullanılır.
+      const live = sale.customerId && customers.length > 0 ? customers.find(c => c.id === sale.customerId) : undefined
+      if (live) {
+        phone = live.phone || live.phone1 || ""
+        customerName = live.name || customerName
       }
-
-      if (!phone && sale.customerId && customers.length > 0) {
-        const customer = customers.find(c => c.id === sale.customerId)
-        if (customer) {
-          phone = customer.phone || customer.phone1 || ""
-          customerName = customer.name
-        }
+      if (!phone && sale.customerPhone) {
+        phone = sale.customerPhone
       }
 
       if (!phone) {
