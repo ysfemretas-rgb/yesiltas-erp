@@ -489,6 +489,144 @@ export async function findPurchaseLinesAtPrice(
   return out
 }
 
+// Bir alış satırının ADEDİNİ düzeltir (yanlış girilen adet). Stok, alış toplamı ve tedarikçi borcu birlikte değişir:
+//  - Adet azalırsa: stok düşer (yetersizse işlem reddedilir), toplam/borç düşer; ödenen tutar yeni toplamdan
+//    fazlaysa fark kasaya "Tedarikçi İadesi" geliri olarak yazılır.
+//  - Adet artarsa: stok artar, toplam/borç artar (ödenen tutar aynı kalır).
+export async function changePurchaseLineQuantity(
+  purchase: Purchase,
+  index: number,
+  newQuantity: number
+): Promise<{ newTotal: number; refund: number }> {
+  if (purchase.kind !== "supplier") throw new Error("Adet düzeltme sadece tedarikçiden alışlarda yapılır.")
+  const line = purchase.items[index]
+  if (!line) throw new Error("Satır bulunamadı.")
+  if (!line.inventoryId) throw new Error("Bu satır bir ürüne bağlı değil; adet düzeltilemez.")
+  const q = Math.floor(Number(newQuantity))
+  if (!(q >= 1)) throw new Error("Adet en az 1 olmalı. Alışın tamamını kaldırmak için 'Alışı sil'i kullanın.")
+  const delta = q - line.quantity
+  if (delta === 0) throw new Error("Adet değişmedi.")
+  if (line.imei && q !== 1) throw new Error("IMEI'li ürün 1 adet olmalı.")
+
+  const { data: inv, error: invErr } = await supabase.from("inventory").select("id, name, quantity, total_purchased_qty").eq("id", line.inventoryId).single()
+  if (invErr || !inv) throw new Error("Bu alışın ürünü Envanter'de bulunamadı (silinmiş olabilir).")
+  const stock = Number(inv.quantity) || 0
+  if (delta < 0 && -delta > stock) throw new Error(`Bu üründen stokta sadece ${stock} adet var (${-delta} adet düşülecek). Satılmış ürünlerin alışı azaltılamaz; önce ilgili satışı iptal edin.`)
+
+  // Stok önce değişir (azalışta kontrollü); alış kaydı güncellenemezse geri alınır
+  await adjustInventoryQuantity(line.inventoryId, delta, `Alış adet düzeltmesi (${purchase.code}): ${line.quantity} → ${q}`, inv.name, delta < 0)
+  let refund = 0
+  let newTotal = purchase.total
+  try {
+    const newLines = purchase.items.map((l, i) => (i === index ? { ...l, quantity: q } : l))
+    newTotal = purchaseTotal(newLines)
+    const newPaid = Math.min(purchase.paid, newTotal)
+    refund = Math.round((purchase.paid - newPaid) * 100) / 100
+    const { error } = await supabase
+      .from("purchases")
+      .update({
+        items: newLines,
+        total_try: newTotal,
+        paid_amount: newPaid,
+        note: `${purchase.note ? purchase.note + " | " : ""}Adet düzeltmesi (${localDateStr()}): ${line.name} ${line.quantity} → ${q} adet`,
+      })
+      .eq("id", purchase.id)
+    if (error) throw error
+  } catch (e) {
+    await adjustInventoryQuantity(line.inventoryId, -delta, "Alış adet düzeltmesi başarısız — stok iadesi", inv.name).catch((err) => console.error(err))
+    throw e
+  }
+  try {
+    const purchased = Number(inv.total_purchased_qty != null ? inv.total_purchased_qty : stock)
+    await updateInventoryItem(line.inventoryId, { purchasedQuantity: Math.max(0, purchased + delta) })
+  } catch (e) {
+    console.error("Alınan toplam adet güncellenemedi:", e)
+  }
+  if (refund > 0.009) {
+    await createTransaction({
+      type: "income",
+      category: "Tedarikçi İadesi",
+      amount: refund,
+      description: `↩️ Alış adet düzeltmesi ${purchase.code}: ${purchase.partyName} — fazla ödeme iadesi`,
+      date: localDateStr(),
+      customer: purchase.partyName,
+      source: "manual",
+    })
+  }
+  logActivity("Alışlar", "updated", `${purchase.code} (${purchase.partyName}) adet düzeltmesi: ${line.name} ${line.quantity} → ${q}; toplam ${purchase.total} → ${newTotal} TL${refund > 0.009 ? `, ${refund} TL iade kasaya yazıldı` : ""}`)
+  return { newTotal, refund }
+}
+
+// Bir alışı tamamen siler: ürünler stoktan düşer (stok yetersizse hiçbir şey değişmez ve silinmez), ödenen tutar kasaya
+// "Tedarikçi İadesi" geliri olarak yazılır (kasa geçmişi silinmez), borç Alışlar kaydı kalkınca otomatik düşer.
+// Alışla oluşan YENİ ürünün kartı Envanter'de 0 stokla kalır (gerekirse oradan silin).
+export async function deletePurchase(purchase: Purchase): Promise<{ refund: number; warning?: string }> {
+  // 1) Ürün bazında düşülecek adetler ve stok yeterliliği (hepsi önce kontrol edilir)
+  const qtyById = new Map<string, { qty: number; name: string }>()
+  for (const l of purchase.items) {
+    if (!l.inventoryId) continue
+    const cur = qtyById.get(l.inventoryId)
+    qtyById.set(l.inventoryId, { qty: (cur?.qty || 0) + (Number(l.quantity) || 0), name: l.name })
+  }
+  const problems: string[] = []
+  const invRows = new Map<string, { quantity: number; purchased: number; name: string }>()
+  for (const [id, v] of Array.from(qtyById.entries())) {
+    const { data: inv } = await supabase.from("inventory").select("id, name, quantity, total_purchased_qty").eq("id", id).maybeSingle()
+    if (!inv) continue // ürün zaten silinmiş: düşülecek stok yok
+    const stock = Number(inv.quantity) || 0
+    invRows.set(id, { quantity: stock, purchased: Number(inv.total_purchased_qty != null ? inv.total_purchased_qty : stock), name: inv.name })
+    if (stock < v.qty) problems.push(`${inv.name}: alışta ${v.qty} adet, stokta ${stock} adet`)
+  }
+  if (problems.length > 0) {
+    throw new Error(`Bu alıştaki ürünlerin bir kısmı satılmış ya da stoktan çıkmış, silinemez:\n${problems.join("\n")}\n\nÖnce ilgili satışları iptal edin ya da yalnızca adedi/fiyatı düzeltin.`)
+  }
+
+  // 2) Stok düşülür (hata olursa yapılanlar geri alınır)
+  const done: { id: string; qty: number; name: string }[] = []
+  try {
+    for (const [id, v] of Array.from(qtyById.entries())) {
+      if (!invRows.has(id)) continue
+      await adjustInventoryQuantity(id, -v.qty, `Alış silindi (${purchase.code})`, invRows.get(id)!.name, true)
+      done.push({ id, qty: v.qty, name: invRows.get(id)!.name })
+    }
+    // 3) Alış kaydı silinir
+    const { error } = await supabase.from("purchases").delete().eq("id", purchase.id)
+    if (error) throw error
+  } catch (e) {
+    for (const d of done) await adjustInventoryQuantity(d.id, d.qty, "Alış silme başarısız — stok iadesi", d.name).catch((err) => console.error(err))
+    throw e
+  }
+  for (const d of done) {
+    try {
+      const r = invRows.get(d.id)!
+      await updateInventoryItem(d.id, { purchasedQuantity: Math.max(0, r.purchased - d.qty) })
+    } catch (e) {
+      console.error("Alınan toplam adet güncellenemedi:", e)
+    }
+  }
+  // 4) Ödenen tutar kasaya iade geliri olarak yazılır
+  let warning: string | undefined
+  const refund = Math.round(purchase.paid * 100) / 100
+  if (refund > 0.009) {
+    try {
+      await createTransaction({
+        type: "income",
+        category: "Tedarikçi İadesi",
+        amount: refund,
+        description: `↩️ Alış silindi ${purchase.code}: ${purchase.partyName} — ödenen tutarın iadesi`,
+        date: localDateStr(),
+        customer: purchase.partyName,
+        source: "manual",
+      })
+    } catch (e) {
+      console.error(e)
+      warning = `Alış silindi ancak ${refund} TL iade kasaya yazılamadı; Kasa'dan "Tedarikçi İadesi" gelir kaydı ekleyin.`
+    }
+  }
+  logActivity("Alışlar", "deleted", `${purchase.code} (${purchase.partyName}) SİLİNDİ: ${purchase.items.map((i) => `${i.name} x${i.quantity}`).join(", ")} — toplam ${purchase.total} TL, ödenen ${purchase.paid} TL${refund > 0.009 ? `, iade kasaya yazıldı` : ""}`)
+  return { refund, warning }
+}
+
 // Yanlış girilen alış fiyatını / para birimini düzeltir (örn. TL yerine yanlışlıkla USD seçildiyse).
 // Alış toplamı, kalan borç (tedarikçi borcu) ve ürünün alış fiyatı birlikte güncellenir.
 // Ödenen tutar yeni toplamdan büyükse fazlası kasaya "Tedarikçi İadesi" geliri olarak yazılır (kasa tutarlı kalır).

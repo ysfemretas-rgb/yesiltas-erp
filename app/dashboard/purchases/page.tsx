@@ -14,7 +14,7 @@ import { Search, Truck, Smartphone, Printer, Banknote, Download } from "lucide-r
 import { NewPurchaseDialog } from "@/components/purchases/NewPurchaseDialog"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Pagination } from "@/components/Pagination"
-import { Purchase, fetchPurchases, payPurchase, correctPurchasePrices } from "@/lib/purchases"
+import { Purchase, fetchPurchases, payPurchase, correctPurchasePrices, changePurchaseLineQuantity, deletePurchase } from "@/lib/purchases"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 import { Supplier, fetchSuppliers } from "@/lib/suppliers"
 import { fetchCustomers } from "@/lib/customers"
@@ -51,6 +51,12 @@ export default function PurchasesPage() {
   const [fixPrice, setFixPrice] = useState("")
   const [fixCur, setFixCur] = useState<"TRY" | "USD" | "EUR">("TRY")
   const [fixSaving, setFixSaving] = useState(false)
+
+  // Adet düzeltme ve silme (kancalar erken return'dan ÖNCE olmalı)
+  const [qtyFix, setQtyFix] = useState<{ index: number } | null>(null)
+  const [qtyValue, setQtyValue] = useState("")
+  const [qtySaving, setQtySaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const reload = async () => {
     const [p, inv] = await Promise.all([fetchPurchases(), fetchInventory()])
@@ -165,6 +171,52 @@ export default function PurchasesPage() {
       showToast(e?.message || "Fiyat düzeltilemedi.", "error")
     } finally {
       setFixSaving(false)
+    }
+  }
+
+  const openQty = (idx: number) => {
+    if (!detail) return
+    setQtyFix({ index: idx })
+    setQtyValue(String(detail.items[idx].quantity))
+  }
+  const saveQty = async () => {
+    if (!detail || !qtyFix) return
+    const q = Math.floor(Number(String(qtyValue).replace(",", ".")))
+    const line = detail.items[qtyFix.index]
+    if (!(q >= 1)) return showToast("Adet en az 1 olmalı. Alışın tamamını kaldırmak için 'Alışı Sil'i kullanın.", "error")
+    if (q === line.quantity) { setQtyFix(null); return }
+    const diff = q - line.quantity
+    if (!confirm(`${line.name}\nEski adet: ${line.quantity}  →  Yeni adet: ${q}\n\n${diff < 0 ? `Stok ${-diff} adet düşer, alış toplamı ve tedarikçi borcu azalır.` : `Stok ${diff} adet artar, alış toplamı ve tedarikçi borcu artar.`}\n\nDevam edilsin mi?`)) return
+    setQtySaving(true)
+    try {
+      const r = await changePurchaseLineQuantity(detail, qtyFix.index, q)
+      const fresh = await fetchPurchases()
+      setPurchases(fresh)
+      setDetail(fresh.find((x) => x.id === detail.id) || null)
+      fetchInventory().then(setInventory).catch((e) => console.error(e))
+      setQtyFix(null)
+      showToast(`Adet düzeltildi (${line.quantity} → ${q}). Yeni alış toplamı: ${money(r.newTotal)}${r.refund > 0.009 ? ` • ${money(r.refund)} fazla ödeme kasaya iade geliri yazıldı` : ""}.`, "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Adet düzeltilemedi.", "error")
+    } finally {
+      setQtySaving(false)
+    }
+  }
+  const doDelete = async (p: Purchase) => {
+    if (deleting) return
+    if (!confirm(`${p.code} • ${p.partyName}\nToplam ${money(p.total)} (ödenen ${money(p.paid)})\n\nBu alış SİLİNECEK:\n• Ürünler stoktan düşer\n• Tedarikçi borcu bu alış kadar azalır\n• Ödenen tutar kasaya "Tedarikçi İadesi" geliri olarak yazılır\n\nDevam edilsin mi?`)) return
+    setDeleting(true)
+    try {
+      const r = await deletePurchase(p)
+      await reload()
+      setDetail(null)
+      showToast(r.warning || `Alış silindi, ürünler stoktan düşüldü.${r.refund > 0.009 ? ` ${money(r.refund)} kasaya iade geliri yazıldı.` : ""}`, r.warning ? "error" : "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Alış silinemedi.", "error")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -304,7 +356,7 @@ export default function PurchasesPage() {
                 <div className="space-y-1">
                   {detail.items.map((i, idx) => (
                     <div key={idx} className="p-2 rounded bg-slate-800 border border-slate-700">
-                      <div className="flex justify-between gap-2"><span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{detail.kind === "supplier" && <button type="button" onClick={() => openFix(idx)} className="ml-2 text-[11px] text-sky-400 underline" title="Yanlış girilen fiyatı / para birimini düzelt">✏️ Fiyatı düzelt</button>}</span><span className="text-amber-300 shrink-0">{money(i.quantity * i.unitCostTRY)}</span></div>
+                      <div className="flex justify-between gap-2"><span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{detail.kind === "supplier" && <button type="button" onClick={() => openQty(idx)} className="ml-2 text-[11px] text-emerald-400 underline" title="Yanlış girilen adedi düzelt (stok ve borç da düzelir)">🔢 Adedi düzelt</button>}{detail.kind === "supplier" && <button type="button" onClick={() => openFix(idx)} className="ml-2 text-[11px] text-sky-400 underline" title="Yanlış girilen fiyatı / para birimini düzelt">✏️ Fiyatı düzelt</button>}</span><span className="text-amber-300 shrink-0">{money(i.quantity * i.unitCostTRY)}</span></div>
                       <div className="text-xs text-slate-400">{i.unitPrice.toLocaleString("tr-TR")} {i.currency}{i.currency !== "TRY" ? ` (kur ${i.rate})` : ""}{i.productCode ? ` • ${i.productCode}` : ""}{i.imei ? ` • IMEI ${i.imei}` : ""}{i.salePrice > 0 ? ` • satış ${money(i.salePrice)}` : ""}</div>
                     </div>
                   ))}
@@ -320,12 +372,31 @@ export default function PurchasesPage() {
                     <Button size="sm" disabled={paying} onClick={() => doPay(detail)} className="bg-emerald-600 hover:bg-emerald-700"><Banknote className="h-3 w-3 mr-1" />Ödeme Yap</Button>
                   )}
                   <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => printPurchaseSlip(detail)}><Printer className="h-3 w-3 mr-1" />Alış Fişi</Button>
+                  {isManager && (
+                    <Button size="sm" variant="outline" disabled={deleting} onClick={() => doDelete(detail)} className="border-red-700 text-red-400 hover:bg-red-900/30">{deleting ? "Siliniyor..." : "🗑️ Alışı Sil"}</Button>
+                  )}
                   {detail.kind === "customer" && (
                     <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => printPurchaseDocument({ id: detail.id, docCode: detail.code, sellerName: detail.partyName, sellerPhone: detail.partyPhone, sellerIdNo: "", deviceName: detail.items.map((i) => i.name).join(", "), imei: detail.items.find((i) => i.imei)?.imei || "", conditionNote: detail.items.map((i) => i.conditionNote).filter(Boolean).join("; "), price: detail.total, date: detail.date })}><Printer className="h-3 w-3 mr-1" />Alım Belgesi</Button>
                   )}
                 </div>
               </div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!qtyFix} onOpenChange={(o) => { if (!o) setQtyFix(null) }}>
+        <DialogContent className="max-w-sm bg-slate-900 border-slate-700 text-white">
+          <DialogHeader><DialogTitle className="text-white">🔢 Alış Adedini Düzelt</DialogTitle></DialogHeader>
+          {detail && qtyFix && detail.items[qtyFix.index] && (
+            <div className="space-y-3 text-sm">
+              <p className="text-slate-300">{detail.items[qtyFix.index].name} <span className="text-slate-500">• şu an x{detail.items[qtyFix.index].quantity}</span></p>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400">Doğru adet</label>
+                <Input type="number" inputMode="numeric" min={1} value={qtyValue} onChange={(e) => setQtyValue(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+              </div>
+              <p className="text-xs text-slate-400">Stok, alış toplamı ve tedarikçi borcu birlikte düzelir (adet azalırsa ödenen fazlası kasaya "Tedarikçi İadesi" yazılır). Satılmış ürünün adedi azaltılamaz.</p>
+              <Button disabled={qtySaving} onClick={saveQty} className="w-full bg-emerald-600 hover:bg-emerald-700">{qtySaving ? "Kaydediliyor..." : "Düzelt"}</Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>
