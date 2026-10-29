@@ -86,7 +86,7 @@ export async function printRecordLabel(opts: LabelOptions) {
   @media print { .no-print { display: none !important; } }
 </style></head><body>
   ${toolbarHtml()}
-  <div class="label">
+  <div class="label" data-share-target="1">
     <div class="head">
       <img src="${logoUrl()}" alt="" onerror="this.style.display='none'" />
       <span class="co">${esc(company.name)}</span>

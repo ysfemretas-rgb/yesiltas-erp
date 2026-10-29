@@ -1,5 +1,6 @@
 "use client"
 
+import { toolbarHtml, openPrintWindow } from "@/lib/printTheme"
 import { netTotals } from "@/lib/financeTotals"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Toast, useToast } from "@/components/toast"
@@ -485,10 +486,7 @@ export default function ReportsPage() {
             </style>
           </head>
           <body>
-            <div class="toolbar no-print">
-              <button class="btn-print" onclick="window.print()">🖨️ Yazdır</button>
-              <button class="btn-close" onclick="window.close(); setTimeout(function(){ history.back(); }, 150);">✕ Kapat</button>
-            </div>
+            ${toolbarHtml()}
             <h1>Yeşiltaş Teknoloji</h1>
             <h2>Rapor — ${data.tarihAraligi}</h2>
             ${rows("Özet", [
@@ -518,18 +516,8 @@ export default function ReportsPage() {
         </html>
       `
 
-      const printWindow = window.open("", "_blank")
-      if (printWindow) {
-        printWindow.document.write(html)
-        printWindow.document.close()
-        printWindow.onload = () => {
-          printWindow.focus()
-          const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-          if (!isMobile) printWindow.print()
-        }
-      } else {
-        showToast("Yazdırma penceresi açılamadı. Tarayıcınızın pop-up engelleyicisini kontrol edin.", "error")
-      }
+      // Ortak yazdırma penceresi: masaüstünde otomatik yazdırır, iPhone'da "Paylaş / Yazdır" düğmesi çıkar
+      openPrintWindow(html, 900, 900)
     }
 
     setShowDownloadDialog(false)

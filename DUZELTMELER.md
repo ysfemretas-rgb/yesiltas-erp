@@ -220,3 +220,9 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 - **Sorun:** Envanter > barkod etiketi penceresindeki "Yazdır" düğmesi iPhone ana ekran uygulamasında hiçbir şey yapmıyordu (iPhone bu tür pencerelerde `window.print()` komutunu desteklemiyor).
 - **Çözüm:** iPhone'da etiket penceresinde **"📤 Paylaş / Yazdır"** düğmesi çıkar. Etiketler (50x31 mm, 3 sütun, A4 sayfaya dizili; 24'ü aşarsa birden çok sayfa) 300 dpi görsel olarak hazırlanır, barkod JsBarcode ile taranabilir Code128 çizilir ve iPhone paylaşım menüsü açılır; oradan **Yazdır** (AirPrint), Dosyalara Kaydet veya etiket yazıcı uygulaması seçilir. Masaüstü ve Android'de değişiklik yoktur ("Yazdır" aynen çalışır).
 - Not: Fiş, Tamir Formu gibi diğer belgelerin "Yazdır" düğmesi de aynı iPhone kısıtına takılabilir; bunlar için ayrıca bakılacak.
+
+## v36 — Tüm "Yazdır" düğmelerinde iPhone desteği
+- iPhone ana ekran uygulamasında `window.print()` çalışmadığı için, yazdırma penceresi açan **her belgede** (Satış Fişi, Tamir Fişi/Formu, Tamir Teklifi, Alış Belgesi, Cihaz Alım Belgesi, Gün Sonu Raporu, Kasa Sayımı, Raporlar sayfası, QR etiketi) iPhone'da **"📤 Paylaş / Yazdır"** düğmesi çıkar. Belge görsel olarak hazırlanır (A4, uzunsa birden çok sayfa; QR etiketi tek görsel) ve iPhone paylaşım menüsü açılır: Yazdır (AirPrint), Dosyalara Kaydet, WhatsApp vb. Görsel hazırlama için html2canvas kütüphanesi internetten (jsDelivr) yüklenir.
+- Raporlar sayfası da ortak yazdırma penceresini kullanır (masaüstünde otomatik yazdırma korunur).
+- Barkod etiketi sayfası kendi (taranabilir barkodlu) paylaşım düğmesini kullanır (v35).
+- Masaüstü ve Android'de değişiklik yoktur: "Yazdır" aynen çalışır, Paylaş düğmesi gizlidir.

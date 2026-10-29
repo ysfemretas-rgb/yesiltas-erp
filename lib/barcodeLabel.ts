@@ -60,7 +60,7 @@ export function printBarcodeLabels(products: LabelProduct[], copiesPerProduct = 
   .btn-print { background: #059669; color: #fff; } .btn-close { background: #e2e8f0; color: #334155; } .btn-share { background: #2563eb; color: #fff; }
   @media print { .label { border-color: #064e3b; } .no-print { display: none !important; } }
 </style></head><body>
-  ${toolbarHtml('<button id="btnShare" class="btn-share" style="display:none" onclick="shareLabels()">📤 Paylaş / Yazdır</button>')}
+  ${toolbarHtml('<button id="btnShare" class="btn-share" style="display:none" onclick="shareLabels()">📤 Paylaş / Yazdır</button>', false)}
   <div id="iosHint" class="no-print" style="display:none; margin: 0 0 10px; padding: 8px 10px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; font-size: 12px; color: #78350f;">
     iPhone'da "Yazdır" düğmesi çalışmayabilir. <b>📤 Paylaş / Yazdır</b>'a basın, açılan menüden <b>Yazdır</b>'ı seçin (A4 sayfaya etiketler dizili hazırlanır; bir etiket yazıcı uygulamanız varsa görseli ona da gönderebilirsiniz).
   </div>

@@ -88,13 +88,79 @@ export function docStyles(extra = ""): string {
   ${extra}`
 }
 
-export function toolbarHtml(extraButtons: string = ""): string {
+export function toolbarHtml(extraButtons: string = "", genericShare: boolean = true): string {
+  const share = genericShare
+    ? `<button id="btnShareDoc" style="display:none;background:#2563eb;color:#fff" onclick="shareDoc()">📤 Paylaş / Yazdır</button>`
+    : ""
+  const hint = genericShare
+    ? `<div id="iosDocHint" class="no-print" style="display:none;margin:0 0 10px;padding:8px 10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:12px;color:#78350f">iPhone'da "Yazdır" düğmesi çalışmayabilir. <b>📤 Paylaş / Yazdır</b>'a basın, açılan menüden <b>Yazdır</b>'ı seçin (belge görsel olarak hazırlanır).</div>`
+    : ""
   return `<div class="toolbar no-print">
     <button class="btn-print" onclick="window.print()">🖨️ Yazdır</button>
-    ${extraButtons}
+    ${share}${extraButtons}
     <button class="btn-close" onclick="window.close(); setTimeout(function(){ history.back(); }, 150);">✕ Kapat</button>
-  </div>`
+  </div>${hint}`
 }
+
+// iPhone ana ekran uygulamasında window.print() çalışmaz. Bu betik belgeyi (html2canvas ile) A4 görsel(ler)e çevirip
+// iPhone paylaşım menüsüne gönderir (Yazdır / Dosyalara Kaydet / başka uygulama). Belgede data-share-target="1" olan bir
+// öğe varsa (küçük etiketler) sadece o öğe, sayfa boşluğu eklenmeden tek görsel olarak paylaşılır.
+// Masaüstü ve Android'de düğme gizli kalır, normal "Yazdır" çalışır.
+export const DOC_SHARE_SCRIPT = `
+(function () {
+  var ua = navigator.userAgent || "";
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  var b = document.getElementById("btnShareDoc"), h = document.getElementById("iosDocHint");
+  if (isIOS && b) { b.style.display = ""; if (h) h.style.display = ""; }
+})();
+function loadScriptOnce(src) {
+  return new Promise(function (res, rej) {
+    var s = document.createElement("script"); s.src = src; s.onload = res;
+    s.onerror = function () { rej(new Error("Bileşen yüklenemedi; internet bağlantınızı kontrol edin.")); };
+    document.head.appendChild(s);
+  });
+}
+function canvasToBlob(cv) { return new Promise(function (res) { cv.toBlob(function (b) { res(b); }, "image/png"); }); }
+async function shareDoc() {
+  var btn = document.getElementById("btnShareDoc"), old = btn ? btn.textContent : "";
+  if (btn) { btn.textContent = "Hazırlanıyor..."; btn.disabled = true; }
+  try {
+    if (!window.html2canvas) await loadScriptOnce("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+    var target = document.querySelector("[data-share-target]");
+    var blobs = [];
+    if (target) {
+      var one = await html2canvas(target, { scale: 4, backgroundColor: "#ffffff", useCORS: true });
+      blobs.push(await canvasToBlob(one));
+    } else {
+      var W = 794;
+      var full = await html2canvas(document.body, {
+        scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: W, width: W,
+        ignoreElements: function (el) { return el.classList && el.classList.contains("no-print"); }
+      });
+      var pageH = Math.round(full.width * 297 / 210);
+      for (var y = 0; y < full.height; y += pageH) {
+        var pg = document.createElement("canvas"); pg.width = full.width; pg.height = pageH;
+        var g = pg.getContext("2d"); g.fillStyle = "#ffffff"; g.fillRect(0, 0, pg.width, pg.height);
+        g.drawImage(full, 0, y, full.width, Math.min(pageH, full.height - y), 0, 0, full.width, Math.min(pageH, full.height - y));
+        blobs.push(await canvasToBlob(pg));
+      }
+    }
+    var name = (document.title || "belge").replace(/[^A-Za-z0-9ÇĞİÖŞÜçğıöşü _-]/g, "").trim().replace(/\\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "belge";
+    var files = blobs.map(function (bl, i) { return new File([bl], name + (blobs.length > 1 ? "-" + (i + 1) : "") + ".png", { type: "image/png" }); });
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      await navigator.share({ files: files, title: document.title || "Belge" });
+    } else {
+      window.location.href = URL.createObjectURL(blobs[0]);
+      alert("Görsele uzun basıp Paylaş > Yazdır'ı seçebilirsiniz.");
+    }
+  } catch (e) {
+    if (!(e && e.name === "AbortError")) alert("Paylaşım hazırlanamadı: " + (e && e.message ? e.message : e));
+  } finally {
+    if (btn) { btn.textContent = old; btn.disabled = false; }
+  }
+}
+`
 
 // Antet: logo solda, firma bilgileri yanında
 export function letterheadHtml(company: CompanyInfo = readCompany()): string {
@@ -122,9 +188,10 @@ export function openPrintWindow(html: string, width = 800, height = 900, autoPri
     alert("Yazdırma penceresi açılamadı. Tarayıcınızın açılır pencere engelleyicisini kontrol edin.")
     return false
   }
+  const shareJs = html.includes('id="btnShareDoc"') ? `<script>${DOC_SHARE_SCRIPT}</script>` : ""
   const withAuto = html.replace(
     "</body>",
-    `<script>window.addEventListener("load", function () { var m = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); if (!m) { setTimeout(function () { window.print(); }, ${autoPrintDelay}); } });</script></body>`
+    () => `<script>window.addEventListener("load", function () { var m = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); if (!m) { setTimeout(function () { window.print(); }, ${autoPrintDelay}); } });</script>${shareJs}</body>`
   )
   win.document.write(withAuto)
   win.document.close()
