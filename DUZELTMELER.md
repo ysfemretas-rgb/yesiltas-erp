@@ -215,3 +215,8 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 - **Müşteri telefonu/adı düzeltilince satış ve tamir kayıtları da güncellenir:** Satışta müşterinin adı ve telefonu kopya olarak saklandığı için, yanlış yazılıp sonradan düzeltilen numara satış kaydında ve WhatsApp'ta eski kalıyordu. Artık müşteri kaydedilince (değişiklik olmasa da "Güncelle"ye basmak yeterli) o müşteriye bağlı bütün satışlardaki ad/telefon yenilenir; müşteriye bağlı olmayan eski satışlar eski ad+telefon eşleşmesiyle bulunur. Tamirlerde ad güncellenir, telefon ise eski numarayla aynıysa güncellenir.
 - **Satışlardan WhatsApp:** Müşteri kayıtlıysa mesaj GÜNCEL müşteri telefonuna gider (satıştaki kopya yalnızca müşteri bulunamazsa kullanılır).
 - **Müşteri Düzenle penceresine Şehir, Adres ve Notlar alanları eklendi** (adres değiştirilemiyordu); pencere küçük ekranda kaydırılabilir.
+
+## v35 — iPhone'da barkod etiketi yazdırma
+- **Sorun:** Envanter > barkod etiketi penceresindeki "Yazdır" düğmesi iPhone ana ekran uygulamasında hiçbir şey yapmıyordu (iPhone bu tür pencerelerde `window.print()` komutunu desteklemiyor).
+- **Çözüm:** iPhone'da etiket penceresinde **"📤 Paylaş / Yazdır"** düğmesi çıkar. Etiketler (50x31 mm, 3 sütun, A4 sayfaya dizili; 24'ü aşarsa birden çok sayfa) 300 dpi görsel olarak hazırlanır, barkod JsBarcode ile taranabilir Code128 çizilir ve iPhone paylaşım menüsü açılır; oradan **Yazdır** (AirPrint), Dosyalara Kaydet veya etiket yazıcı uygulaması seçilir. Masaüstü ve Android'de değişiklik yoktur ("Yazdır" aynen çalışır).
+- Not: Fiş, Tamir Formu gibi diğer belgelerin "Yazdır" düğmesi de aynı iPhone kısıtına takılabilir; bunlar için ayrıca bakılacak.

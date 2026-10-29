@@ -88,9 +88,10 @@ export function docStyles(extra = ""): string {
   ${extra}`
 }
 
-export function toolbarHtml(): string {
+export function toolbarHtml(extraButtons: string = ""): string {
   return `<div class="toolbar no-print">
     <button class="btn-print" onclick="window.print()">🖨️ Yazdır</button>
+    ${extraButtons}
     <button class="btn-close" onclick="window.close(); setTimeout(function(){ history.back(); }, 150);">✕ Kapat</button>
   </div>`
 }
