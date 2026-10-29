@@ -1,5 +1,6 @@
 "use client"
 
+import { SettleDialog } from "@/components/finance/SettleDialog"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
@@ -87,6 +88,7 @@ export default function CustomersPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [settleOpen, setSettleOpen] = useState(false)
   const [isDebtOpen, setIsDebtOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false)
@@ -1226,11 +1228,19 @@ export default function CustomersPage() {
             .map(s => ({ label: `Satış: ${(s.items || []).map(i => i.name).join(", ")}`, amount: s.remaining, code: s.saleCode, kind: "sale" as const, id: s.id })),
         ] : []}
         onCollect={handleCollect}
+        onSettle={() => setSettleOpen(true)}
         onPayDebt={(debtId) => handlePayDebt(selectedCustomer!.id, debtId)}
         newDebt={newDebt}
         onNewDebtChange={setNewDebt}
         onAddDebt={handleAddDebt}
         formatCurrency={formatCurrency}
+      />
+      <SettleDialog
+        open={settleOpen}
+        kind="customer"
+        presetCustomerId={selectedCustomer?.id}
+        onClose={() => setSettleOpen(false)}
+        onDone={(msg) => { showToast(msg, "success"); loadAll() }}
       />
     </div>
   )

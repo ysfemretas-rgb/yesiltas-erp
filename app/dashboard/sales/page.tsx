@@ -1,5 +1,6 @@
 "use client"
 
+import { lineNetUnitPrice, discountAmount } from "@/lib/settlementMath"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
@@ -79,6 +80,7 @@ export default function SalesPage() {
   const [customerSearch, setCustomerSearch] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const [saleDiscount, setSaleDiscount] = useState("")
+  const [saleDiscountType, setSaleDiscountType] = useState<"amt" | "pct">("amt")
   const [editSaleDiscount, setEditSaleDiscount] = useState("")
   const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [minMarginPercent, setMinMarginPercent] = useState(0)
@@ -217,8 +219,12 @@ export default function SalesPage() {
   const cartSubtotal = useMemo(() => {
     return cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
   }, [cart])
-  const cartTotal = Math.max(0, cartSubtotal - (Number(saleDiscount) || 0))
-  const maxCartDiscount = cartSubtotal * maxDiscountPercent / 100
+  // Liste fiyatlarıyla toplam: satır iskontosu bu toplamdan düşer. Genel iskonto ₺ ya da % girilebilir.
+  const cartListSubtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.listPrice ?? item.price ?? 0) * (item.quantity || 0), 0), [cart])
+  const saleDiscountAmount = discountAmount(saleDiscountType, Number(saleDiscount) || 0, cartSubtotal)
+  const cartTotal = Math.max(0, cartSubtotal - saleDiscountAmount)
+  const maxCartDiscount = cartListSubtotal * maxDiscountPercent / 100
+  const cartTotalDiscount = Math.max(0, cartListSubtotal - cartSubtotal) + saleDiscountAmount // satır + genel iskonto
 
   const editCartSubtotal = useMemo(() => {
     return editCart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
@@ -381,7 +387,7 @@ export default function SalesPage() {
         item.productId === product.id ? { ...item, quantity: nextQty } : item
       ))
     } else {
-      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, purchasePrice: purchaseInTRY(product), quantity }])
+      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, listPrice: product.salePrice, purchasePrice: purchaseInTRY(product), quantity }])
     }
   }
 
@@ -417,9 +423,17 @@ export default function SalesPage() {
     }
     const product = products.find(p => p.id === productId)
     if (product && quantity > product.quantity) return
-    setCart(cart.map(item =>
-      item.productId === productId ? { ...item, quantity } : item
-    ))
+    setCart(cart.map(item => item.productId === productId ? repriceItem({ ...item, quantity }) : item))
+  }
+
+  // Satır iskontosu: yüzde = liste fiyatın %'si, ₺ = bu satırın TOPLAMINDAN düşülen tutar → net birim fiyat
+  const repriceItem = (item: SaleItem): SaleItem => {
+    const list = item.listPrice ?? item.price
+    if (!item.disc || !(Number(item.disc.value) > 0)) return { ...item, price: list, disc: undefined }
+    return { ...item, listPrice: list, price: lineNetUnitPrice(list, item.quantity, item.disc.type, Number(item.disc.value)) }
+  }
+  const setLineDiscount = (productId: string, type: "pct" | "amt", value: string) => {
+    setCart(cart.map(item => item.productId === productId ? repriceItem({ ...item, disc: value === "" ? undefined : { type, value: Number(value) || 0 } }) : item))
   }
 
   const updateEditQuantity = (productId: string, quantity: number) => {
@@ -524,8 +538,8 @@ export default function SalesPage() {
     const customer = customers.find(c => c.id === selectedCustomer)
     if (!customer) return
 
-    if (Number(saleDiscount) > maxCartDiscount) {
-      showToast(`İskonto izin verilen maksimum %${maxDiscountPercent}'i (${formatCurrency(maxCartDiscount)}) aşıyor.`, "error")
+    if (cartTotalDiscount > maxCartDiscount + 0.005) {
+      showToast(`Toplam iskonto (${formatCurrency(cartTotalDiscount)}) izin verilen maksimum %${maxDiscountPercent}'i (${formatCurrency(maxCartDiscount)}) aşıyor.`, "error")
       return
     }
 
@@ -617,7 +631,7 @@ export default function SalesPage() {
         customerPhone: phone,
         items: [...cart],
         totalAmount: cartTotal,
-        discount: Number(saleDiscount) || 0,
+        discount: saleDiscountAmount,
         paid: paid,
         remaining: remaining,
         paymentMethod,
@@ -699,6 +713,7 @@ export default function SalesPage() {
     setPaymentMethod("cash")
     setPaidAmount("")
     setSaleDiscount("")
+    setSaleDiscountType("amt")
     setSplitCash(""); setSplitCard(""); setSplitTransfer("")
     setInstDown(""); setInstCount("3"); setInstFirstDate("")
     setTradeName(""); setTradeImei(""); setTradeValue("")
@@ -1377,7 +1392,20 @@ Bu işlem geri alınamaz!`)) return
                     <div key={item.productId} className="flex items-center justify-between p-2 bg-slate-800 rounded-lg">
                       <div>
                         <div className="text-sm text-white">{item.name}</div>
-                        <div className="text-xs text-slate-400">{formatCurrency(item.price)} x {item.quantity}</div>
+                        <div className="text-xs text-slate-400">{item.listPrice && item.listPrice > item.price + 0.004 ? <span><s className="text-slate-500">{formatCurrency(item.listPrice)}</s> → <b className="text-emerald-400">{formatCurrency(item.price)}</b></span> : formatCurrency(item.price)} x {item.quantity}</div>
+                        <div className="flex items-center gap-1 mt-1">
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            value={item.disc ? item.disc.value : ""}
+                            onChange={(e) => setLineDiscount(item.productId, item.disc?.type || "pct", e.target.value)}
+                            placeholder="Ürün iskontosu"
+                            className="h-7 w-28 bg-slate-900 border-slate-700 text-white text-xs"
+                          />
+                          {(["pct", "amt"] as const).map((t) => (
+                            <button key={t} type="button" onClick={() => setLineDiscount(item.productId, t, item.disc ? String(item.disc.value) : "")} className={`h-7 px-2 rounded text-xs border ${(item.disc?.type || "pct") === t ? "bg-emerald-600 border-emerald-600 text-white" : "bg-slate-900 border-slate-700 text-slate-300"}`}>{t === "pct" ? "%" : "₺"}</button>
+                          ))}
+                        </div>
                         <Input
                           value={item.imei || ""}
                           onChange={(e) => setCart(cart.map(c => c.productId === item.productId ? { ...c, imei: e.target.value } : c))}
@@ -1411,19 +1439,28 @@ Bu işlem geri alınamaz!`)) return
                     <span>{formatCurrency(cartSubtotal)}</span>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">İskonto (TL)</Label>
-                    <Input
-                      type="number"
-                      value={saleDiscount}
-                      onChange={(e) => setSaleDiscount(e.target.value)}
-                      className="bg-slate-800 border-slate-600 text-white"
-                      placeholder="0"
-                    />
-                    {cartSubtotal > 0 && (
-                      <p className="text-xs text-slate-500">Maks. {formatCurrency(maxCartDiscount)} (%{maxDiscountPercent})</p>
+                    <Label className="text-slate-300 text-xs">Genel iskonto (satırlara ek)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={saleDiscount}
+                        onChange={(e) => setSaleDiscount(e.target.value)}
+                        className="bg-slate-800 border-slate-600 text-white"
+                        placeholder="0"
+                      />
+                      <div className="flex rounded-md overflow-hidden border border-slate-600 shrink-0">
+                        {(["amt", "pct"] as const).map((t) => (
+                          <button key={t} type="button" onClick={() => setSaleDiscountType(t)} className={`px-3 text-sm ${saleDiscountType === t ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300"}`}>{t === "amt" ? "₺" : "%"}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {saleDiscountType === "pct" && saleDiscountAmount > 0 && <p className="text-xs text-slate-500">%{saleDiscount} = {formatCurrency(saleDiscountAmount)}</p>}
+                    {cartListSubtotal > 0 && (
+                      <p className="text-xs text-slate-500">Toplam iskonto {formatCurrency(cartTotalDiscount)} • Maks. {formatCurrency(maxCartDiscount)} (%{maxDiscountPercent})</p>
                     )}
                   </div>
-                  {Number(saleDiscount) > maxCartDiscount && (
+                  {cartTotalDiscount > maxCartDiscount + 0.005 && (
                     <p className="text-xs text-red-400">⚠️ İzin verilen maksimum %{maxDiscountPercent}'i aşıyor, kaydedilemez.</p>
                   )}
                   <div className="flex justify-between text-lg font-bold text-white">

@@ -22,6 +22,7 @@ import { fetchTasks } from "@/lib/tasks"
 import { fetchCashCounts } from "@/lib/cashCounts"
 import { fetchScheduledPayments } from "@/lib/scheduledPayments"
 import { fetchActivityLog } from "@/lib/activityLog"
+import { fetchSettlementDiscounts } from "@/lib/settlement"
 
 type CheckResult = {
   label: string
@@ -56,6 +57,7 @@ const MODULES: { label: string; run: () => Promise<any[]> }[] = [
       return data || []
     },
   },
+  { label: "İndirim Kayıtları", run: fetchSettlementDiscounts },
   { label: "Aktivite Logu", run: () => fetchActivityLog(100) },
 ]
 

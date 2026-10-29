@@ -6,7 +6,7 @@
 with checks as (
   -- Tablolar
   select 'tablo: ' || v.t as item, to_regclass('public.' || v.t) is not null as ok
-  from (values ('purchases'),('cash_counts'),('scheduled_payments'),('stock_movements'),('supplier_payments'),('device_purchases'),('app_settings'),('activity_log'),('profiles')) as v(t)
+  from (values ('purchases'),('cash_counts'),('scheduled_payments'),('stock_movements'),('supplier_payments'),('device_purchases'),('app_settings'),('activity_log'),('settlement_discounts'),('profiles')) as v(t)
 
   union all
   -- Sütunlar

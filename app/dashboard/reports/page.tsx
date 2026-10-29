@@ -1,5 +1,6 @@
 "use client"
 
+import { fetchSettlementDiscounts, SettlementDiscount } from "@/lib/settlement"
 import { toolbarHtml, openPrintWindow } from "@/lib/printTheme"
 import { netTotals } from "@/lib/financeTotals"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
@@ -127,6 +128,7 @@ export default function ReportsPage() {
   const [statKey, setStatKey] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  const [discountsData, setDiscountsData] = useState<SettlementDiscount[]>([])
   const [dateRange, setDateRange] = useState({ start: "", end: "" })
   const [financeData, setFinanceData] = useState<FinanceRecord[]>([])
   const [repairsData, setRepairsData] = useState<RepairRecord[]>([])
@@ -145,6 +147,7 @@ export default function ReportsPage() {
     })
 
     // Supabase'den verileri çek
+    fetchSettlementDiscounts().then(setDiscountsData).catch(() => undefined) // SQL v12 çalıştırılmadıysa sessizce atlanır
     Promise.all([fetchTransactions(), fetchRepairs(), fetchSales(), fetchCustomers()])
       .then(([finance, repairs, sales, customers]) => {
         const validFinance: FinanceRecord[] = finance
@@ -242,6 +245,7 @@ export default function ReportsPage() {
   const filteredFinance = filterByDate(financeData)
   const filteredRepairs = filterByDate(repairsData)
   const filteredSales = filterByDate(salesData)
+  const filteredDiscounts = filterByDate(discountsData)
 
   // Genel istatistikler
   // İptal/iade ters kayıtları brüt gelir-gideri şişirmez (net aynı kalır)
@@ -296,10 +300,15 @@ export default function ReportsPage() {
     const repairRevenue = filteredRepairs.reduce((sum, x) => sum + (x.gift ? 0 : x.price), 0)
     const repairParts = filteredRepairs.reduce((sum, x) => sum + x.partsCost, 0)
     const repairProfit = filteredRepairs.reduce((sum, x) => sum + (x.gift ? -x.partsCost : x.price - x.partsCost), 0)
+    // Borç kapatırken alınan/verilen indirimler (settlement_discounts). Tedarikçiden alınan indirim, mal maliyetine yansımadığı
+    // için kâra ayrıca EKLENİR; müşteriye verilen indirim satış/tamir tutarından zaten düşüldüğü için sadece bilgi olarak gösterilir.
+    const supplierDiscount = filteredDiscounts.filter(d => d.kind === "supplier").reduce((sum, d) => sum + d.amount, 0)
+    const customerDiscount = filteredDiscounts.filter(d => d.kind === "customer").reduce((sum, d) => sum + d.amount, 0)
     return {
+      supplierDiscount: r2(supplierDiscount), customerDiscount: r2(customerDiscount),
       salesRevenue: r2(salesRevenue), salesCost: r2(salesCost), salesExtra: r2(salesExtra), salesProfit: r2(salesProfit),
       repairRevenue: r2(repairRevenue), repairParts: r2(repairParts), repairProfit: r2(repairProfit),
-      total: r2(salesProfit + repairProfit),
+      total: r2(salesProfit + repairProfit + supplierDiscount),
     }
   })()
   const totalCustomers = customersData.length
@@ -767,7 +776,13 @@ export default function ReportsPage() {
               <div className="space-y-1 md:border-l md:border-slate-700 md:pl-4">
                 <p className="text-slate-400 font-medium">Toplam</p>
                 <p className={`text-2xl font-bold ${realProfit.total >= 0 ? "text-emerald-400" : "text-red-400"}`}>₺{realProfit.total.toLocaleString("tr-TR")}</p>
-                <p className="text-xs text-slate-500">Satış kârı + tamir kârı. Kira, maaş gibi sabit giderler dahil değildir. Eski satışlarda maliyet kaydı yoksa kâr olduğundan yüksek görünebilir.</p>
+                {(realProfit.supplierDiscount > 0 || realProfit.customerDiscount > 0) && (
+                  <div className="text-xs space-y-0.5">
+                    {realProfit.supplierDiscount > 0 && <div className="flex justify-between"><span className="text-slate-400">Tedarikçiden alınan indirim</span><span className="text-emerald-300">+₺{realProfit.supplierDiscount.toLocaleString("tr-TR")}</span></div>}
+                    {realProfit.customerDiscount > 0 && <div className="flex justify-between"><span className="text-slate-500">Müşteriye verilen tahsilat indirimi (cirodan zaten düşük)</span><span className="text-slate-400">₺{realProfit.customerDiscount.toLocaleString("tr-TR")}</span></div>}
+                  </div>
+                )}
+                <p className="text-xs text-slate-500">Satış kârı + tamir kârı + alınan indirim. Kira, maaş gibi sabit giderler dahil değildir. Eski satışlarda maliyet kaydı yoksa kâr olduğundan yüksek görünebilir.</p>
               </div>
             </div>
           </CardContent>

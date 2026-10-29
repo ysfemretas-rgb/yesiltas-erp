@@ -9,6 +9,8 @@ export interface SaleItem {
   purchasePrice?: number
   quantity: number
   imei?: string // ikinci el telefon / seri no (opsiyonel)
+  listPrice?: number // iskontosuz liste (satış) fiyatı; satır iskontosu varsa price bundan düşüktür
+  disc?: { type: "pct" | "amt"; value: number } // girilen satır iskontosu (amt = satırın toplamından düşülen tutar)
 }
 
 export interface SalePayment {

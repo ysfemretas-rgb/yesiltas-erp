@@ -7,7 +7,7 @@ interface ReceiptSale {
   customerName: string
   customerCode?: string
   customerPhone?: string
-  items: { name: string; price: number; quantity: number; imei?: string }[]
+  items: { name: string; price: number; quantity: number; imei?: string; listPrice?: number }[]
   totalAmount: number
   discount: number
   paid: number
@@ -40,7 +40,7 @@ export function printSaleReceipt(sale: ReceiptSale) {
       <td style="width:6%">${idx + 1}</td>
       <td>${esc(i.name)}${i.imei ? `<div style="font-size:9.5px;color:#6b7280">IMEI / Seri No: ${esc(i.imei)}</div>` : ""}</td>
       <td style="text-align:center;width:10%">${i.quantity}</td>
-      <td style="text-align:right;width:18%">${money(i.price)}</td>
+      <td style="text-align:right;width:18%">${i.listPrice && i.listPrice > i.price + 0.004 ? `<s style="color:#94a3b8;font-size:0.85em">${money(i.listPrice)}</s><br/>` : ""}${money(i.price)}</td>
       <td style="text-align:right;width:18%">${money(i.price * i.quantity)}</td></tr>`).join("")
 
   const paymentBreakdown = (sale.payments || []).length > 0

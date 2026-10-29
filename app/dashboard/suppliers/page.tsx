@@ -1,5 +1,7 @@
 "use client"
 
+import { SettleDialog } from "@/components/finance/SettleDialog"
+import { supplierDebtInfo } from "@/lib/supplierDebt"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
@@ -40,6 +42,7 @@ export default function SuppliersPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [productsOf, setProductsOf] = useState<Supplier | null>(null)
   const [extraCats, setExtraCats] = useState<string[]>([])
+  const [settleSupplier, setSettleSupplier] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -87,30 +90,7 @@ export default function SuppliersPage() {
   // Borç artık "kalan stok" değil, bugüne kadar ALINAN toplam adet üzerinden hesaplanır
   // (ürün satıldıkça borç kendiliğinden azalmaz). Ürün formundaki ödemeler ve
   // "Ödeme Yap" ile girilen ödemeler borçtan düşülür.
-  const supplierStats = (supplierName: string) => {
-    const items = inventory.filter((i) => i.supplier === supplierName)
-    const orderCount = items.length
-    // Alışlar kayıtlarıyla zaten izlenen adetler eski ürün-bazlı borç hesabında tekrar sayılmaz
-    const coveredQty: Record<string, number> = {}
-    // (hangi tedarikçiden alınmış olursa olsun: o adetler zaten Alışlar kayıtlarında borç olarak izlenir)
-    purchases.filter(p => p.kind === "supplier").forEach(p => {
-      p.items.forEach(l => { if (l.inventoryId) coveredQty[l.inventoryId] = (coveredQty[l.inventoryId] || 0) + l.quantity })
-    })
-    const purchasedTotal = items.reduce((sum, i) => {
-      const priceInTRY = i.purchaseCurrency === "USD" ? i.purchasePrice * rates.USD
-        : i.purchaseCurrency === "EUR" ? i.purchasePrice * rates.EUR
-        : i.purchasePrice
-      const total = priceInTRY * legacyOutstandingQty(i.purchasedQuantity ?? i.quantity, coveredQty[i.id] || 0)
-      const paid = i.paymentStatus === "paid" ? total : i.paymentStatus === "partial" ? (i.paidAmount || 0) : 0
-      return sum + Math.max(0, total - paid)
-    }, 0)
-    const extraPaid = payments.filter(p => p.supplierName === supplierName).reduce((sum, p) => sum + p.amount, 0)
-    // Alışlar sayfasından yapılan alışların ödenmemiş kalanı da borca eklenir
-    const supplierPurchases = purchases.filter(p => p.kind === "supplier" && p.partyName === supplierName)
-    const purchasesRemaining = supplierPurchases.reduce((sum, p) => sum + Math.max(0, p.total - p.paid), 0)
-    const net = supplierNetDebt(purchasedTotal, purchasesRemaining, extraPaid)
-    return { orderCount: orderCount + supplierPurchases.length, debt: Math.max(0, net), credit: Math.max(0, -net) }
-  }
+  const supplierStats = (supplierName: string) => supplierDebtInfo(supplierName, inventory, purchases, payments, rates)
 
   const handleSupplierPayment = async (supplier: Supplier) => {
     const stats = supplierStats(supplier.name)
@@ -586,7 +566,7 @@ export default function SuppliersPage() {
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       {stats.debt > 0 && (
-                        <Button size="sm" variant="outline" className="border-amber-600 text-amber-400 hover:bg-amber-900/30" onClick={() => handleSupplierPayment(supplier)}>
+                        <Button size="sm" variant="outline" className="border-amber-600 text-amber-400 hover:bg-amber-900/30" onClick={() => setSettleSupplier(supplier.name)}>
                           <CreditCard className="h-3 w-3 mr-1" />Ödeme Yap
                         </Button>
                       )}
@@ -726,6 +706,18 @@ export default function SuppliersPage() {
           </Dialog>
         )}
       </div>
+      <SettleDialog
+        open={settleSupplier !== null}
+        kind="supplier"
+        presetSupplierName={settleSupplier || undefined}
+        onClose={() => setSettleSupplier(null)}
+        onDone={async (msg) => {
+          showToast(msg, "success")
+          const [pay, pur] = await Promise.all([fetchSupplierPayments(), fetchPurchases()])
+          setPayments(pay)
+          setPurchases(pur)
+        }}
+      />
       <SupplierProductsDialog supplier={productsOf} inventory={inventory} onClose={() => setProductsOf(null)} />
     </div>
   )

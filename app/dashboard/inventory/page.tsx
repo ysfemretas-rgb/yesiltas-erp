@@ -31,6 +31,7 @@ import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
 import { StockMoveDialog } from "@/components/inventory/StockMoveDialog"
+import { NewPurchaseDialog } from "@/components/purchases/NewPurchaseDialog"
 import { recordStockPurchase, fetchPurchases, Purchase, findPurchaseLinesAtPrice, correctPurchasePrices, createPurchase, reduceStockPurchase } from "@/lib/purchases"
 import { rateFor, unitCostTRY } from "@/lib/purchaseMath"
 import { diffFields } from "@/lib/diff"
@@ -104,6 +105,8 @@ export default function InventoryPage() {
   const [quickSupplierPhone, setQuickSupplierPhone] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkSupplier, setBulkSupplier] = useState("")
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
@@ -785,8 +788,11 @@ export default function InventoryPage() {
           <Button onClick={exportInventory} variant="outline" className="border-slate-600 text-slate-300">
             <Download className="mr-2 h-4 w-4" />Excel'e Aktar
           </Button>
+          <Button onClick={() => { setBulkSupplier(""); setBulkOpen(true) }} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            📥 Toplu Alış
+          </Button>
           <Button onClick={() => { window.location.href = "/dashboard/purchases" }} variant="outline" className="border-slate-600 text-slate-300">
-            <Smartphone className="mr-2 h-4 w-4" />Alış Yap
+            <Smartphone className="mr-2 h-4 w-4" />Alışlar
           </Button>
           <Button onClick={() => setCountOpen(true)} variant="outline" className="border-slate-600 text-slate-300">
             <ClipboardList className="mr-2 h-4 w-4" />Sayım
@@ -1040,6 +1046,15 @@ export default function InventoryPage() {
                 )}
                 {renderQuickSupplier("new")}
               </div>
+              {newItem.supplier && (
+                <button
+                  type="button"
+                  onClick={() => { setBulkSupplier(newItem.supplier || ""); setIsDialogOpen(false); setBulkOpen(true) }}
+                  className="w-full rounded-lg border border-emerald-600 bg-emerald-600/10 text-emerald-300 p-3 text-sm text-left hover:bg-emerald-600/20"
+                >
+                  📥 <b>{newItem.supplier}</b>'den birden çok ürün mü alıyorsunuz? <b>Toplu Alış</b> ekranını açın: tek kayıtta çok ürün, ürün bazlı ve genel iskonto, listeyi yapıştırma.
+                </button>
+              )}
               {newItem.supplier && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Tedarikçiye Ödeme Durumu</label>
@@ -1839,6 +1854,20 @@ export default function InventoryPage() {
           )}
         </DialogContent>
       </Dialog>
+      <NewPurchaseDialog
+        kind="supplier"
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        initialPartyName={bulkSupplier}
+        inventory={inventory}
+        suppliers={suppliers}
+        customers={[]}
+        rates={rates}
+        isFallback={isFallback}
+        onSupplierAdded={(s) => setSuppliers((prev) => [...prev, s])}
+        onCreated={(purchase) => { fetchInventory().then(setInventory).catch(() => undefined); showToast(`Alış kaydedildi (${purchase.code}).`, "success") }}
+        notify={(m, t) => showToast(m, t)}
+      />
     </div>
   )
 }

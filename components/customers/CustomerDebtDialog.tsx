@@ -35,6 +35,7 @@ interface CustomerDebtDialogProps {
   debts: Debt[]
   relatedDebts?: RelatedDebtItem[]
   onCollect?: (item: { kind: "sale" | "repair"; id: string; amount: number; label: string }) => void
+  onSettle?: () => void // "İndirimle kapat / toplu tahsilat" penceresini açar
   onPayDebt: (debtId: string) => void
   newDebt: NewDebtInput
   onNewDebtChange: (debt: NewDebtInput) => void
@@ -49,6 +50,7 @@ export function CustomerDebtDialog({
   debts,
   relatedDebts = [],
   onCollect,
+  onSettle,
   onPayDebt,
   newDebt,
   onNewDebtChange,
@@ -62,6 +64,11 @@ export function CustomerDebtDialog({
           <DialogTitle className="text-white">Borç Yönetimi - {customerName}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          {onSettle && (
+            <button type="button" onClick={onSettle} className="w-full rounded-lg border border-emerald-600 bg-emerald-600/10 text-emerald-300 py-2 text-sm font-semibold hover:bg-emerald-600/20">
+              💰 İndirimle Kapat / Toplu Tahsilat
+            </button>
+          )}
           {relatedDebts.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300">Satış / Tamirden Gelen Bakiyeler</label>

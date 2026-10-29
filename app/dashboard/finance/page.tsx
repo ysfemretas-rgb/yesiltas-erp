@@ -33,6 +33,7 @@ import { netTotals } from "@/lib/financeTotals"
 import { diffFields } from "@/lib/diff"
 import { logChange } from "@/lib/activityLog"
 import { ReconcileDialog } from "@/components/finance/ReconcileDialog"
+import { SettleDialog } from "@/components/finance/SettleDialog"
 import { CashCountDialog } from "@/components/finance/CashCountDialog"
 import { PaymentCalendarDialog } from "@/components/finance/PaymentCalendarDialog"
 import { Transaction, fetchTransactions, createTransaction, updateTransaction, deleteTransaction } from "@/lib/finance"
@@ -55,6 +56,7 @@ export default function FinancePage() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [listPage, setListPage] = useState(1)
+  const [settleKind, setSettleKind] = useState<"customer" | "supplier" | null>(null)
   const [reconcileOpen, setReconcileOpen] = useState(false)
   const [cashOpen, setCashOpen] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
@@ -359,10 +361,13 @@ export default function FinancePage() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
+        <Button onClick={() => setSettleKind("customer")} className="bg-emerald-600 hover:bg-emerald-700 text-white">💰 Müşteriden Tahsilat</Button>
+        <Button onClick={() => setSettleKind("supplier")} className="bg-amber-600 hover:bg-amber-700 text-white">🏭 Tedarikçiye Ödeme</Button>
         <Button variant="outline" onClick={() => setReconcileOpen(true)} className="border-slate-600 text-slate-300 hover:text-white">🔎 Mutabakat</Button>
         <Button variant="outline" onClick={() => setCashOpen(true)} className="border-slate-600 text-slate-300 hover:text-white">💵 Kasa Sayımı</Button>
         <Button variant="outline" onClick={() => setCalendarOpen(true)} className="border-slate-600 text-slate-300 hover:text-white">📅 Ödeme Takvimi</Button>
       </div>
+      <SettleDialog open={settleKind !== null} kind={settleKind || "customer"} onClose={() => setSettleKind(null)} onDone={(msg) => { showToast(msg, "success"); fetchTransactions().then(setTransactions).catch(() => undefined) }} />
       <ReconcileDialog open={reconcileOpen} onOpenChange={setReconcileOpen} notify={showToast} onChanged={() => fetchTransactions().then(setTransactions).catch(() => undefined)} />
       <CashCountDialog open={cashOpen} onOpenChange={setCashOpen} transactions={transactions} notify={showToast} />
       <PaymentCalendarDialog open={calendarOpen} onOpenChange={setCalendarOpen} isManager={isManager} notify={showToast} onChanged={() => fetchTransactions().then(setTransactions).catch(() => undefined)} />

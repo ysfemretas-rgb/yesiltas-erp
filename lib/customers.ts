@@ -346,6 +346,81 @@ export async function collectBalance(
   return { paid: newPaid, remaining: newRemaining, collected }
 }
 
+const rnd2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100
+
+// Satış veya tamirin kalan bakiyesinden İNDİRİM düşer (para alınmaz, kasaya yazılmaz): satışın/tamirin toplam tutarı ve
+// iskontosu güncellenir, bağlı borç kaydı senkronlanır. Böylece ciro/kâr hesabı indirimli tutardan yapılır.
+export async function discountBalance(kind: "sale" | "repair", id: string, amount: number): Promise<{ remaining: number; discounted: number }> {
+  const table = kind === "sale" ? "sales" : "devices"
+  const selectCols = kind === "sale"
+    ? "total_price, discount, paid_amount, remaining_amount, customer_name, installment_plan"
+    : "cost, discount, paid_amount, remaining_amount, customer_name"
+  const { data: row, error } = await supabase.from(table).select(selectCols).eq("id", id).single() as { data: any; error: any }
+  if (error || !row) throw error || new Error("Kayıt bulunamadı")
+  const currentRemaining = Number(row.remaining_amount) || 0
+  if (currentRemaining <= 0) throw new Error("Bu kayıtta indirim yapılacak bakiye yok.")
+  const d = rnd2(Math.min(currentRemaining, Math.max(0, amount)))
+  if (!(d > 0)) throw new Error("İndirim tutarı geçersiz.")
+  const newRemaining = rnd2(currentRemaining - d)
+  const payload: Record<string, unknown> = { remaining_amount: newRemaining, discount: rnd2((Number(row.discount) || 0) + d) }
+  if (kind === "sale") {
+    const newTotal = rnd2((Number(row.total_price) || 0) - d)
+    payload.total_price = newTotal
+    payload.unit_price = newTotal
+    if (Array.isArray(row.installment_plan) && row.installment_plan.length > 0) payload.installment_plan = allocateInstallments(row.installment_plan, d)
+  } else {
+    payload.cost = rnd2((Number(row.cost) || 0) - d)
+  }
+  const { error: upErr } = await supabase.from(table).update(payload).eq("id", id)
+  if (upErr) throw upErr
+  const sourceType = kind === "sale" ? "sale" : "device"
+  if (newRemaining <= 0) {
+    const { data: debtRows } = await supabase.from("debts").select("id, total_amount").eq("source_type", sourceType).eq("source_id", id)
+    for (const dr of debtRows || []) await supabase.from("debts").update({ status: "Tamamlandı", paid_amount: dr.total_amount, remaining_amount: 0 }).eq("id", dr.id)
+  } else {
+    await supabase.from("debts").update({ total_amount: newRemaining, remaining_amount: newRemaining, status: "Beklemede" }).eq("source_type", sourceType).eq("source_id", id)
+  }
+  logActivity("Müşteriler", "updated", `${row.customer_name || ""} — ${d.toLocaleString("tr-TR")} TL indirim yapıldı (${kind === "sale" ? "satış" : "tamir"})`)
+  return { remaining: newRemaining, discounted: d }
+}
+
+// Satış/tamire bağlı olmayan (elle eklenmiş) borcun bir kısmını tahsil eder ve kasaya gelir yazar.
+export async function collectManualDebt(debtId: string, amount: number, customerName = ""): Promise<{ remaining: number; collected: number }> {
+  const { data: d, error } = await supabase.from("debts").select("total_amount, paid_amount, remaining_amount, description").eq("id", debtId).single()
+  if (error || !d) throw error || new Error("Borç kaydı bulunamadı")
+  const remaining = Number(d.remaining_amount) || 0
+  const collected = rnd2(Math.min(remaining, Math.max(0, amount)))
+  if (!(collected > 0)) throw new Error("Tahsil edilecek bakiye yok.")
+  const newRemaining = rnd2(remaining - collected)
+  const upd = newRemaining <= 0
+    ? { status: "Tamamlandı", paid_amount: Number(d.total_amount) || 0, remaining_amount: 0 }
+    : { paid_amount: rnd2((Number(d.paid_amount) || 0) + collected), remaining_amount: newRemaining }
+  const { error: upErr } = await supabase.from("debts").update(upd).eq("id", debtId)
+  if (upErr) throw upErr
+  try {
+    await createTransaction({ type: "income", category: "Borç Tahsilatı", amount: collected, description: `💰 Borç tahsilatı: ${customerName} - ${d.description || ""}`.trim(), date: localDateStr(), customer: customerName, source: "manual" })
+  } catch (e) {
+    console.error("Tahsilat kasaya yazılamadı:", e)
+  }
+  return { remaining: newRemaining, collected }
+}
+
+// Elle eklenmiş borçtan indirim düşer (para alınmaz).
+export async function discountManualDebt(debtId: string, amount: number): Promise<{ remaining: number; discounted: number }> {
+  const { data: d, error } = await supabase.from("debts").select("total_amount, paid_amount, remaining_amount").eq("id", debtId).single()
+  if (error || !d) throw error || new Error("Borç kaydı bulunamadı")
+  const remaining = Number(d.remaining_amount) || 0
+  const disc = rnd2(Math.min(remaining, Math.max(0, amount)))
+  if (!(disc > 0)) throw new Error("İndirim yapılacak bakiye yok.")
+  const newRemaining = rnd2(remaining - disc)
+  const upd = newRemaining <= 0
+    ? { status: "Tamamlandı", total_amount: rnd2((Number(d.total_amount) || 0) - disc), remaining_amount: 0 }
+    : { total_amount: rnd2((Number(d.total_amount) || 0) - disc), remaining_amount: newRemaining }
+  const { error: upErr } = await supabase.from("debts").update(upd).eq("id", debtId)
+  if (upErr) throw upErr
+  return { remaining: newRemaining, discounted: disc }
+}
+
 // Mükerrer müşteri birleştirme: "kaynak" müşterinin tüm satış, tamir, borç, randevu,
 // garanti ve kasa kayıtları "hedef" müşteriye taşınır, sonra kaynak müşteri silinir.
 export async function mergeCustomers(sourceId: string, targetId: string): Promise<{ moved: number }> {

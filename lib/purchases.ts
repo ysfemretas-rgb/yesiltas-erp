@@ -11,6 +11,7 @@ import { createTransaction } from "@/lib/finance"
 import { InventoryItem, createInventoryItem, updateInventoryItem, adjustInventoryQuantity, findActiveImeiConflict } from "@/lib/inventory"
 import { logStockMovement } from "@/lib/stockMovements"
 import { Currency, paymentStatusOf, purchaseTotal, allocatePayment, rateFor } from "@/lib/purchaseMath"
+import { scaleFactorForReduction } from "@/lib/settlementMath"
 
 export interface PurchaseLine {
   inventoryId?: string // mevcut ürüne stok eklemek için; yeni ürünse kayıttan sonra doldurulur
@@ -28,6 +29,9 @@ export interface PurchaseLine {
   imei?: string
   conditionNote?: string
   productCode?: string // kayıttan sonra
+  // İskonto bilgisi (yalnızca gösterim için; hesaplar hep NET birim fiyat/maliyet üzerinden yapılır)
+  listPrice?: number // iskontosuz liste fiyatı (satırın para biriminde); iskonto varsa unitPrice bundan düşüktür
+  lineDiscount?: { type: "pct" | "amt"; value: number } // girilen satır indirimi (amt = satır toplamından düşülen tutar)
 }
 
 export interface Purchase {
@@ -489,6 +493,27 @@ export async function findPurchaseLinesAtPrice(
   return out
 }
 
+// Ödenmemiş bakiyeden İNDİRİM düşer (tedarikçi "5000 ver yeter" dediğinde): alış toplamı ve satırların net birim fiyatları
+// aynı oranda azalır (liste fiyatı saklanır; detayda "liste → net" görünür). Kasaya hiçbir şey yazılmaz.
+export async function discountPurchase(purchaseId: string, amount: number): Promise<{ newTotal: number; discounted: number }> {
+  const { data, error } = await supabase.from("purchases").select("*").eq("id", purchaseId).single()
+  if (error || !data) throw error || new Error("Alış kaydı bulunamadı.")
+  const p = fromRow(data)
+  const remaining = Math.round((p.total - p.paid) * 100) / 100
+  const d = Math.round(Math.min(Math.max(0, Number(amount) || 0), remaining) * 100) / 100
+  if (!(d > 0)) throw new Error(`${p.code}: indirim yapılacak bakiye yok.`)
+  const factor = scaleFactorForReduction(p.total, d)
+  const r4 = (n: number) => Math.round(n * 10000) / 10000
+  const newLines = p.items.map((l) => ({ ...l, listPrice: l.listPrice ?? l.unitPrice, unitPrice: r4(l.unitPrice * factor), unitCostTRY: r4(l.unitCostTRY * factor) }))
+  const newTotal = Math.round((p.total - d) * 100) / 100
+  const { error: upErr } = await supabase
+    .from("purchases")
+    .update({ items: newLines, total_try: newTotal, note: `${p.note ? p.note + " | " : ""}İndirim ${d} TL (${localDateStr()})` })
+    .eq("id", purchaseId)
+  if (upErr) throw upErr
+  return { newTotal, discounted: d }
+}
+
 // Bir alış satırının ADEDİNİ düzeltir (yanlış girilen adet). Stok, alış toplamı ve tedarikçi borcu birlikte değişir:
 //  - Adet azalırsa: stok düşer (yetersizse işlem reddedilir), toplam/borç düşer; ödenen tutar yeni toplamdan
 //    fazlaysa fark kasaya "Tedarikçi İadesi" geliri olarak yazılır.
@@ -649,7 +674,7 @@ export async function correctPurchasePrices(
     const rate = e.currency === "TRY" ? 1 : sameCurrency && l.rate > 0 ? l.rate : rateFor(e.currency, rates)
     const cost = Math.round(e.unitPrice * rate * 100) / 100
     if (l.inventoryId) changedItems.push({ inventoryId: l.inventoryId, oldPrice: l.unitPrice, oldCurrency: l.currency, newPrice: e.unitPrice, newCurrency: e.currency })
-    return { ...l, unitPrice: e.unitPrice, currency: e.currency, rate, unitCostTRY: cost }
+    return { ...l, unitPrice: e.unitPrice, currency: e.currency, rate, unitCostTRY: cost, listPrice: e.unitPrice, lineDiscount: undefined }
   })
   const newTotal = purchaseTotal(newLines)
   const newPaid = Math.min(purchase.paid, newTotal)

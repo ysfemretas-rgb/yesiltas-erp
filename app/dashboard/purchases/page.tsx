@@ -14,7 +14,9 @@ import { Search, Truck, Smartphone, Printer, Banknote, Download } from "lucide-r
 import { NewPurchaseDialog } from "@/components/purchases/NewPurchaseDialog"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Pagination } from "@/components/Pagination"
-import { Purchase, fetchPurchases, payPurchase, correctPurchasePrices, changePurchaseLineQuantity, deletePurchase } from "@/lib/purchases"
+import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
+import { groupExcelPurchases } from "@/lib/purchaseLines"
+import { Purchase, createPurchase, fetchPurchases, payPurchase, correctPurchasePrices, changePurchaseLineQuantity, deletePurchase } from "@/lib/purchases"
 import { InventoryItem, fetchInventory } from "@/lib/inventory"
 import { Supplier, fetchSuppliers } from "@/lib/suppliers"
 import { fetchCustomers } from "@/lib/customers"
@@ -26,6 +28,16 @@ import { localDateStr } from "@/lib/dates"
 
 const money = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n || 0)
 const PAGE_SIZE = 20
+
+const PURCHASE_IMPORT_FIELDS: ImportField[] = [
+  { key: "supplier", label: "Tedarikçi", required: true, type: "text" },
+  { key: "name", label: "Ürün Adı", required: true, type: "text" },
+  { key: "category", label: "Kategori", type: "text", defaultValue: "Diğer" },
+  { key: "quantity", label: "Adet", type: "number", defaultValue: 1 },
+  { key: "listPrice", label: "Liste Fiyatı", required: true, type: "number" },
+  { key: "discountPct", label: "İskonto %", type: "number", defaultValue: 0 },
+  { key: "currency", label: "Para Birimi", type: "text", defaultValue: "TRY" },
+]
 
 export default function PurchasesPage() {
   const { toast, showToast, hideToast } = useToast()
@@ -53,6 +65,7 @@ export default function PurchasesPage() {
   const [fixSaving, setFixSaving] = useState(false)
 
   // Adet düzeltme ve silme (kancalar erken return'dan ÖNCE olmalı)
+  const [excelOpen, setExcelOpen] = useState(false)
   const [qtyFix, setQtyFix] = useState<{ index: number } | null>(null)
   const [qtyValue, setQtyValue] = useState("")
   const [qtySaving, setQtySaving] = useState(false)
@@ -174,6 +187,27 @@ export default function PurchasesPage() {
     }
   }
 
+  // Excel'den toplu alış: tedarikçiye göre gruplanır, her tedarikçi için TEK alış kaydı (ödenmemiş/borç) oluşur.
+  // Hiçbir kayıt yapılmadan önce tüm satırlar doğrulanır; hata varsa hiçbir şey kaydedilmez.
+  const handleExcelPurchases = async (rows: Record<string, any>[]) => {
+    const { groups, errors } = groupExcelPurchases(rows as any, suppliers.map((s) => s.name), inventory, rates, isFallback)
+    if (errors.length > 0) throw new Error(`Hiçbir kayıt yapılmadı. Düzeltilecek satırlar:\n${errors.slice(0, 12).join("\n")}${errors.length > 12 ? `\n...ve ${errors.length - 12} satır daha` : ""}`)
+    if (groups.length === 0) throw new Error("Yüklenecek satır bulunamadı.")
+    const done: string[] = []
+    for (const g of groups) {
+      const sp = suppliers.find((s) => s.name === g.supplierName)
+      try {
+        const { purchase } = await createPurchase({ kind: "supplier", partyName: g.supplierName, partyPhone: sp?.phone, lines: g.lines, paid: 0, note: "Excel ile yüklendi" })
+        done.push(`${g.supplierName} → ${purchase.code} (${g.lines.length} kalem)`)
+      } catch (e: any) {
+        throw new Error(`${done.length ? `Kaydedilenler: ${done.join(", ")}.\n` : ""}${g.supplierName} alışı kaydedilemedi: ${e?.message || e}`)
+      }
+    }
+    await reload()
+    fetchInventory().then(setInventory).catch(() => undefined)
+    showToast(`${groups.length} alış kaydı oluşturuldu: ${done.join("; ")}. Ödemeler "ödenmemiş" olarak başladı; ödemeyi Tedarikçiler > Ödeme Yap ile yapın.`, "success")
+  }
+
   const openQty = (idx: number) => {
     if (!detail) return
     setQtyFix({ index: idx })
@@ -270,6 +304,7 @@ export default function PurchasesPage() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={exportAll} className="border-slate-600 text-slate-300"><Download className="h-4 w-4 mr-2" />Excel</Button>
           <Button onClick={() => setNewKind("customer")} variant="outline" className="border-sky-600 text-sky-400"><Smartphone className="h-4 w-4 mr-2" />Müşteriden Alış</Button>
+          <Button onClick={() => setExcelOpen(true)} variant="outline" className="border-emerald-700 text-emerald-300">📥 Excel ile Alış</Button>
           <Button onClick={() => setNewKind("supplier")} className="bg-emerald-600 hover:bg-emerald-700"><Truck className="h-4 w-4 mr-2" />Tedarikçiden Alış</Button>
         </div>
       </div>
@@ -357,11 +392,16 @@ export default function PurchasesPage() {
                   {detail.items.map((i, idx) => (
                     <div key={idx} className="p-2 rounded bg-slate-800 border border-slate-700">
                       <div className="flex justify-between gap-2"><span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{detail.kind === "supplier" && <button type="button" onClick={() => openQty(idx)} className="ml-2 text-[11px] text-emerald-400 underline" title="Yanlış girilen adedi düzelt (stok ve borç da düzelir)">🔢 Adedi düzelt</button>}{detail.kind === "supplier" && <button type="button" onClick={() => openFix(idx)} className="ml-2 text-[11px] text-sky-400 underline" title="Yanlış girilen fiyatı / para birimini düzelt">✏️ Fiyatı düzelt</button>}</span><span className="text-amber-300 shrink-0">{money(i.quantity * i.unitCostTRY)}</span></div>
-                      <div className="text-xs text-slate-400">{i.unitPrice.toLocaleString("tr-TR")} {i.currency}{i.currency !== "TRY" ? ` (kur ${i.rate})` : ""}{i.productCode ? ` • ${i.productCode}` : ""}{i.imei ? ` • IMEI ${i.imei}` : ""}{i.salePrice > 0 ? ` • satış ${money(i.salePrice)}` : ""}</div>
+                      <div className="text-xs text-slate-400">{i.listPrice && i.listPrice > i.unitPrice + 0.00001 ? <span><s className="text-slate-500">{i.listPrice.toLocaleString("tr-TR")}</s> → <b className="text-emerald-400">{i.unitPrice.toLocaleString("tr-TR", { maximumFractionDigits: 4 })}</b> {i.currency} <span className="text-emerald-400">(−%{Math.round(((i.listPrice - i.unitPrice) / i.listPrice) * 10000) / 100})</span></span> : <span>{i.unitPrice.toLocaleString("tr-TR")} {i.currency}</span>}{i.currency !== "TRY" ? ` (kur ${i.rate})` : ""}{i.productCode ? ` • ${i.productCode}` : ""}{i.imei ? ` • IMEI ${i.imei}` : ""}{i.salePrice > 0 ? ` • satış ${money(i.salePrice)}` : ""}</div>
                     </div>
                   ))}
                 </div>
                 <div className="space-y-1 border-t border-slate-700 pt-2">
+                  {(() => {
+                    // İskonto kazancı: liste fiyatıyla net maliyet arasındaki fark (TL)
+                    const saved = detail.items.reduce((s, i) => s + (i.listPrice && i.listPrice > i.unitPrice ? i.quantity * (i.listPrice * (i.rate || 1) - i.unitCostTRY) : 0), 0)
+                    return saved > 0.009 ? <div className="flex justify-between text-xs text-emerald-400"><span>İskonto kazancı (liste − net)</span><span>{money(saved)}</span></div> : null
+                  })()}
                   <div className="flex justify-between font-bold"><span>Toplam</span><span>{money(detail.total)}</span></div>
                   <div className="flex justify-between text-emerald-400"><span>Ödenen</span><span>{money(detail.paid)}</span></div>
                   {remainingOf(detail) > 0.009 && <div className="flex justify-between text-amber-400"><span>Kalan borç</span><span>{money(remainingOf(detail))}</span></div>}
@@ -426,6 +466,14 @@ export default function PurchasesPage() {
           )}
         </DialogContent>
       </Dialog>
+      <ExcelImportDialog
+        open={excelOpen}
+        onOpenChange={setExcelOpen}
+        title="Excel ile Toplu Alış"
+        fields={PURCHASE_IMPORT_FIELDS}
+        onImport={handleExcelPurchases}
+        templateHint="Excel dosyanızda şu sütunlar olmalı: Tedarikçi (kayıtlı adıyla), Ürün Adı, Kategori, Adet, Liste Fiyatı, İskonto %, Para Birimi (TRY/USD/EUR). Aynı adlı ürün envanterde varsa stoğuna eklenir, yoksa yeni ürün açılır. Her tedarikçi için tek alış kaydı oluşur."
+      />
     </div>
   )
 }
