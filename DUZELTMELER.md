@@ -226,3 +226,8 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 - Raporlar sayfası da ortak yazdırma penceresini kullanır (masaüstünde otomatik yazdırma korunur).
 - Barkod etiketi sayfası kendi (taranabilir barkodlu) paylaşım düğmesini kullanır (v35).
 - Masaüstü ve Android'de değişiklik yoktur: "Yazdır" aynen çalışır, Paylaş düğmesi gizlidir.
+
+## v37 — iPhone'dan rulo/etiket yazıcıya barkod etiketi
+- **Sorun:** Paylaş/Yazdır, etiketleri A4 boyutunda tek görsel olarak gönderiyordu; rulo (etiket) yazıcı A4 görseli kağıt genişliğine sığdırınca 24 etiketlik sayfa küçüldü ve tek etiket rulonun sol üstünde minicik kaldı.
+- **Çözüm:** Barkod etiketi penceresinde (iPhone) **Etiket ölçüsü** (40×30, 50×30, 50×31, 60×40, 70×40, 80×50, 100×50, 100×100, 100×150 mm veya "Özel ölçü") ve **Düzen** seçimi eklendi. **"Tek etiket"** düzeninde her etiket, seçilen ölçüde (300 dpi) ayrı bir görsel olarak gönderilir; yazıcı görseli kağıt genişliğine sığdırdığı için etiket ölçüsü rulonun/etiketin gerçek ölçüsüne eşit seçilmelidir. "A4 sayfaya dizili" düzeni normal yazıcı içindir. Yazılar ve barkod seçilen ölçüye göre ölçeklenir. Son seçim hatırlanır.
+- **Barkod etiketi (iPhone Paylaş): logo ve başlık seçenekleri (v38):** Paylaşılan etiket görselinde firma LOGOSU yoktu (ekran/masaüstü sürümünde vardı); eklendi. Seçenek paneline **"Logo ve firma adı"** kutusu (kapatılırsa başlık hiç basılmaz, barkoda daha çok yer kalır) ve **Başlık** stili eklendi: **Sade (siyah-beyaz / termal yazıcı)** — beyaz zeminde siyah yazı + ince çizgi, termal yazıcıda okunaklı basar (varsayılan); **Koyu zemin (renkli yazıcı)** — yeşil bant. Seçimler hatırlanır.
