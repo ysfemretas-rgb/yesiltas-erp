@@ -28,5 +28,7 @@ export function supplierDebtInfo(
   const supplierPurchases = purchases.filter((p) => p.kind === "supplier" && p.partyName === supplierName)
   const purchasesRemaining = supplierPurchases.reduce((sum, p) => sum + Math.max(0, p.total - p.paid), 0)
   const net = supplierNetDebt(legacyUnpaid, purchasesRemaining, extraPaid)
-  return { orderCount: items.length + supplierPurchases.length, debt: Math.max(0, net), credit: Math.max(0, -net), net }
+  // Alışlar kaydıyla izlenen ürün zaten o alışın içinde sayılır; sadece alışa bağlı OLMAYAN (eski) ürünler ayrıca eklenir
+  const orderCount = items.filter((i) => !(coveredQty[i.id] > 0)).length + supplierPurchases.length
+  return { orderCount, debt: Math.max(0, net), credit: Math.max(0, -net), net }
 }

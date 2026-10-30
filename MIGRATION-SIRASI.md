@@ -31,3 +31,9 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 
 ## Son kontrol
 Tüm SQL'ler çalıştırıldıktan sonra `supabase-saglik-kontrolu.sql` dosyasını çalıştırın (sadece okur); "❌ EKSİK" satırı varsa ilgili dosyayı çalıştırın. Ardından `TEST-SENARYOLARI.md` ile uygulamayı bir kez uçtan uca deneyin.
+
+
+## Onarım betikleri (yalnızca belirti varsa)
+- `supabase-stok-hareketleri-onar.sql` — Envanter > Hareket hep boşsa (stock_movements tablosu eski sürümden kalmışsa).
+- `supabase-tedarikci-odemeleri-onar.sql` — supplier_payments tablosunda `supplier_name` sütunu yoksa (eski sürümden kalma tablo; tedarikçiye genel ödemeler kaydedilemez). `supabase-saglik-kontrolu.sql` artık bu tablonun ve diğer yeni tabloların sütunlarını da denetler; ❌ çıkan sütun için ilgili onarım betiğini çalıştırın.
+- `supabase-test-kayitlarini-sil.sql` — yalnızca "TEST" adlı kayıtları siler (önce deneme modunda çalışır).

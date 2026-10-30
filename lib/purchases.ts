@@ -214,12 +214,20 @@ export async function createPurchase(input: CreatePurchaseInput): Promise<{ purc
         finalLines.push({ ...l, inventoryId: item.id, productCode: item.productCode })
       } else {
         if (!l.inventoryId) throw new Error(`${l.name}: mevcut ürün bulunamadı.`)
-        const { data: cur, error: curErr } = await supabase.from("inventory").select("quantity, total_purchased_qty, product_code, supplier").eq("id", l.inventoryId).single()
+        const { data: cur, error: curErr } = await supabase.from("inventory").select("quantity, total_purchased_qty, product_code, supplier, purchase_price, purchase_currency").eq("id", l.inventoryId).single()
         if (curErr || !cur) throw curErr || new Error(`${l.name}: ürün bulunamadı.`)
         await adjustInventoryQuantity(l.inventoryId, l.quantity, `Alış ${code}`, l.name)
         applied.push({ id: l.inventoryId, qty: l.quantity, name: l.name })
+        // Ürün maliyeti AĞIRLIKLI ORTALAMA olur (eski stok eski maliyetle + yeni adet yeni maliyetle); eskiden son alış fiyatı
+        // eskisinin üzerine yazılıyor, kâr hesabı ve "maliyetin altında satış" uyarısı bozuluyordu.
+        // Eski maliyet yeni satırla aynı para biriminde ya da TL ise ortalama alınır; farklı dövizdeyse (kur bilinmiyor) son fiyat yazılır.
+        const oldQty = Math.max(0, Number(cur.quantity) || 0)
+        const oldCur = String(cur.purchase_currency || "TRY")
+        const oldPrice = Number(cur.purchase_price) || 0
+        const oldInLineCur = oldCur === l.currency ? oldPrice : oldCur === "TRY" && l.rate > 0 ? oldPrice / l.rate : null
+        const avgPrice = oldInLineCur !== null && oldQty > 0 ? Math.round(((oldQty * oldInLineCur + l.quantity * l.unitPrice) / (oldQty + l.quantity)) * 10000) / 10000 : l.unitPrice
         const patch: Partial<InventoryItem> = {
-          purchasePrice: l.unitPrice,
+          purchasePrice: avgPrice,
           purchaseCurrency: l.currency,
           purchasedQuantity: (cur.total_purchased_qty != null ? Number(cur.total_purchased_qty) : Number(cur.quantity) || 0) + l.quantity,
         }

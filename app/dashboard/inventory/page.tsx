@@ -620,6 +620,11 @@ export default function InventoryPage() {
     }
   }
 
+  // Ürün kartındaki ödeme rozeti alış kayıtlarından gösterilir; alış yapıldıktan sonra liste yenilenmeli
+  const refreshPurchases = () => {
+    fetchPurchases().then((p) => setSupplierPurchases(p.filter((x) => x.kind === "supplier"))).catch((e) => console.error("Alışlar yüklenemedi:", e))
+  }
+
   const handleUpdateItem = async () => {
     if (!editingItem) return
     if (isFallback && (editingItem.purchaseCurrency === "USD" || editingItem.purchaseCurrency === "EUR")) {
@@ -740,6 +745,7 @@ export default function InventoryPage() {
         }
         const fresh = await fetchInventory().catch(() => null)
         if (fresh) setInventory(fresh)
+        refreshPurchases()
       }
       showToast(doneMsg, "success")
     } catch (e) {
@@ -1472,7 +1478,7 @@ export default function InventoryPage() {
         suppliers={suppliers}
         rates={rates}
         isFallback={isFallback}
-        onDone={() => { fetchInventory().then(setInventory).catch((e) => console.error(e)) }}
+        onDone={() => { fetchInventory().then(setInventory).catch((e) => console.error(e)); refreshPurchases() }}
         notify={showToast}
       />
 
@@ -1865,7 +1871,7 @@ export default function InventoryPage() {
         rates={rates}
         isFallback={isFallback}
         onSupplierAdded={(s) => setSuppliers((prev) => [...prev, s])}
-        onCreated={(purchase) => { fetchInventory().then(setInventory).catch(() => undefined); showToast(`Alış kaydedildi (${purchase.code}).`, "success") }}
+        onCreated={(purchase) => { fetchInventory().then(setInventory).catch(() => undefined); refreshPurchases(); showToast(`Alış kaydedildi (${purchase.code}).`, "success") }}
         notify={(m, t) => showToast(m, t)}
       />
     </div>

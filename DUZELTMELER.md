@@ -243,3 +243,14 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 - **Düzeltme:** Tedarikçi/ürün adı eşleştirmesi Türkçe "İ/ı" farkında hata veriyordu ("TEST TEDARİKÇİ" = "test tedarikci" artık eşleşir).
 - **Bağlantı Durumu:** "İndirim Kayıtları" modülü eklendi.
 - **Test:** `TEST-SENARYOLARI.md` Bölüm 6 (v39 senaryoları) ve `supabase-test-kayitlarini-sil.sql` (yalnızca TEST kayıtlarını silen, önce deneme modunda çalışan betik).
+
+## v40 — Claude in Chrome test turunda (Bölüm 6) bulunan düzeltmeler
+- **Ürün maliyeti artık AĞIRLIKLI ORTALAMA:** Mevcut ürüne yeni alış yapılınca eski stok eski maliyetle, yeni adet yeni maliyetle ortalanır (örn. 10 adet ₺81 + 1 adet ₺100 → ₺82,73). Eskiden son alış fiyatı eskisinin üzerine yazılıyordu; bu yüzden kâr hesabı bozuluyor ve "satış fiyatı maliyetin altında" uyarısı yanlış çıkıyordu. Eski maliyet farklı dövizdeyse (kur bilinmiyor) son fiyat yazılır.
+- **Envanter kartı ödeme rozeti:** Toplu Alış / ➕ stok / adet düzeltme sonrası alış listesi yenilenmediği için kart "Ödendi" gösteriyordu; artık alış sonrası rozet güncellenir (ödenmemiş alış "Ödenmedi" görünür).
+- **Satış fişinde ürün iskontosu:** "Liste Toplamı" ve "Ürün İskontosu" satırları eklendi (genel iskonto varsa "İskonto" satırı yine ayrıca görünür).
+- **Tedarikçi kartında sipariş sayısı:** Alışla izlenen ürün hem ürün hem alış olarak sayılıyordu (tek alış "2 sipariş"); düzeltildi.
+- Bilerek böyle: Borç kapatırken sonradan yapılan **tedarikçi indirimi** stok maliyetini değiştirmez (kâra "alınan indirim" olarak ayrıca eklenir); alış anında girilen iskonto ise stok maliyetine net fiyat olarak yansır.
+
+## SQL araçları (v40 sonrası)
+- **Tedarikçi ödemeleri tablosu onarımı:** Eski bir sürümden kalma `supplier_payments` tablosunda `supplier_name` sütunu olmayabilir; uygulama bu tablodaki hatayı sessizce yuttuğu için Bağlantı Durumu "0 kayıt" gösteriyordu. `supabase-tedarikci-odemeleri-onar.sql` tabloyu güvenle onarır (doluysa silmez). Sağlık kontrolü artık supplier_payments, purchases, cash_counts, scheduled_payments, device_purchases, stock_movements ve settlement_discounts sütunlarını da denetler.
+- **TEST silme betiği sağlamlaştırıldı:** Kasa tablosunda doğru sütun adları (`related_table`/`related_id`) kullanılıyor; tablosu ya da sütunu veritabanında olmayan adımlar hata vermek yerine "ATLANDI" olarak listelenir.

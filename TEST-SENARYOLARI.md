@@ -102,7 +102,7 @@ Gerçek işlerde kullanmadan önce **küçük tutarlı** kayıtlarla bu senaryol
 | 6.17 | Satış sepetine TEST ÜRÜN C ekle, "Ürün iskontosu" **10 %** | "~~liste~~ → net" görünür; ara toplam net tutarla |
 | 6.18 | Genel iskonto **₺ 5** gir, sonra **%** seçip 5 yaz | % seçilince "%5 = ₺…" görünür; toplam doğru |
 | 6.19 | İskontoyu ayarlardaki azami yüzdeden büyük yap | "Toplam iskonto … maksimumu aşıyor", kaydedilmez |
-| 6.20 | Satışı tamamla, **Fiş** | Fişte liste fiyatı üstü çizili + net; "İskonto" satırı; kasaya ödenen tutar |
+| 6.20 | Satışı tamamla, **Fiş** | Fişte liste fiyatı üstü çizili + net; "Liste Toplamı / Ürün İskontosu" satırları (genel iskonto varsa ayrıca "İskonto"); kasaya ödenen tutar |
 
 ### 6F) Adet düzeltme / alış silme (v33)
 | # | Adım | Beklenen |

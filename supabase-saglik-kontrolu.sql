@@ -15,6 +15,13 @@ with checks as (
   from (values
     ('sales','customer_id'),('sales','payments'),('sales','installment_plan'),('sales','refunds'),('sales','trade_in'),('sales','extra_cost'),('sales','extra_cost_note'),
     ('customers','birth_date'),
+    ('supplier_payments','supplier_name'),('supplier_payments','amount'),('supplier_payments','payment_date'),('supplier_payments','note'),
+    ('stock_movements','product_id'),('stock_movements','product_name'),('stock_movements','delta'),('stock_movements','reason'),('stock_movements','user_name'),
+    ('purchases','purchase_code'),('purchases','kind'),('purchases','party_name'),('purchases','items'),('purchases','total_try'),('purchases','paid_amount'),
+    ('cash_counts','count_date'),('cash_counts','counted_cash'),('cash_counts','expected_cash'),
+    ('scheduled_payments','title'),('scheduled_payments','due_date'),('scheduled_payments','status'),
+    ('device_purchases','seller_name'),('device_purchases','device_name'),
+    ('settlement_discounts','kind'),('settlement_discounts','party_name'),('settlement_discounts','amount'),
     ('inventory','imei'),('inventory','total_purchased_qty'),
     ('fixed_assets','supplier'),('devices','parts'),('devices','parts_cost'),('devices','technician'),('devices','signature'),('devices','stage'),('devices','estimated_delivery'),('devices','qc'),('devices','quote')
   ) as v(t,c)

@@ -35,6 +35,9 @@ export function printSaleReceipt(sale: ReceiptSale) {
   const no = sale.saleCode || sale.id.slice(0, 8).toUpperCase()
   const isGift = sale.paymentMethod === "gift"
   const subtotal = sale.items.reduce((s, i) => s + i.price * i.quantity, 0)
+  // Ürün bazlı iskonto (liste fiyatı − net fiyat): toplamı fişte ayrıca gösterilir
+  const listSubtotal = sale.items.reduce((s, i) => s + (i.listPrice && i.listPrice > i.price ? i.listPrice : i.price) * i.quantity, 0)
+  const lineDiscount = Math.round((listSubtotal - subtotal) * 100) / 100
 
   const rows = sale.items.map((i, idx) => `<tr>
       <td style="width:6%">${idx + 1}</td>
@@ -72,7 +75,7 @@ export function printSaleReceipt(sale: ReceiptSale) {
     ${rows}
   </table>
   <div class="totals">
-    <div class="row"><span>Ara Toplam</span><span>${money(subtotal)}</span></div>
+    ${lineDiscount > 0.004 ? `<div class="row"><span>Liste Toplamı</span><span>${money(listSubtotal)}</span></div><div class="row"><span>Ürün İskontosu</span><span>-${money(lineDiscount)}</span></div>` : ""}<div class="row"><span>Ara Toplam</span><span>${money(subtotal)}</span></div>
     ${sale.discount > 0 ? `<div class="row"><span>İskonto</span><span>-${money(sale.discount)}</span></div>` : ""}
     <div class="row strong"><span>Genel Toplam</span><span>${money(sale.totalAmount)}</span></div>
     <div class="row"><span>Ödeme Şekli</span><span>${esc(METHOD_LABELS[sale.paymentMethod] || sale.paymentMethod)}</span></div>
