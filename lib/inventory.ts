@@ -245,3 +245,18 @@ export async function findActiveImeiConflict(imei: string, excludeId?: string): 
   }
   return data && data[0] ? { id: data[0].id, name: data[0].name, productCode: data[0].product_code ?? "" } : null
 }
+
+// Tüm ürünlerin minimum stok adedini toplu değiştirir (Ayarlar > Envanter Minimum Stok Adedi > "Tüm ürünlere uygula").
+// Güncellenen ürün sayısını döndürür.
+export async function setAllMinQuantity(min: number): Promise<number> {
+  const value = Math.max(0, Math.floor(Number(min) || 0))
+  const rows = await fetchAllRows("inventory", "created_at", false)
+  const ids: string[] = rows.map((r: any) => r.id)
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
+    const { error } = await supabase.from("inventory").update({ min_stock: value }).in("id", chunk)
+    if (error) throw error
+  }
+  logActivity("Envanter", "updated", `Tüm ürünlerin minimum stok adedi ${value} yapıldı (${ids.length} ürün)`)
+  return ids.length
+}

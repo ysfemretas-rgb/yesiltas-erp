@@ -1,5 +1,6 @@
 "use client"
 
+import { getDefaultMinStock } from "@/lib/stockLevel"
 import { useEffect, useMemo, useState } from "react"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
@@ -190,7 +191,7 @@ export default function PurchasesPage() {
   // Excel'den toplu alış: tedarikçiye göre gruplanır, her tedarikçi için TEK alış kaydı (ödenmemiş/borç) oluşur.
   // Hiçbir kayıt yapılmadan önce tüm satırlar doğrulanır; hata varsa hiçbir şey kaydedilmez.
   const handleExcelPurchases = async (rows: Record<string, any>[]) => {
-    const { groups, errors } = groupExcelPurchases(rows as any, suppliers.map((s) => s.name), inventory, rates, isFallback)
+    const { groups, errors } = groupExcelPurchases(rows as any, suppliers.map((s) => s.name), inventory, rates, isFallback, getDefaultMinStock())
     if (errors.length > 0) throw new Error(`Hiçbir kayıt yapılmadı. Düzeltilecek satırlar:\n${errors.slice(0, 12).join("\n")}${errors.length > 12 ? `\n...ve ${errors.length - 12} satır daha` : ""}`)
     if (groups.length === 0) throw new Error("Yüklenecek satır bulunamadı.")
     const done: string[] = []

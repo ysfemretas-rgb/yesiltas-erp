@@ -10,6 +10,7 @@ export interface LineCtx {
   currency: Currency
   category: string
   rates: { USD: number; EUR: number }
+  defaultMinQuantity?: number // yeni ürünün min. stoğu (Ayarlar > Envanter Minimum Stok Adedi); verilmezse 0
 }
 
 // Aynı adlı ürün (büyük/küçük harf fark etmez) envanterde varsa stoğuna eklenir, yoksa yeni ürün açılır.
@@ -23,7 +24,7 @@ export function makePurchaseLine(row: { name: string; quantity: number; price: n
   if (ex) {
     return { isNew: false, inventoryId: ex.id, name: ex.name, category: ex.category, quantity: row.quantity, unitPrice: net, currency: ctx.currency, rate, unitCostTRY: cost, salePrice: 0, profitMargin: ex.profitMargin, minQuantity: ex.minQuantity, productCode: ex.productCode, ...disc }
   }
-  return { isNew: true, name: row.name.trim(), category: ctx.category || "Diğer", quantity: row.quantity, unitPrice: net, currency: ctx.currency, rate, unitCostTRY: cost, salePrice: suggestedSalePrice(net, ctx.currency, 20, ctx.rates), profitMargin: 20, minQuantity: 0, ...disc }
+  return { isNew: true, name: row.name.trim(), category: ctx.category || "Diğer", quantity: row.quantity, unitPrice: net, currency: ctx.currency, rate, unitCostTRY: cost, salePrice: suggestedSalePrice(net, ctx.currency, 20, ctx.rates), profitMargin: 20, minQuantity: ctx.defaultMinQuantity ?? 0, ...disc }
 }
 
 // Excel satırlarını tedarikçiye göre gruplar: HİÇBİR şey kaydedilmeden önce tüm hatalar toplanır (bilinmeyen tedarikçi, geçersiz sayı vb.)
@@ -34,7 +35,8 @@ export function groupExcelPurchases(
   supplierNames: string[],
   inventory: InventoryItem[],
   rates: { USD: number; EUR: number },
-  isFallback = false
+  isFallback = false,
+  defaultMinQuantity = 0
 ): { groups: { supplierName: string; lines: PurchaseLine[] }[]; errors: string[] } {
   const errors: string[] = []
   const nameMap = new Map(supplierNames.map((n): [string, string] => [normKey(n), n]))
@@ -55,7 +57,7 @@ export function groupExcelPurchases(
     if (!(pct >= 0 && pct <= 100)) return errors.push(`Satır ${line} (${name}): iskonto % geçersiz`)
     if (cur !== "TRY" && cur !== "USD" && cur !== "EUR") return errors.push(`Satır ${line} (${name}): para birimi TRY, USD veya EUR olmalı`)
     if (cur !== "TRY" && isFallback) return errors.push(`Satır ${line} (${name}): güncel döviz kuru alınamadı; dövizli alış şu an kaydedilemez`)
-    const l = makePurchaseLine({ name, quantity: qty, price, discountPct: pct }, { inventory, currency: cur as Currency, category: String(r.category || "Diğer"), rates }, byName)
+    const l = makePurchaseLine({ name, quantity: qty, price, discountPct: pct }, { inventory, currency: cur as Currency, category: String(r.category || "Diğer"), rates, defaultMinQuantity }, byName)
     groups.set(supplier, [...(groups.get(supplier) || []), l])
   })
   return { groups: Array.from(groups.entries()).map(([supplierName, lines]) => ({ supplierName, lines })), errors }

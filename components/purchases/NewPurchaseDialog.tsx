@@ -1,5 +1,6 @@
 "use client"
 
+import { getDefaultMinStock } from "@/lib/stockLevel"
 import { PhoneInput } from "@/components/PhoneInput"
 import { useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -50,7 +51,7 @@ function LineEditor({
   const [currency, setCurrency] = useState<Currency>("TRY")
   const [margin, setMargin] = useState("20")
   const [salePrice, setSalePrice] = useState("")
-  const [minQty, setMinQty] = useState("0")
+  const [minQty, setMinQty] = useState(kind === "supplier" ? String(getDefaultMinStock()) : "0")
   const [imei, setImei] = useState("")
   const [condition, setCondition] = useState("")
   const [discType, setDiscType] = useState<"pct" | "amt">("pct")
@@ -302,7 +303,7 @@ export function NewPurchaseDialog({
     const rawLines = pasteText.split(/\r?\n/)
     rows.forEach((r) => {
       if (r.error) { bad.push({ text: rawLines[r.lineNo - 1], error: `Satır ${r.lineNo}: ${r.error}` }); return }
-      ok.push(makePurchaseLine(r, { inventory, currency: pasteCurrency, category: pasteCategory, rates }, byName))
+      ok.push(makePurchaseLine(r, { inventory, currency: pasteCurrency, category: pasteCategory, rates, defaultMinQuantity: kind === "supplier" ? getDefaultMinStock() : 0 }, byName))
     })
     if (ok.length > 0) setLines((prev) => [...prev, ...ok])
     setPasteText(bad.map((b) => b.text).join("\n"))

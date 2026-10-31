@@ -1,5 +1,6 @@
 "use client"
 
+import { stockLevel, getDefaultMinStock } from "@/lib/stockLevel"
 import { PhoneInput } from "@/components/PhoneInput"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
@@ -48,7 +49,7 @@ const INVENTORY_IMPORT_FIELDS: ImportField[] = [
   { key: "sku", label: "SKU", type: "text" },
   { key: "category", label: "Kategori", type: "text", defaultValue: "Diğer" },
   { key: "quantity", label: "Stok", type: "number" },
-  { key: "minQuantity", label: "Min. Stok", type: "number", defaultValue: 5 },
+  { key: "minQuantity", label: "Min. Stok", type: "number", defaultValue: getDefaultMinStock() },
   { key: "purchasePrice", label: "Alış Fiyatı", required: true, type: "number" },
   { key: "purchaseCurrency", label: "Para Birimi", type: "text", defaultValue: "TRY" },
   { key: "profitMargin", label: "Kâr Marjı (%)", type: "number", defaultValue: 30 },
@@ -123,7 +124,7 @@ export default function InventoryPage() {
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Telefon (Sıfır)",
     quantity: 0,
-    minQuantity: 5,
+    minQuantity: getDefaultMinStock(),
     purchasePrice: 0,
     purchaseCurrency: "TRY",
     profitMargin: 30,
@@ -213,7 +214,9 @@ export default function InventoryPage() {
   })
 
   // Min. stok 0 = uyarı yok (ör. ikinci el cihazlar); 0 stoğa düşmek kritik sayılmaz
-  const lowStockItems = inventoryWithPrices.filter(item => item.minQuantity > 0 && item.quantity <= item.minQuantity)
+  const lowStockItems = inventoryWithPrices.filter(item => item.minQuantity > 0 && item.quantity <= item.minQuantity) // sipariş gerektirenler (tükenenler dahil)
+  const outItems = inventoryWithPrices.filter(item => stockLevel(item) === "out") // stoğu 0 olan HER ürün (kırmızı)
+  const criticalItems = inventoryWithPrices.filter(item => stockLevel(item) === "low") // stoğu min. adede inmiş ama 0 olmayan (sarı)
   const totalPurchaseValue = inventoryWithPrices.reduce((sum, item) => {
     let priceInTRY = item.purchasePrice
     if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
@@ -520,7 +523,7 @@ export default function InventoryPage() {
         sku: String(r.sku || ""),
         category: String(r.category || "Diğer"),
         quantity: Number(r.quantity) || 0,
-        minQuantity: r.minQuantity === undefined || r.minQuantity === null || r.minQuantity === "" ? 5 : (Number(r.minQuantity) || 0),
+        minQuantity: r.minQuantity === undefined || r.minQuantity === null || r.minQuantity === "" ? getDefaultMinStock() : (Number(r.minQuantity) || 0),
         purchasePrice,
         purchaseCurrency,
         profitMargin,
@@ -563,7 +566,7 @@ export default function InventoryPage() {
         sku: "",
         category: newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"),
         quantity: Number(newItem.quantity) || 0,
-        minQuantity: newItem.minQuantity === undefined || newItem.minQuantity === null ? 5 : (Number(newItem.minQuantity) || 0),
+        minQuantity: newItem.minQuantity === undefined || newItem.minQuantity === null ? getDefaultMinStock() : (Number(newItem.minQuantity) || 0),
         purchasePrice: Number(newItem.purchasePrice) || 0,
         purchaseCurrency: newItem.purchaseCurrency || "TRY",
         profitMargin: Number(newItem.profitMargin) || 0,
@@ -1153,7 +1156,7 @@ export default function InventoryPage() {
         templateHint="Excel dosyanızda şu sütunlar olmalı: Ürün Adı, SKU, Kategori, Stok, Min. Stok, Alış Fiyatı, Para Birimi (TRY/USD/EUR), Kâr Marjı (%), Tedarikçi, Konum. Sütun sırası ve tam isim önemli değil, bir sonraki adımda eşleştirebilirsiniz."
       />
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <Card onClick={() => setStatKey("all")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Toplam Ürün</CardTitle>
@@ -1166,10 +1169,19 @@ export default function InventoryPage() {
         <Card onClick={() => setStatKey("low")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Kritik Stok</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-400">{criticalItems.length}</div>
+          </CardContent>
+        </Card>
+        <Card onClick={() => setStatKey("out")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-400">Tükendi</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-400">{lowStockItems.length}</div>
+            <div className="text-2xl font-bold text-red-400">{outItems.length}</div>
           </CardContent>
         </Card>
         <Card onClick={() => setStatKey("cost")} className="cursor-pointer hover:border-slate-500 transition-colors bg-slate-900 border-slate-700">
@@ -1218,8 +1230,9 @@ export default function InventoryPage() {
     onClick: () => { setStatKey(null); setSearchTerm(i.productCode || i.name) },
   })
   const inStock = inventoryWithPrices.filter(i => i.quantity > 0)
-  defs.all = { title: "Tüm Ürünler", rows: inventoryWithPrices.map(i => rowOf(i, `${i.quantity} adet`, i.minQuantity > 0 && i.quantity <= i.minQuantity ? "text-red-400" : "text-white")) }
-  defs.low = { title: "Kritik Stoktaki Ürünler", rows: lowStockItems.map(i => rowOf(i, `${i.quantity}/${i.minQuantity}`, "text-red-400")) }
+  defs.all = { title: "Tüm Ürünler", rows: inventoryWithPrices.map(i => rowOf(i, `${i.quantity} adet`, stockLevel(i) === "out" ? "text-red-400" : stockLevel(i) === "low" ? "text-amber-400" : "text-white")) }
+  defs.low = { title: "Kritik Stoktaki Ürünler (sarı)", rows: criticalItems.map(i => rowOf(i, `${i.quantity}/${i.minQuantity}`, "text-amber-400")) }
+  defs.out = { title: "Tükenen Ürünler (stok 0)", rows: outItems.map(i => rowOf(i, "0 adet", "text-red-400")) }
   defs.cost = { title: "Stok Maliyeti (ürün bazında)", summary: `Toplam: ${money(totalPurchaseValue)}`, rows: inStock.map(i => rowOf(i, money(costTRY(i) * i.quantity), "text-amber-400")).sort((a, b) => 0) }
   defs.saleValue = { title: "Stok Satış Değeri (ürün bazında)", summary: `Toplam: ${money(totalSaleValue)}`, rows: inStock.map(i => rowOf(i, money(i.salePrice * i.quantity), "text-emerald-400")) }
   defs.profit = { title: "Tahmini Kâr (ürün bazında)", summary: `Toplam: ${money(totalProfit)}`, rows: inStock.map(i => rowOf(i, money((i.salePrice - costTRY(i)) * i.quantity), "text-green-400")) }
@@ -1228,9 +1241,9 @@ export default function InventoryPage() {
 })()}
 
       {lowStockItems.length > 0 && (
-        <Card className="bg-red-900/20 border-red-800">
+        <Card className={lowStockItems.some((x) => stockLevel(x) === "out") ? "bg-red-900/20 border-red-800" : "bg-amber-900/20 border-amber-700"}>
           <CardHeader>
-            <CardTitle className="text-red-300 flex items-center gap-2">
+            <CardTitle className={`${lowStockItems.some((x) => stockLevel(x) === "out") ? "text-red-300" : "text-amber-300"} flex items-center gap-2`}>
               <AlertTriangle className="h-5 w-5" />
               Kritik Stok Uyarısı
             </CardTitle>
@@ -1241,7 +1254,7 @@ export default function InventoryPage() {
                 <div key={item.id} className="flex items-center justify-between text-sm">
                   <span className="font-medium text-white">{item.name} <span className="text-xs font-normal text-slate-500">({item.category})</span></span>
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-red-600">Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
+                    <Badge className={stockLevel(item) === "out" ? "bg-red-600" : "bg-amber-600"}>{stockLevel(item) === "out" ? "Tükendi" : "Kritik"} • Stok: {item.quantity} / Min: {item.minQuantity}</Badge>
                     {item.supplier && (
                       <Button size="sm" variant="outline" onClick={() => orderViaWhatsApp(item)} className="h-7 px-2 border-green-600 text-green-400 hover:text-green-300 hover:bg-green-500/10" title="Tedarikçiye WhatsApp ile sipariş">
                         <MessageCircle className="h-3 w-3" />
@@ -1310,7 +1323,7 @@ export default function InventoryPage() {
             )}
             {filteredItems.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE).map((item) => {
               const stockPercent = item.minQuantity > 0 ? Math.min(100, (item.quantity / item.minQuantity) * 100) : 100
-              const isLowStock = item.minQuantity > 0 && item.quantity <= item.minQuantity
+              const level = stockLevel(item)
               const purchaseInTRY = item.purchaseCurrency === "USD"
                 ? item.purchasePrice * rates.USD
                 : item.purchaseCurrency === "EUR"
@@ -1318,7 +1331,7 @@ export default function InventoryPage() {
                   : item.purchasePrice
 
               return (
-                <div key={item.id} className={`rounded-lg border p-4 ${isLowStock ? "border-red-800 bg-red-900/10" : "border-slate-700 bg-slate-800/50"}`}>
+                <div key={item.id} className={`rounded-lg border p-4 ${level === "out" ? "border-red-700 bg-red-900/20" : level === "low" ? "border-amber-600 bg-amber-900/15" : "border-slate-700 bg-slate-800/50"}`}>
                   <div className="flex items-start justify-between mb-2 gap-3">
                     {item.imageUrl ? (
                       <img
@@ -1336,7 +1349,8 @@ export default function InventoryPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-white">{item.name}</span>
                         <Badge variant="outline" className="text-xs border-slate-600 text-slate-300">{item.category}</Badge>
-                        {isLowStock && <Badge className="bg-red-600 text-xs">Kritik Stok</Badge>}
+                        {level === "out" && <Badge className="bg-red-600 text-xs">Tükendi</Badge>}
+                        {level === "low" && <Badge className="bg-amber-500 text-black text-xs">Kritik Stok</Badge>}
                       </div>
                       <div className="text-sm text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
                         {item.productCode && (
@@ -1411,10 +1425,10 @@ export default function InventoryPage() {
                       </Button>
                     </div>
                     <div className="flex-1">
-                      <Progress value={stockPercent} className={isLowStock ? "bg-red-900/50" : "bg-slate-700"} />
+                      <Progress value={level === "out" ? 100 : stockPercent} className={level === "out" ? "bg-red-900/50 [&>div]:bg-red-500" : level === "low" ? "bg-amber-900/40 [&>div]:bg-amber-500" : "bg-slate-700"} />
                     </div>
                     <div className="text-sm text-slate-400 sm:w-24 sm:text-right">
-                      Stok: {item.quantity}/{item.minQuantity}
+                      <span className={level === "out" ? "text-red-400 font-semibold" : level === "low" ? "text-amber-400 font-semibold" : ""}>Stok: {item.quantity}/{item.minQuantity}</span>
                     </div>
                     <div className="flex gap-1 flex-wrap">
                       <Button

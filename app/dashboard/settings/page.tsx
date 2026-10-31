@@ -1,5 +1,6 @@
 "use client"
 
+import { setAllMinQuantity } from "@/lib/inventory"
 import { DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices"
 import { pushCompanySettings } from "@/lib/companySettings"
 import { Toast, useToast } from "@/components/toast"
@@ -33,6 +34,7 @@ interface CompanySettings {
   maxDiscountPercent: number
   minMarginPercent: number
   cardCommissionPercent: number
+  defaultMinStock?: number // Envanter: tüm ürünler için minimum (kritik) stok adedi; yeni ürünlerde varsayılan
   repairServices?: { name: string; price: number }[] // hazır işlem fiyat listesi (Teknik Servis)
   repairMarkupPercent: number // Teknik servis: parçaların satış fiyatı toplamının üzerine eklenen işçilik/kâr yüzdesi
 }
@@ -69,6 +71,7 @@ const getInitialCompany = (): CompanySettings => ({
   minMarginPercent: 0,
   cardCommissionPercent: 0,
   repairMarkupPercent: 30,
+  defaultMinStock: 5,
   repairServices: DEFAULT_REPAIR_SERVICES,
 })
 
@@ -95,6 +98,7 @@ export default function SettingsPage() {
   const [restoreLoading, setRestoreLoading] = useState(false)
   const isManager = useIsManager()
   const [isLoaded, setIsLoaded] = useState(false)
+  const [applyingMin, setApplyingMin] = useState(false)
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
   const [waTemplates, setWaTemplates] = useState<WhatsAppTemplates>(DEFAULT_WA_TEMPLATES)
   const [users, setUsers] = useState<AppUser[]>([])
@@ -172,6 +176,23 @@ export default function SettingsPage() {
       localStorage.setItem("yt_login_records", JSON.stringify(loginRecords))
     }
   }, [loginRecords, isLoaded])
+
+  // Envanterdeki TÜM ürünlerin minimum stok adedini değiştirir; aynı değer yeni ürünlerde varsayılan olur
+  const handleApplyMinStock = async () => {
+    const n = Math.max(0, Math.floor(Number(company.defaultMinStock ?? 5) || 0))
+    if (!window.confirm(`Envanterdeki TÜM ürünlerin minimum stok adedi ${n} olarak değiştirilecek. Devam edilsin mi?`)) return
+    setApplyingMin(true)
+    try {
+      const count = await setAllMinQuantity(n)
+      handleSaveCompany()
+      showToast(`${count} ürünün minimum stok adedi ${n} yapıldı.`, "success")
+    } catch (e: any) {
+      console.error(e)
+      showToast(e?.message || "Minimum stok adedi güncellenemedi.", "error")
+    } finally {
+      setApplyingMin(false)
+    }
+  }
 
   const handleSaveCompany = () => {
     localStorage.setItem("yt_company", JSON.stringify(company))
@@ -447,6 +468,25 @@ export default function SettingsPage() {
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                   <p className="text-xs text-slate-500">0 = kontrol yok. Satış bu orandan düşük kârla (ya da maliyetin altında) yapılırsa sadece Yönetici onaylayabilir.</p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-slate-300">Envanter Minimum Stok Adedi (tüm ürünler)</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={company.defaultMinStock ?? 5}
+                      onChange={(e) => setCompany({ ...company, defaultMinStock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                      className="bg-slate-700 border-slate-600 text-white"
+                    />
+                    {isManager && (
+                      <button type="button" disabled={applyingMin} onClick={handleApplyMinStock} className="px-3 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm whitespace-nowrap disabled:opacity-50">
+                        {applyingMin ? "Uygulanıyor..." : "Tüm ürünlere uygula"}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500">Stoğu bu adede ya da altına düşen ürünler Envanter'de <b className="text-amber-400">sarı (kritik)</b>, stoğu 0 olanlar <b className="text-red-400">kırmızı (tükendi)</b> görünür. "Tüm ürünlere uygula" mevcut bütün ürünlerin minimum stok adedini bu değere çeker; ayrıca yeni eklenen ürünlerde de varsayılan olur. 0 yazarsanız kritik uyarı kapanır (tükenenler yine kırmızıdır).</p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-300">Teknik Servis Hazır İşlem Fiyatları (başlangıç fiyatı)</label>
