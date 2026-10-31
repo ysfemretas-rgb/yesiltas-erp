@@ -1,5 +1,7 @@
 "use client"
 
+import { isSparePart } from "@/lib/productKinds"
+import { PhoneInput } from "@/components/PhoneInput"
 import { lineNetUnitPrice, discountAmount } from "@/lib/settlementMath"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
@@ -205,9 +207,11 @@ export default function SalesPage() {
   }, [customers, customerSearch])
 
   const filteredProducts = useMemo(() => {
-    if (!searchTerm) return products
+    // Satışta yedek parçalar (Yedek Parça - Ekran vb.) listelenmez; onlar teknik serviste kullanılır
+    const sellable = products.filter(p => !isSparePart(p))
+    if (!searchTerm) return sellable
     const search = searchTerm.toLowerCase()
-    return products.filter(p =>
+    return sellable.filter(p =>
       (p.name && p.name.toLowerCase().includes(search)) ||
       (p.category && p.category.toLowerCase().includes(search)) ||
       (p.productCode && p.productCode.toLowerCase().includes(search)) ||
@@ -1287,8 +1291,8 @@ Bu işlem geri alınamaz!`)) return
               {showNewCustomer && (
                 <div className="space-y-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <Input placeholder="Ad Soyad *" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
-                  <Input placeholder="Telefon 1 *" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
-                  <Input placeholder="Telefon 2" value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                  <PhoneInput placeholder="Telefon 1 *" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                  <PhoneInput placeholder="Telefon 2" value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                   {!showMoreCustomerFields ? (
                     <button type="button" onClick={() => setShowMoreCustomerFields(true)} className="text-xs text-blue-400 hover:text-blue-300">
                       + Detaylı bilgi ekle (e-posta, adres)

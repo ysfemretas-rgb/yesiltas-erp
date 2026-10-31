@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
@@ -302,7 +303,7 @@ export default function InventoryPage() {
       {quickSupplierFor === target && (
         <div className="space-y-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
           <Input placeholder="Tedarikçi / Toptancı Adı *" value={quickSupplierName} onChange={(e) => setQuickSupplierName(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
-          <Input placeholder="Telefon (opsiyonel)" value={quickSupplierPhone} onChange={(e) => setQuickSupplierPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+          <PhoneInput placeholder="Telefon (opsiyonel)" value={quickSupplierPhone} onChange={(e) => setQuickSupplierPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
           <Button type="button" size="sm" onClick={handleQuickSupplier} className="bg-emerald-600 hover:bg-emerald-700">✅ Ekle</Button>
         </div>
       )}
@@ -1489,7 +1490,7 @@ export default function InventoryPage() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="Satıcı Ad Soyad *" value={purchaseForm.sellerName} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerName: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
-              <Input placeholder="Telefon" value={purchaseForm.sellerPhone} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerPhone: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+              <PhoneInput placeholder="Telefon" value={purchaseForm.sellerPhone} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerPhone: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <Input placeholder="T.C. Kimlik No (belgeye yazılır, kaydedilmez)" value={purchaseForm.sellerIdNo} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerIdNo: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <Input placeholder="Cihaz (marka / model) *" value={purchaseForm.deviceName} onChange={(e) => setPurchaseForm({ ...purchaseForm, deviceName: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />

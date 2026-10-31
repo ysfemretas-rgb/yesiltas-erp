@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { CustomerPicker } from "@/components/CustomerPicker"
@@ -708,7 +709,7 @@ export default function AppointmentsPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300">Telefon <span className="text-red-400">*</span></label>
-              <Input
+              <PhoneInput
                 value={newCustomer.phone}
                 onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
                 className="bg-slate-800 border-slate-700 text-white"

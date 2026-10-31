@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { SettleDialog } from "@/components/finance/SettleDialog"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
@@ -694,7 +695,7 @@ export default function CustomersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Telefon *</label>
-                  <Input
+                  <PhoneInput
                     value={newCustomer.phone || newCustomer.phone1 || ""}
                     onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value, phone1: e.target.value })}
                     placeholder="0555 123 4567"
@@ -703,7 +704,7 @@ export default function CustomersPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Telefon 2</label>
-                  <Input
+                  <PhoneInput
                     value={newCustomer.phone2 || ""}
                     onChange={(e) => setNewCustomer({ ...newCustomer, phone2: e.target.value })}
                     placeholder="0555 987 6543"
@@ -1150,11 +1151,11 @@ export default function CustomersPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Telefon</label>
-                <Input value={newCustomer.phone || newCustomer.phone1 || ""} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value, phone1: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+                <PhoneInput value={newCustomer.phone || newCustomer.phone1 || ""} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value, phone1: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300">Telefon 2</label>
-                <Input value={newCustomer.phone2 || ""} onChange={(e) => setNewCustomer({...newCustomer, phone2: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
+                <PhoneInput value={newCustomer.phone2 || ""} onChange={(e) => setNewCustomer({...newCustomer, phone2: e.target.value})} className="bg-slate-800 border-slate-700 text-white" />
               </div>
             </div>
             <div className="space-y-2">

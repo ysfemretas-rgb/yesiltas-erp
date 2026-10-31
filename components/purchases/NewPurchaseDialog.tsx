@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -350,7 +351,7 @@ export function NewPurchaseDialog({
               {quickSupplier && (
                 <div className="space-y-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
                   <Input placeholder="Tedarikçi / Toptancı adı *" value={qsName} onChange={(e) => setQsName(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
-                  <Input placeholder="Telefon (opsiyonel)" value={qsPhone} onChange={(e) => setQsPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                  <PhoneInput placeholder="Telefon (opsiyonel)" value={qsPhone} onChange={(e) => setQsPhone(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                   <Button type="button" size="sm" onClick={addQuickSupplier} className="bg-emerald-600 hover:bg-emerald-700">✅ Ekle</Button>
                 </div>
               )}
@@ -370,7 +371,7 @@ export function NewPurchaseDialog({
               />
               <div className="grid grid-cols-2 gap-2">
                 <Input placeholder="Ad Soyad *" value={partyName} onChange={(e) => { setPartyName(e.target.value); setCustomerId("") }} className="bg-slate-800 border-slate-600 text-white" />
-                <Input placeholder="Telefon" value={partyPhone} onChange={(e) => setPartyPhone(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                <PhoneInput placeholder="Telefon" value={partyPhone} onChange={(e) => setPartyPhone(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
               <Input placeholder="T.C. Kimlik No (belgeye basılır, kaydedilmez)" value={sellerIdNo} onChange={(e) => setSellerIdNo(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
             </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
@@ -278,7 +279,7 @@ export default function WarrantiesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Telefon</label>
-                  <Input
+                  <PhoneInput
                     value={newWarranty.customerPhone || ""}
                     onChange={(e) => setNewWarranty({ ...newWarranty, customerPhone: e.target.value })}
                     placeholder="0555 123 4567"
@@ -562,7 +563,7 @@ export default function WarrantiesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Telefon</label>
-                  <Input
+                  <PhoneInput
                     value={editingWarranty.customerPhone}
                     onChange={(e) => setEditingWarranty({ ...editingWarranty, customerPhone: e.target.value })}
                     className="bg-slate-800 border-slate-600 text-white"

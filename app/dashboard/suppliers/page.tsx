@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { SettleDialog } from "@/components/finance/SettleDialog"
 import { supplierDebtInfo } from "@/lib/supplierDebt"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
@@ -319,7 +320,7 @@ export default function SuppliersPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-300">Telefon</label>
-                    <Input
+                    <PhoneInput
                       value={newSupplier.phone || ""}
                       onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-white"
@@ -537,17 +538,17 @@ export default function SuppliersPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm text-slate-400 mb-2">
-                      <div className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {supplier.phone}
+                      <div className="flex items-center gap-1 min-w-0">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0 break-all">{supplier.phone}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        {supplier.email}
+                      <div className="flex items-center gap-1 min-w-0">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0 break-all">{supplier.email}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {supplier.address}
+                      <div className="flex items-center gap-1 min-w-0">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0 break-all">{supplier.address}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Package className="h-3 w-3" />
@@ -619,7 +620,7 @@ export default function SuppliersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Telefon</label>
-                  <Input value={newSupplier.phone || ""} onChange={(e) => setNewSupplier({...newSupplier, phone: e.target.value})} className="bg-slate-700 border-slate-600 text-white" />
+                  <PhoneInput value={newSupplier.phone || ""} onChange={(e) => setNewSupplier({...newSupplier, phone: e.target.value})} className="bg-slate-700 border-slate-600 text-white" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">E-posta</label>

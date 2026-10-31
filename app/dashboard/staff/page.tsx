@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/PhoneInput"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
@@ -323,7 +324,7 @@ export default function StaffPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-300">Telefon</label>
-                    <Input
+                    <PhoneInput
                       value={newMember.phone || ""}
                       onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
                       placeholder="0555 123 4567"
@@ -632,7 +633,7 @@ export default function StaffPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-300">Telefon</label>
-                    <Input
+                    <PhoneInput
                       value={editingMember.phone}
                       onChange={(e) => setEditingMember({ ...editingMember, phone: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-white"

@@ -1,5 +1,7 @@
 "use client"
 
+import { isSparePart } from "@/lib/productKinds"
+import { PhoneInput } from "@/components/PhoneInput"
 import { RepairService, DEFAULT_REPAIR_SERVICES, normalizeServices, servicesTotal } from "@/lib/repairServices"
 import { SearchPicker } from "@/components/SearchPicker"
 import { PHONE_BRANDS, PHONE_CATALOG } from "@/lib/productCatalog"
@@ -124,6 +126,8 @@ function RepairsPageContent() {
   const [quoteNote, setQuoteNote] = useState("")
   const [staffList, setStaffList] = useState<StaffMember[]>([])
   const [stockItems, setStockItems] = useState<InventoryItem[]>([])
+  const [showAllParts, setShowAllParts] = useState(false) // varsayılan: sadece yedek parça kategorisi; gerekirse tüm ürünler
+  const partItems = useMemo(() => stockItems.filter((i) => i.quantity > 0 && (showAllParts || isSparePart(i))), [stockItems, showAllParts])
   const [partProductId, setPartProductId] = useState("")
   const [partQty, setPartQty] = useState("1")
   const [listPage, setListPage] = useState(1)
@@ -1034,7 +1038,7 @@ function RepairsPageContent() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-slate-300 text-xs">Telefon 1 <span className="text-red-400">*</span></Label>
-                      <Input 
+                      <PhoneInput 
                         value={phone1} 
                         onChange={(e) => setPhone1(e.target.value)} 
                         className="bg-slate-800 border-slate-600 text-white"
@@ -1043,7 +1047,7 @@ function RepairsPageContent() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-slate-300 text-xs">Telefon 2</Label>
-                      <Input 
+                      <PhoneInput 
                         value={phone2} 
                         onChange={(e) => setPhone2(e.target.value)} 
                         className="bg-slate-800 border-slate-600 text-white"
@@ -1146,7 +1150,7 @@ function RepairsPageContent() {
                           <SelectValue placeholder="Parça seçin" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-800 border-slate-600 max-h-60">
-                          {stockItems.filter((i) => i.quantity > 0).map((i) => (
+                          {partItems.map((i) => (
                             <SelectItem key={i.id} value={i.id} className="text-white">{i.name} (stok {i.quantity}) • {formatCurrency(i.salePrice)}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1154,6 +1158,7 @@ function RepairsPageContent() {
                       <Input type="number" min={1} value={formPartQty} onChange={(e) => setFormPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
                       <Button type="button" aria-label="Parçayı ekle" onClick={addFormPart} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4" /></Button>
                     </div>
+                    <button type="button" onClick={() => setShowAllParts((v) => !v)} className="text-xs text-slate-400 underline">{showAllParts ? "Sadece yedek parçaları göster" : `Listede yoksa tüm ürünleri göster (şu an ${partItems.length} yedek parça)`}</button>
                   </>
                 )}
               </div>
@@ -1571,12 +1576,12 @@ function RepairsPageContent() {
               </div>
               <div className="space-y-2">
                 <Label className="text-slate-300">Telefon 1 <span className="text-red-400">*</span></Label>
-                <Input value={phone1} onChange={(e) => setPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                <PhoneInput value={phone1} onChange={(e) => setPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-slate-300">Telefon 2</Label>
-              <Input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ikinci telefon (opsiyonel)" />
+              <PhoneInput value={phone2} onChange={(e) => setPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Ikinci telefon (opsiyonel)" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1786,7 +1791,7 @@ function RepairsPageContent() {
                     <SelectValue placeholder="Parça seçin" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-600 max-h-60">
-                    {stockItems.filter(i => i.quantity > 0).map(i => (
+                    {partItems.map(i => (
                       <SelectItem key={i.id} value={i.id} className="text-white">{i.name} (stok {i.quantity})</SelectItem>
                     ))}
                   </SelectContent>
@@ -1924,11 +1929,11 @@ function RepairsPageContent() {
             </div>
             <div className="space-y-2">
               <Label className="text-slate-300">Telefon 1 <span className="text-red-400">*</span></Label>
-              <Input value={newCustomerPhone1} onChange={(e) => setNewCustomerPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0532 123 4567" />
+              <PhoneInput value={newCustomerPhone1} onChange={(e) => setNewCustomerPhone1(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0532 123 4567" />
             </div>
             <div className="space-y-2">
               <Label className="text-slate-300">Telefon 2</Label>
-              <Input value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0544 987 6543" />
+              <PhoneInput value={newCustomerPhone2} onChange={(e) => setNewCustomerPhone2(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="0544 987 6543" />
             </div>
             <div className="space-y-2">
               <Label className="text-slate-300">E-posta</Label>

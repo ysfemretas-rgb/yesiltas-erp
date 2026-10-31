@@ -371,7 +371,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </aside>
 
-        <main className="flex-1 overflow-auto bg-background min-w-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background min-w-0">
           <div className="lg:hidden flex items-center justify-between h-14 border-b px-4 bg-card">
             <div className="flex items-center gap-2">
               <Button

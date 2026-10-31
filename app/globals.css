@@ -56,3 +56,12 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
+
+/* Telefonda (iOS Safari) 16px'ten küçük yazılı kutuya odaklanınca sayfayı yakınlaştırır ve geri küçültmez: 16px yaparak engellenir */
+@media (max-width: 1024px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
+/* Izgara (grid) çocukları içerikten küçülebilsin: uzun e-posta/ürün adı sayfayı genişletmesin (özgüllük 0: utility sınıfları geçerli kalır) */
+:where(.grid) > * { min-width: 0; }
+img, video, canvas { max-width: 100%; }
