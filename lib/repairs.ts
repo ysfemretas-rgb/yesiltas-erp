@@ -1,6 +1,7 @@
 import { dbDateToLocal } from "@/lib/dates"
 import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
+import { adjustInventoryQuantity } from "@/lib/inventory"
 
 import type { RepairQc, RepairQuote } from "@/lib/repairWorkflow"
 
@@ -235,4 +236,28 @@ export async function deleteRepair(id: string): Promise<void> {
     throw new Error("Silme işlemi reddedildi — bu işlem için yetkiniz olmayabilir (sadece Yönetici silebilir).")
   }
   logActivity("Teknik Servis", "deleted", `${existing?.customer_name || "Bir kayıt"} — ${existing?.brand || ""} ${existing?.model || ""} silindi`)
+}
+
+// Yeni tamir kaydı açılırken seçilen parçaları stoktan düşer ve tamire (parça listesi + parça maliyeti) yazar.
+// Önce HEPSİ için stok yeterli mi diye bakılır (yetersizse hiçbir şey düşmez); düşme sırasında hata olursa düşülenler geri verilir.
+export async function consumeRepairParts(repair: { id: string; repairCode?: string }, parts: RepairPart[]): Promise<Repair> {
+  if (parts.length === 0) throw new Error("Parça listesi boş.")
+  for (const p of parts) {
+    const { data, error } = await supabase.from("inventory").select("quantity").eq("id", p.productId).single()
+    if (error || !data) throw new Error(`${p.name}: ürün envanterde bulunamadı.`)
+    const stock = Number(data.quantity) || 0
+    if (stock < p.quantity) throw new Error(`${p.name}: stokta sadece ${stock} adet var (${p.quantity} gerekiyor).`)
+  }
+  const done: RepairPart[] = []
+  try {
+    for (const p of parts) {
+      await adjustInventoryQuantity(p.productId, -p.quantity, `Tamir ${repair.repairCode || ""}`.trim(), p.name, true)
+      done.push(p)
+    }
+    const partsCost = Math.round(parts.reduce((sum, p) => sum + p.unitCost * p.quantity, 0) * 100) / 100
+    return await updateRepair(repair.id, { parts, partsCost })
+  } catch (e) {
+    for (const d of done) await adjustInventoryQuantity(d.productId, d.quantity, "Tamir parça işlemi başarısız — stok iadesi", d.name).catch((err) => console.error(err))
+    throw e
+  }
 }

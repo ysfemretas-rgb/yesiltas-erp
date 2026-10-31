@@ -1,5 +1,6 @@
 "use client"
 
+import { RepairService, DEFAULT_REPAIR_SERVICES, normalizeServices, servicesTotal } from "@/lib/repairServices"
 import { SearchPicker } from "@/components/SearchPicker"
 import { PHONE_BRANDS, PHONE_CATALOG } from "@/lib/productCatalog"
 import { openWhatsApp } from "@/lib/whatsapp"
@@ -7,7 +8,7 @@ import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
-import { Repair, RepairPart, fetchRepairs, createRepair, updateRepair, deleteRepair } from "@/lib/repairs"
+import { Repair, RepairPart, fetchRepairs, createRepair, updateRepair, deleteRepair, consumeRepairParts } from "@/lib/repairs"
 import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/inventory"
 import { fetchStaff, StaffMember } from "@/lib/staff"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
@@ -97,6 +98,18 @@ function RepairsPageContent() {
   const [issue, setIssue] = useState("")
   const [imei, setImei] = useState("")
   const [cost, setCost] = useState("")
+  // Yeni tamirde kullanılacak parçalar: kayıt açılırken stoktan otomatik düşer; ücret parçaların satış fiyatı + işçilik %'sinden çıkar
+  const [partsMode, setPartsMode] = useState<"known" | "unknown">("known")
+  const [formParts, setFormParts] = useState<(RepairPart & { salePrice: number })[]>([])
+  const [formPartId, setFormPartId] = useState("")
+  const [formPartQty, setFormPartQty] = useState("1")
+  const [defaultMarkup, setDefaultMarkup] = useState(30)
+  const [markupPct, setMarkupPct] = useState("30")
+  const [costAuto, setCostAuto] = useState(true)
+  // Hazır işlemler (ekran değişimi, batarya değişimi...): fiyatlar Ayarlar'dan; "Özel fiyat" seçilirse tutar elle yazılır
+  const [services, setServices] = useState<RepairService[]>(DEFAULT_REPAIR_SERVICES)
+  const [selectedServices, setSelectedServices] = useState<string[]>([])
+  const [customPrice, setCustomPrice] = useState(false)
   const [discount, setDiscount] = useState("")
   const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [paymentType, setPaymentType] = useState<string>("unpaid")
@@ -122,6 +135,18 @@ function RepairsPageContent() {
   const [newCustomerPhone2, setNewCustomerPhone2] = useState("")
   const [newCustomerEmail, setNewCustomerEmail] = useState("")
   const [newCustomerAddress, setNewCustomerAddress] = useState("")
+  // Otomatik ücret: parçaların satış fiyatları toplamı + üzerine işçilik %'si. Elle değiştirilirse otomatik hesap durur.
+  const partsSaleTotal = useMemo(() => formParts.reduce((sum, p) => sum + p.salePrice * p.quantity, 0), [formParts])
+  const servicesSum = useMemo(() => servicesTotal(selectedServices, services), [selectedServices, services])
+  // İşlem seçildiyse: parçalar düz satış fiyatı + işlem fiyatları (işçilik işlemin içinde). Seçilmediyse: parçalar + işçilik %.
+  const autoPrice = useMemo(
+    () => Math.round(servicesSum > 0 ? partsSaleTotal + servicesSum : partsSaleTotal * (1 + (Number(String(markupPct).replace(",", ".")) || 0) / 100)),
+    [partsSaleTotal, servicesSum, markupPct]
+  )
+  useEffect(() => {
+    if (!customPrice && costAuto && (formParts.length > 0 || selectedServices.length > 0)) setCost(String(autoPrice))
+  }, [autoPrice, customPrice, costAuto, formParts.length, selectedServices.length])
+
   useEffect(() => {
     let cancelled = false
 
@@ -130,6 +155,8 @@ function RepairsPageContent() {
       if (companyRaw) {
         const parsed = JSON.parse(companyRaw)
         if (typeof parsed?.maxDiscountPercent === "number") setMaxDiscountPercent(parsed.maxDiscountPercent)
+        if (Array.isArray(parsed?.repairServices)) setServices(normalizeServices(parsed.repairServices))
+        if (typeof parsed?.repairMarkupPercent === "number") { setDefaultMarkup(parsed.repairMarkupPercent); setMarkupPct(String(parsed.repairMarkupPercent)) }
       }
     } catch (e) {
       console.error("Şirket ayarları okunamadı:", e)
@@ -415,12 +442,26 @@ function RepairsPageContent() {
         paid: paidNum,
         remaining: remainingNum,
         paymentType: paymentType as Repair["paymentType"],
-        notes: notesInput,
+        notes: [notesInput, selectedServices.length > 0 ? `İşlemler: ${selectedServices.join(", ")}` : ""].filter(Boolean).join("\n"),
         stage: "received",
         estimatedDelivery: newEstimated || "",
         createdAt: localDateStr(),
       })
-      setRepairs([newRepair, ...repairs])
+      let savedRepair = newRepair
+      let partsNote = ""
+      // Seçilen parçalar kayıt açılırken stoktan otomatik düşer; tamire parça ve maliyet olarak yazılır
+      if (partsMode === "known" && formParts.length > 0) {
+        try {
+          const partsToSave: RepairPart[] = formParts.map((p) => ({ productId: p.productId, name: p.name, quantity: p.quantity, unitCost: p.unitCost }))
+          savedRepair = await consumeRepairParts(newRepair, partsToSave)
+          setStockItems((prev) => prev.map((i) => { const d = formParts.find((x) => x.productId === i.id); return d ? { ...i, quantity: i.quantity - d.quantity } : i }))
+          partsNote = ` ${formParts.length} parça stoktan düşüldü.`
+        } catch (e: any) {
+          console.error(e)
+          partsNote = ` Parçalar işlenemedi (${e?.message || "stok yetersiz olabilir"}); kayıt açıldı, parçaları kayıt içinden ekleyin.`
+        }
+      }
+      setRepairs([savedRepair, ...repairs])
 
       if (isGift && netCost > 0) {
         // Eşantiyon: müşteriden ücret alınmadı, ama verilen değeri kasaya gider (zarar) olarak yaz.
@@ -445,7 +486,7 @@ function RepairsPageContent() {
 
       resetForm()
       setIsDialogOpen(false)
-      showToast(`Tamir kaydı eklendi.${customerNote}`, "success")
+      showToast(`Tamir kaydı eklendi.${partsNote}${customerNote}`, "success")
     } catch (e) {
       console.error(e)
       showToast("Tamir kaydı eklenirken bir sorun oluştu.", "error")
@@ -651,6 +692,14 @@ function RepairsPageContent() {
   }
 
   const resetForm = () => {
+    setPartsMode("known")
+    setFormParts([])
+    setFormPartId("")
+    setFormPartQty("1")
+    setMarkupPct(String(defaultMarkup))
+    setCostAuto(true)
+    setSelectedServices([])
+    setCustomPrice(false)
     setCustomerId("")
     setCustomerName("")
     setPhone1("")
@@ -680,6 +729,27 @@ function RepairsPageContent() {
   }
 
   const sumPartsCost = (parts: RepairPart[]) => Math.round(parts.reduce((sum, p) => sum + p.unitCost * p.quantity, 0) * 100) / 100
+
+  // Yeni tamir formunda parça listesine ekler (stok burada düşmez; kayıt açılırken düşer)
+  const addFormPart = () => {
+    const product = stockItems.find((i) => i.id === formPartId)
+    const qty = Math.floor(Number(formPartQty))
+    if (!product || !qty || qty < 1) {
+      showToast("Parça ve adet seçin.", "error")
+      return
+    }
+    const already = formParts.find((p) => p.productId === product.id)?.quantity || 0
+    if (qty + already > product.quantity) {
+      showToast(`${product.name} — stokta sadece ${product.quantity} adet var${already ? ` (listede zaten ${already} adet)` : ""}.`, "error")
+      return
+    }
+    setFormParts((prev) => already
+      ? prev.map((p) => (p.productId === product.id ? { ...p, quantity: p.quantity + qty } : p))
+      : [...prev, { productId: product.id, name: product.name, quantity: qty, unitCost: costInTRY(product), salePrice: product.salePrice }])
+    setCostAuto(true)
+    setFormPartId("")
+    setFormPartQty("1")
+  }
 
   // Tamirde kullanılan parçayı ekler: stoktan düşer, maliyet tamire yazılır
   const addPart = async () => {
@@ -1038,18 +1108,109 @@ function RepairsPageContent() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label className="text-slate-300">Model</Label>
+                {(device === "Telefon" || device === "Tablet") && (PHONE_CATALOG[brand] || []).length > 0 ? (
+                  <SearchPicker options={PHONE_CATALOG[brand] || []} value={model} onChange={setModel} placeholder="Model seçin ya da yazın" />
+                ) : (
+                  <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
+                )}
+              </div>
+
+              <div className="space-y-3 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label className="text-slate-300 flex items-center gap-2"><PackageIcon className="h-4 w-4" />Kullanılacak Parçalar</Label>
+                  <div className="flex rounded-md overflow-hidden border border-slate-600">
+                    {(["known", "unknown"] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => setPartsMode(m)} className={`px-3 py-1 text-sm ${partsMode === m ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300"}`}>{m === "known" ? "Parça belli" : "Belirsiz"}</button>
+                    ))}
+                  </div>
+                </div>
+                {partsMode === "unknown" ? (
+                  <p className="text-xs text-slate-400">Parça belirsiz: kayıt açıldıktan sonra tamir işleme alınınca, kaydın içinden <b>Kullanılan Parçalar</b>'dan parçayı ekleyin (stoktan düşer, önerilen ücret orada görünür). Ücreti şimdilik elle girebilirsiniz.</p>
+                ) : (
+                  <>
+                    {formParts.length === 0 && <p className="text-xs text-slate-500">Parça ekleyin: kayıt açılırken seçilen parçalar stoktan otomatik düşer, ücret parçaların satış fiyatından hesaplanır.</p>}
+                    {formParts.map((p, i) => (
+                      <div key={`${p.productId}-${i}`} className="flex items-center justify-between gap-2 text-sm p-2 bg-slate-900 rounded border border-slate-700">
+                        <span className="text-white truncate">{p.name} <span className="text-slate-500">x{p.quantity}</span></span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="text-emerald-300">{formatCurrency(p.salePrice * p.quantity)}</span>
+                          <Button type="button" size="icon" variant="outline" className="h-6 w-6 text-red-400" onClick={() => setFormParts((prev) => prev.filter((_, idx) => idx !== i))}><TrashIcon className="h-3 w-3" /></Button>
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <Select value={formPartId} onValueChange={setFormPartId}>
+                        <SelectTrigger className="bg-slate-800 border-slate-600 text-white flex-1 min-w-0">
+                          <SelectValue placeholder="Parça seçin" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-600 max-h-60">
+                          {stockItems.filter((i) => i.quantity > 0).map((i) => (
+                            <SelectItem key={i.id} value={i.id} className="text-white">{i.name} (stok {i.quantity}) • {formatCurrency(i.salePrice)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input type="number" min={1} value={formPartQty} onChange={(e) => setFormPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
+                      <Button type="button" aria-label="Parçayı ekle" onClick={addFormPart} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4" /></Button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-3 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                <Label className="text-slate-300">Yapılacak İşlem</Label>
+                <div className="flex flex-wrap gap-2">
+                  {services.map((sv) => {
+                    const on = selectedServices.includes(sv.name)
+                    return (
+                      <button
+                        key={sv.name}
+                        type="button"
+                        onClick={() => {
+                          setCustomPrice(false)
+                          setCostAuto(true)
+                          setSelectedServices((prev) => (prev.includes(sv.name) ? prev.filter((x) => x !== sv.name) : [...prev, sv.name]))
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-sm border ${on ? "bg-emerald-600 border-emerald-600 text-white" : "bg-slate-800 border-slate-600 text-slate-300"}`}
+                      >
+                        {sv.name} • {formatCurrency(sv.price)}
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !customPrice
+                      setCustomPrice(next)
+                      if (next) { setSelectedServices([]); setCostAuto(false); setCost("") } else setCostAuto(true)
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-sm border ${customPrice ? "bg-amber-600 border-amber-600 text-white" : "bg-slate-800 border-amber-700 text-amber-300"}`}
+                  >
+                    ✏️ Özel fiyat
+                  </button>
+                </div>
+                {customPrice && <p className="text-xs text-amber-300">Özel fiyat: aşağıdaki Ücret kutusuna tutarı kendiniz yazın. Otomatik hesap kapalı.</p>}
+                {!customPrice && (formParts.length > 0 || selectedServices.length > 0) && (
+                  <div className="space-y-1 text-sm pt-2 border-t border-slate-700">
+                    {formParts.length > 0 && <div className="flex justify-between"><span className="text-slate-400">Parçaların satış toplamı</span><span className="text-white">{formatCurrency(partsSaleTotal)}</span></div>}
+                    {selectedServices.length > 0 && <div className="flex justify-between"><span className="text-slate-400">İşlem ücreti ({selectedServices.length} işlem)</span><span className="text-white">{formatCurrency(servicesSum)}</span></div>}
+                    {selectedServices.length === 0 && formParts.length > 0 && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-slate-400">Üzerine eklenecek % (işçilik)</span>
+                        <Input type="number" min={0} value={markupPct} onChange={(e) => { setMarkupPct(e.target.value); setCostAuto(true) }} className="w-20 h-8 bg-slate-800 border-slate-600 text-white" />
+                      </div>
+                    )}
+                    <div className="flex justify-between"><span className="text-slate-400">Önerilen ücret</span><span className="text-emerald-300 font-bold">{formatCurrency(autoPrice)}</span></div>
+                    {!costAuto && <button type="button" onClick={() => { setCostAuto(true); setCost(String(autoPrice)) }} className="text-xs text-emerald-400 underline">↺ Ücreti otomatik hesaplanana döndür</button>}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Model</Label>
-                  {(device === "Telefon" || device === "Tablet") && (PHONE_CATALOG[brand] || []).length > 0 ? (
-                    <SearchPicker options={PHONE_CATALOG[brand] || []} value={model} onChange={setModel} placeholder="Model seçin ya da yazın" />
-                  ) : (
-                    <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
-                  )}
-                </div>
-                <div className="space-y-2">
                   <Label className="text-slate-300">Ücret (TL)</Label>
-                  <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
+                  <Input type="number" value={cost} onChange={(e) => { setCost(e.target.value); setCostAuto(false) }} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-slate-300">İskonto (TL)</Label>
@@ -1633,6 +1794,17 @@ function RepairsPageContent() {
                 <Input type="number" min={1} value={partQty} onChange={(e) => setPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
                 <Button type="button" onClick={addPart} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4" /></Button>
               </div>
+              {selectedRepair && (selectedRepair.parts || []).length > 0 && (() => {
+                // Önerilen ücret: kullanılan parçaların SATIŞ fiyatları toplamı + işçilik %'si (parça envanterde duruyorsa). Elle uygulanır.
+                const base = (selectedRepair.parts || []).reduce((sum, pt) => sum + (stockItems.find((i) => i.id === pt.productId)?.salePrice || 0) * pt.quantity, 0)
+                const suggested = Math.round(base * (1 + defaultMarkup / 100))
+                return base > 0 ? (
+                  <div className="flex items-center justify-between gap-2 text-sm pt-1 border-t border-slate-700">
+                    <span className="text-slate-400">Önerilen ücret (parçalar + %{defaultMarkup}): <span className="text-emerald-300 font-semibold">{formatCurrency(suggested)}</span></span>
+                    <Button type="button" size="sm" variant="outline" className="border-emerald-700 text-emerald-300 h-7" onClick={() => { setCost(String(suggested)); showToast("Ücret alanına yazıldı; kaydetmek için Güncelle'ye basın.", "success") }}>Ücrete yaz</Button>
+                  </div>
+                ) : null
+              })()}
               {selectedRepair && (selectedRepair.partsCost || 0) > 0 && (
                 <div className="flex justify-between text-sm pt-1 border-t border-slate-700">
                   <span className="text-slate-400">Parça maliyeti: <span className="text-amber-400">{formatCurrency(selectedRepair.partsCost || 0)}</span></span>

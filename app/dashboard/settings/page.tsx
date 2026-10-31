@@ -1,5 +1,6 @@
 "use client"
 
+import { DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices"
 import { pushCompanySettings } from "@/lib/companySettings"
 import { Toast, useToast } from "@/components/toast"
 
@@ -32,6 +33,8 @@ interface CompanySettings {
   maxDiscountPercent: number
   minMarginPercent: number
   cardCommissionPercent: number
+  repairServices?: { name: string; price: number }[] // hazır işlem fiyat listesi (Teknik Servis)
+  repairMarkupPercent: number // Teknik servis: parçaların satış fiyatı toplamının üzerine eklenen işçilik/kâr yüzdesi
 }
 
 interface AppUser {
@@ -65,6 +68,8 @@ const getInitialCompany = (): CompanySettings => ({
   maxDiscountPercent: 20,
   minMarginPercent: 0,
   cardCommissionPercent: 0,
+  repairMarkupPercent: 30,
+  repairServices: DEFAULT_REPAIR_SERVICES,
 })
 
 const getInitialUsers = (): AppUser[] => [
@@ -442,6 +447,31 @@ export default function SettingsPage() {
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                   <p className="text-xs text-slate-500">0 = kontrol yok. Satış bu orandan düşük kârla (ya da maliyetin altında) yapılırsa sadece Yönetici onaylayabilir.</p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-slate-300">Teknik Servis Hazır İşlem Fiyatları (başlangıç fiyatı)</label>
+                  <div className="space-y-2">
+                    {(company.repairServices || DEFAULT_REPAIR_SERVICES).map((sv, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input value={sv.name} onChange={(e) => setCompany({ ...company, repairServices: (company.repairServices || DEFAULT_REPAIR_SERVICES).map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} className="bg-slate-700 border-slate-600 text-white" />
+                        <Input type="number" min={0} value={sv.price} onChange={(e) => setCompany({ ...company, repairServices: (company.repairServices || DEFAULT_REPAIR_SERVICES).map((x, j) => (j === i ? { ...x, price: Math.max(0, Number(e.target.value) || 0) } : x)) })} className="w-28 bg-slate-700 border-slate-600 text-white" />
+                        <button type="button" onClick={() => setCompany({ ...company, repairServices: (company.repairServices || DEFAULT_REPAIR_SERVICES).filter((_, j) => j !== i) })} className="px-3 rounded-md border border-red-700 text-red-400">Sil</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setCompany({ ...company, repairServices: [...(company.repairServices || DEFAULT_REPAIR_SERVICES), { name: "Yeni işlem", price: 0 }] })} className="px-3 py-1.5 rounded-md border border-emerald-600 text-emerald-400 text-sm">+ İşlem ekle</button>
+                  </div>
+                  <p className="text-xs text-slate-500">Yeni tamir kaydında bu işlemler seçilir ve fiyatlar toplanır. "Özel fiyat" seçilirse tutarı kendiniz yazarsınız. Fiyatlar marka/modele göre değişir; kendi piyasanıza göre düzenleyin.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Teknik Servis İşçilik Yüzdesi (%)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={company.repairMarkupPercent ?? 30}
+                    onChange={(e) => setCompany({ ...company, repairMarkupPercent: Math.max(0, Number(e.target.value) || 0) })}
+                    className="bg-slate-700 border-slate-600 text-white"
+                  />
+                  <p className="text-xs text-slate-500">Yeni tamir kaydında seçilen parçaların SATIŞ fiyatları toplamının üzerine bu yüzde eklenerek ücret otomatik hesaplanır (kayıtta değiştirilebilir).</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Kredi Kartı Komisyonu (%)</label>
