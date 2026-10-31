@@ -1,5 +1,7 @@
 "use client"
 
+import { SearchPicker } from "@/components/SearchPicker"
+import { PHONE_BRANDS, PHONE_CATALOG } from "@/lib/productCatalog"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { localDateStr } from "@/lib/dates"
 import { Toast, useToast } from "@/components/toast"
@@ -20,7 +22,7 @@ import { resolveScan } from "@/lib/recordLookup"
 import { Pagination } from "@/components/Pagination"
 import { Download as DownloadIcon, Trash2 as TrashIcon, Package as PackageIcon, ScanLine } from "lucide-react"
 import { RepairNote as Note, fetchRepairNotes, createRepairNote } from "@/lib/repairNotes"
-import { fetchCustomers, createCustomer } from "@/lib/customers"
+import { fetchCustomers, createCustomer, ensureRepairCustomer } from "@/lib/customers"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource } from "@/lib/finance"
 import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
@@ -89,7 +91,7 @@ function RepairsPageContent() {
   const [customerName, setCustomerName] = useState("")
   const [phone1, setPhone1] = useState("")
   const [phone2, setPhone2] = useState("")
-  const [device, setDevice] = useState("")
+  const [device, setDevice] = useState("Telefon") // çoğu kayıt telefon: marka/model listeden seçilsin
   const [brand, setBrand] = useState("")
   const [model, setModel] = useState("")
   const [issue, setIssue] = useState("")
@@ -307,6 +309,7 @@ function RepairsPageContent() {
         phone2: created.phone2 || "",
         email: created.email,
         address: created.address,
+        customerCode: created.customerCode,
       }
       setCustomers([...customers, newCustomer])
       setCustomerId(newCustomer.id)
@@ -382,8 +385,22 @@ function RepairsPageContent() {
     const paidNum = isGift ? 0 : (paymentType === "partial" ? (parseFloat(paidAmount) || 0) : (paymentType === "unpaid" ? 0 : netCost))
     const remainingNum = isGift ? 0 : calculateRemaining(netCost, paidNum)
     try {
+      // Müşteriyi listeden seçmeden ad/telefon yazıldıysa (yeni müşteri) önce Müşteriler'e kaydedilir; aynı telefon
+      // zaten kayıtlıysa yenisi AÇILMAZ, tamir o müşteriye bağlanır (çift kayıt olmasın).
+      const resolved = await ensureRepairCustomer({ customerId, name: customerName, phone1, phone2 }, customers)
+      const customerCodeToUse = resolved.customerCode
+      let customerNote = ""
+      if (resolved.created) {
+        const c = resolved.created
+        setCustomers((prev) => [...prev, { id: c.id, name: c.name, phone1: c.phone, phone2: c.phone2 || "", email: c.email, address: c.address, customerCode: c.customerCode }])
+        customerNote = " Yeni müşteri Müşteriler sayfasına da eklendi."
+      } else if (resolved.existingName) {
+        customerNote = ` "${resolved.existingName}" bu telefonla zaten kayıtlıydı, tamir o müşteriye bağlandı.`
+      } else if (resolved.error) {
+        customerNote = " (Müşteri kaydı oluşturulamadı; tamir yine de kaydedildi.)"
+      }
       const newRepair = await createRepair({
-        customerCode: customers.find(c => c.id === customerId)?.customerCode || "",
+        customerCode: customerCodeToUse,
         customerName,
         phone1,
         phone2,
@@ -428,7 +445,7 @@ function RepairsPageContent() {
 
       resetForm()
       setIsDialogOpen(false)
-      showToast("Tamir kaydı eklendi.", "success")
+      showToast(`Tamir kaydı eklendi.${customerNote}`, "success")
     } catch (e) {
       console.error(e)
       showToast("Tamir kaydı eklenirken bir sorun oluştu.", "error")
@@ -638,7 +655,7 @@ function RepairsPageContent() {
     setCustomerName("")
     setPhone1("")
     setPhone2("")
-    setDevice("")
+    setDevice("Telefon")
     setBrand("")
     setModel("")
     setIssue("")
@@ -1013,14 +1030,22 @@ function RepairsPageContent() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-slate-300">Marka <span className="text-red-400">*</span></Label>
-                  <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: Apple" />
+                  {device === "Telefon" || device === "Tablet" ? (
+                    <SearchPicker options={PHONE_BRANDS} value={brand} onChange={(v) => { setBrand(v); if (v !== brand) setModel("") }} placeholder="Marka seçin ya da yazın (Apple, Samsung...)" />
+                  ) : (
+                    <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: Lenovo" />
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-slate-300">Model</Label>
-                  <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
+                  {(device === "Telefon" || device === "Tablet") && (PHONE_CATALOG[brand] || []).length > 0 ? (
+                    <SearchPicker options={PHONE_CATALOG[brand] || []} value={model} onChange={setModel} placeholder="Model seçin ya da yazın" />
+                  ) : (
+                    <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-slate-300">Ücret (TL)</Label>

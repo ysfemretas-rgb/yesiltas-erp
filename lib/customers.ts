@@ -486,3 +486,36 @@ export async function mergeCustomers(sourceId: string, targetId: string): Promis
   logActivity("Müşteriler", "updated", `${src.name} müşterisi ${tgt.name} ile birleştirildi (${moved} kayıt taşındı)`)
   return { moved }
 }
+
+// Tamir kaydı için müşteriyi çözer: listeden seçilmişse onun kodu; seçilmeden ad/telefon yazılmışsa (yeni müşteri) Müşteriler'e
+// KAYDEDİLİR. Aynı telefon (son 10 hane) zaten kayıtlıysa yenisi AÇILMAZ, mevcut müşteriye bağlanır (çift kayıt olmasın).
+export async function ensureRepairCustomer(
+  input: { customerId: string; name: string; phone1: string; phone2?: string },
+  customers: { id: string; name: string; phone1: string; customerCode?: string }[]
+): Promise<{ customerCode: string; created?: Customer; existingName?: string; error?: string }> {
+  const picked = customers.find((c) => c.id === input.customerId)
+  if (input.customerId && picked) return { customerCode: picked.customerCode || "" }
+  const name = input.name.trim()
+  const phone = input.phone1.trim()
+  if (!name || !phone) return { customerCode: "" }
+  const last10 = (v: string) => String(v || "").replace(/\D/g, "").slice(-10)
+  if (last10(phone).length >= 10) {
+    const existing = customers.find((c) => last10(c.phone1) === last10(phone))
+    if (existing) return { customerCode: existing.customerCode || "", existingName: existing.name }
+  }
+  try {
+    const created = await createCustomer({
+      name,
+      firstName: name.split(" ")[0] || name,
+      lastName: name.split(" ").slice(1).join(" "),
+      phone,
+      phone2: (input.phone2 || "").trim(),
+      status: "active",
+      lastVisit: localDateStr(),
+    })
+    return { customerCode: created.customerCode || "", created }
+  } catch (e: any) {
+    console.error(e)
+    return { customerCode: "", error: e?.message || "Müşteri kaydı oluşturulamadı" }
+  }
+}
