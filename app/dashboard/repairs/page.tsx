@@ -112,6 +112,7 @@ function RepairsPageContent() {
   const [services, setServices] = useState<RepairService[]>(DEFAULT_REPAIR_SERVICES)
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [customPrice, setCustomPrice] = useState(false)
+  const [openPartsId, setOpenPartsId] = useState<string | null>(null) // listede "Kullanılan parçalar" detayı açık olan tamir
   const [discount, setDiscount] = useState("")
   const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [paymentType, setPaymentType] = useState<string>("unpaid")
@@ -1450,6 +1451,36 @@ function RepairsPageContent() {
                         <div className="text-xs text-slate-500 font-mono">IMEI: {repair.imei}</div>
                       )}
                       <div className="text-xs text-slate-500 mt-0.5">📅 {repair.createdAt}</div>
+                      {((repair.parts || []).length > 0 || /İşlemler:/.test(repair.notes || "")) && (
+                        <div className="mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setOpenPartsId(openPartsId === repair.id ? null : repair.id)}
+                            className="text-xs text-emerald-300 underline"
+                          >
+                            🔩 Kullanılan parçalar / işlemler{(repair.parts || []).length > 0 ? ` (${(repair.parts || []).length})` : ""} {openPartsId === repair.id ? "▲" : "▼"}
+                          </button>
+                          {openPartsId === repair.id && (
+                            <div className="mt-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs space-y-1 max-w-full">
+                              {(repair.parts || []).map((pt, i) => (
+                                <div key={`${pt.productId}-${i}`} className="flex justify-between gap-2">
+                                  <span className="text-slate-200 min-w-0 break-words">{pt.name} <span className="text-slate-500">x{pt.quantity}</span></span>
+                                  <span className="text-amber-300 shrink-0">{formatCurrency(pt.unitCost * pt.quantity)}</span>
+                                </div>
+                              ))}
+                              {(repair.parts || []).length > 0 && (
+                                <div className="flex justify-between gap-2 border-t border-slate-700 pt-1">
+                                  <span className="text-slate-400">Parça maliyeti</span>
+                                  <span className="text-amber-400 font-semibold">{formatCurrency(repair.partsCost || 0)}</span>
+                                </div>
+                              )}
+                              {(repair.notes || "").split("\n").filter((ln) => ln.startsWith("İşlemler:")).map((ln, i) => (
+                                <div key={i} className="text-slate-300 break-words">🛠️ {ln}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-emerald-400">
@@ -1566,7 +1597,7 @@ function RepairsPageContent() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Tamir Düzenle #{selectedRepair?.id}</DialogTitle>
+            <DialogTitle className="text-white pr-6">Tamir Düzenle{selectedRepair?.repairCode ? ` • ${selectedRepair.repairCode}` : ""}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
