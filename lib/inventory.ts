@@ -1,6 +1,7 @@
 import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 import { logStockMovement } from "@/lib/stockMovements"
+import { desiredMinQuantity, type StockAlertConfig } from "@/lib/stockAlerts"
 
 export interface InventoryItem {
   id: string
@@ -246,17 +247,31 @@ export async function findActiveImeiConflict(imei: string, excludeId?: string): 
   return data && data[0] ? { id: data[0].id, name: data[0].name, productCode: data[0].product_code ?? "" } : null
 }
 
-// Tüm ürünlerin minimum stok adedini toplu değiştirir (Ayarlar > Envanter Minimum Stok Adedi > "Tüm ürünlere uygula").
-// Güncellenen ürün sayısını döndürür.
-export async function setAllMinQuantity(min: number): Promise<number> {
-  const value = Math.max(0, Math.floor(Number(min) || 0))
+// Stok uyarısı ayarını (grup bazında açık/kapalı + minimum adet) mevcut TÜM ürünlere uygular: uyarı açık gruptaki ürünlerin minimum stoğu
+// grubun adedi, kapalı gruptakilerin 0 olur. Ürünler tek tek elle açılıp kapatılmış olsa bile bu ayara çekilir.
+export async function applyStockAlertConfig(cfg: StockAlertConfig): Promise<{ total: number; changed: number; on: number; off: number }> {
   const rows = await fetchAllRows("inventory", "created_at", false)
-  const ids: string[] = rows.map((r: any) => r.id)
-  for (let i = 0; i < ids.length; i += 100) {
-    const chunk = ids.slice(i, i + 100)
-    const { error } = await supabase.from("inventory").update({ min_stock: value }).in("id", chunk)
-    if (error) throw error
+  const byValue = new Map<number, string[]>()
+  let on = 0
+  let off = 0
+  for (const r of rows) {
+    const want = desiredMinQuantity(r.category, cfg)
+    if (want > 0) on++
+    else off++
+    if ((Number(r.min_stock) || 0) === want) continue
+    const list = byValue.get(want) || []
+    list.push(r.id)
+    byValue.set(want, list)
   }
-  logActivity("Envanter", "updated", `Tüm ürünlerin minimum stok adedi ${value} yapıldı (${ids.length} ürün)`)
-  return ids.length
+  let changed = 0
+  for (const [value, ids] of byValue) {
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100)
+      const { error } = await supabase.from("inventory").update({ min_stock: value }).in("id", chunk)
+      if (error) throw error
+      changed += chunk.length
+    }
+  }
+  logActivity("Envanter", "updated", `Stok uyarısı ayarı uygulandı: ${on} üründe açık, ${off} üründe kapalı (${changed} ürün güncellendi)`)
+  return { total: rows.length, changed, on, off }
 }

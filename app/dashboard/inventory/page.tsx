@@ -1,6 +1,7 @@
 "use client"
 
-import { stockLevel, getDefaultMinStock } from "@/lib/stockLevel"
+import { stockLevel } from "@/lib/stockLevel"
+import { getStockAlertConfig, desiredMinQuantity, alertOnMinQuantity } from "@/lib/stockAlerts"
 import { PhoneInput } from "@/components/PhoneInput"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { openWhatsApp } from "@/lib/whatsapp"
@@ -49,7 +50,7 @@ const INVENTORY_IMPORT_FIELDS: ImportField[] = [
   { key: "sku", label: "SKU", type: "text" },
   { key: "category", label: "Kategori", type: "text", defaultValue: "Diğer" },
   { key: "quantity", label: "Stok", type: "number" },
-  { key: "minQuantity", label: "Min. Stok", type: "number", defaultValue: getDefaultMinStock() },
+  { key: "minQuantity", label: "Min. Stok (boş = grup ayarı)", type: "number" },
   { key: "purchasePrice", label: "Alış Fiyatı", required: true, type: "number" },
   { key: "purchaseCurrency", label: "Para Birimi", type: "text", defaultValue: "TRY" },
   { key: "profitMargin", label: "Kâr Marjı (%)", type: "number", defaultValue: 30 },
@@ -124,7 +125,6 @@ export default function InventoryPage() {
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     category: "Telefon (Sıfır)",
     quantity: 0,
-    minQuantity: getDefaultMinStock(),
     purchasePrice: 0,
     purchaseCurrency: "TRY",
     profitMargin: 30,
@@ -523,7 +523,7 @@ export default function InventoryPage() {
         sku: String(r.sku || ""),
         category: String(r.category || "Diğer"),
         quantity: Number(r.quantity) || 0,
-        minQuantity: r.minQuantity === undefined || r.minQuantity === null || r.minQuantity === "" ? getDefaultMinStock() : (Number(r.minQuantity) || 0),
+        minQuantity: r.minQuantity === undefined || r.minQuantity === null || r.minQuantity === "" ? desiredMinQuantity(String(r.category ?? "Diğer"), getStockAlertConfig()) : (Number(r.minQuantity) || 0),
         purchasePrice,
         purchaseCurrency,
         profitMargin,
@@ -566,7 +566,7 @@ export default function InventoryPage() {
         sku: "",
         category: newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"),
         quantity: Number(newItem.quantity) || 0,
-        minQuantity: newItem.minQuantity === undefined || newItem.minQuantity === null ? getDefaultMinStock() : (Number(newItem.minQuantity) || 0),
+        minQuantity: newItem.minQuantity === undefined || newItem.minQuantity === null ? desiredMinQuantity(newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"), getStockAlertConfig()) : (Number(newItem.minQuantity) || 0),
         purchasePrice: Number(newItem.purchasePrice) || 0,
         purchaseCurrency: newItem.purchaseCurrency || "TRY",
         profitMargin: Number(newItem.profitMargin) || 0,
@@ -627,6 +627,19 @@ export default function InventoryPage() {
   // Ürün kartındaki ödeme rozeti alış kayıtlarından gösterilir; alış yapıldıktan sonra liste yenilenmeli
   const refreshPurchases = () => {
     fetchPurchases().then((p) => setSupplierPurchases(p.filter((x) => x.kind === "supplier"))).catch((e) => console.error("Alışlar yüklenemedi:", e))
+  }
+
+  // Ürün bazında kritik stok uyarısını açar/kapatır: kapalı = minimum stok 0, açık = ürünün grubundaki minimum adet (Ayarlar > Stok Uyarısı)
+  const toggleStockAlert = async (item: InventoryItem) => {
+    const next = item.minQuantity > 0 ? 0 : alertOnMinQuantity(item.category, getStockAlertConfig())
+    try {
+      await updateInventoryItem(item.id, { minQuantity: next })
+      setInventory((prev) => prev.map((i) => (i.id === item.id ? { ...i, minQuantity: next } : i)))
+      showToast(next > 0 ? `${item.name}: stok uyarısı AÇILDI (min. ${next} adet).` : `${item.name}: stok uyarısı kapatıldı.`, "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Stok uyarısı değiştirilemedi.", "error")
+    }
   }
 
   const handleUpdateItem = async () => {
@@ -1428,9 +1441,18 @@ export default function InventoryPage() {
                       <Progress value={level === "out" ? 100 : stockPercent} className={level === "out" ? "bg-red-900/50 [&>div]:bg-red-500" : level === "low" ? "bg-amber-900/40 [&>div]:bg-amber-500" : "bg-slate-700"} />
                     </div>
                     <div className="text-sm text-slate-400 sm:w-24 sm:text-right">
-                      <span className={level === "out" ? "text-red-400 font-semibold" : level === "low" ? "text-amber-400 font-semibold" : ""}>Stok: {item.quantity}/{item.minQuantity}</span>
+                      <span className={level === "out" ? "text-red-400 font-semibold" : level === "low" ? "text-amber-400 font-semibold" : ""}>{item.minQuantity > 0 ? `Stok: ${item.quantity}/${item.minQuantity}` : `Stok: ${item.quantity}`}</span>
                     </div>
                     <div className="flex gap-1 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleStockAlert(item)}
+                        title={item.minQuantity > 0 ? "Bu ürün için kritik stok uyarısı AÇIK. Kapatmak için dokunun." : "Bu ürün için kritik stok uyarısı KAPALI. Açmak için dokunun."}
+                        className={item.minQuantity > 0 ? "border-amber-600 text-amber-300 hover:bg-amber-500/10" : "border-slate-600 text-slate-500 hover:bg-slate-700"}
+                      >
+                        {item.minQuantity > 0 ? "🔔 Uyarı açık" : "🔕 Uyarı kapalı"}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"

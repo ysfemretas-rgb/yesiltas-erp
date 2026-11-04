@@ -1,6 +1,7 @@
 "use client"
 
-import { setAllMinQuantity } from "@/lib/inventory"
+import { applyStockAlertConfig } from "@/lib/inventory"
+import { STOCK_GROUPS, DEFAULT_STOCK_ALERT_CONFIG, normalizeStockAlertConfig, type StockAlertConfig } from "@/lib/stockAlerts"
 import { DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices"
 import { pushCompanySettings } from "@/lib/companySettings"
 import { Toast, useToast } from "@/components/toast"
@@ -34,7 +35,7 @@ interface CompanySettings {
   maxDiscountPercent: number
   minMarginPercent: number
   cardCommissionPercent: number
-  defaultMinStock?: number // Envanter: tüm ürünler için minimum (kritik) stok adedi; yeni ürünlerde varsayılan
+  stockAlertGroups?: StockAlertConfig // Envanter: grup bazında kritik stok uyarısı (açık/kapalı + minimum adet)
   repairServices?: { name: string; price: number }[] // hazır işlem fiyat listesi (Teknik Servis)
   repairMarkupPercent: number // Teknik servis: parçaların satış fiyatı toplamının üzerine eklenen işçilik/kâr yüzdesi
 }
@@ -71,7 +72,7 @@ const getInitialCompany = (): CompanySettings => ({
   minMarginPercent: 0,
   cardCommissionPercent: 0,
   repairMarkupPercent: 30,
-  defaultMinStock: 5,
+  stockAlertGroups: DEFAULT_STOCK_ALERT_CONFIG,
   repairServices: DEFAULT_REPAIR_SERVICES,
 })
 
@@ -177,18 +178,18 @@ export default function SettingsPage() {
     }
   }, [loginRecords, isLoaded])
 
-  // Envanterdeki TÜM ürünlerin minimum stok adedini değiştirir; aynı değer yeni ürünlerde varsayılan olur
+  // Stok uyarısı grup ayarını envanterdeki TÜM ürünlere uygular (uyarı açık gruplarda min. adet, kapalı gruplarda 0)
   const handleApplyMinStock = async () => {
-    const n = Math.max(0, Math.floor(Number(company.defaultMinStock ?? 5) || 0))
-    if (!window.confirm(`Envanterdeki TÜM ürünlerin minimum stok adedi ${n} olarak değiştirilecek. Devam edilsin mi?`)) return
+    const cfg = normalizeStockAlertConfig(company.stockAlertGroups)
+    if (!window.confirm("Stok uyarısı ayarı envanterdeki TÜM ürünlere uygulanacak. Ürünlerde elle açıp kapattığınız uyarılar da bu ayara göre değişir. Devam edilsin mi?")) return
     setApplyingMin(true)
     try {
-      const count = await setAllMinQuantity(n)
+      const r = await applyStockAlertConfig(cfg)
       handleSaveCompany()
-      showToast(`${count} ürünün minimum stok adedi ${n} yapıldı.`, "success")
+      showToast(`Uygulandı: ${r.on} üründe uyarı açık, ${r.off} üründe kapalı (${r.changed} ürün güncellendi).`, "success")
     } catch (e: any) {
       console.error(e)
-      showToast(e?.message || "Minimum stok adedi güncellenemedi.", "error")
+      showToast(e?.message || "Stok uyarısı ayarı uygulanamadı.", "error")
     } finally {
       setApplyingMin(false)
     }
@@ -470,23 +471,34 @@ export default function SettingsPage() {
                   <p className="text-xs text-slate-500">0 = kontrol yok. Satış bu orandan düşük kârla (ya da maliyetin altında) yapılırsa sadece Yönetici onaylayabilir.</p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium text-slate-300">Envanter Minimum Stok Adedi (tüm ürünler)</label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={company.defaultMinStock ?? 5}
-                      onChange={(e) => setCompany({ ...company, defaultMinStock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-                      className="bg-slate-700 border-slate-600 text-white"
-                    />
-                    {isManager && (
-                      <button type="button" disabled={applyingMin} onClick={handleApplyMinStock} className="px-3 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm whitespace-nowrap disabled:opacity-50">
-                        {applyingMin ? "Uygulanıyor..." : "Tüm ürünlere uygula"}
-                      </button>
-                    )}
+                  <label className="text-sm font-medium text-slate-300">Stok Uyarısı (ürün grubuna göre)</label>
+                  <div className="space-y-2">
+                    {STOCK_GROUPS.map((g) => {
+                      const cfg = normalizeStockAlertConfig(company.stockAlertGroups)
+                      const set = (patch: Partial<{ enabled: boolean; min: number }>) => setCompany({ ...company, stockAlertGroups: { ...cfg, [g.key]: { ...cfg[g.key], ...patch } } })
+                      return (
+                        <div key={g.key} className="flex items-center gap-3 p-2 rounded-md bg-slate-700/40 border border-slate-600">
+                          <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                            <input type="checkbox" checked={cfg[g.key].enabled} onChange={(e) => set({ enabled: e.target.checked })} className="h-5 w-5 accent-emerald-500 shrink-0" />
+                            <span className="min-w-0">
+                              <span className="block text-sm text-white">{g.label} <span className={cfg[g.key].enabled ? "text-amber-400" : "text-slate-500"}>{cfg[g.key].enabled ? "• uyarı açık" : "• uyarı kapalı"}</span></span>
+                              <span className="block text-xs text-slate-500 break-words">{g.hint}</span>
+                            </span>
+                          </label>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Input type="number" inputMode="numeric" min={1} value={cfg[g.key].min} onChange={(e) => set({ min: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} className="w-16 h-9 bg-slate-700 border-slate-600 text-white" />
+                            <span className="text-xs text-slate-400">adet</span>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                  <p className="text-xs text-slate-500">Stoğu bu adede ya da altına düşen ürünler Envanter'de <b className="text-amber-400">sarı (kritik)</b>, stoğu 0 olanlar <b className="text-red-400">kırmızı (tükendi)</b> görünür. "Tüm ürünlere uygula" mevcut bütün ürünlerin minimum stok adedini bu değere çeker; ayrıca yeni eklenen ürünlerde de varsayılan olur. 0 yazarsanız kritik uyarı kapanır (tükenenler yine kırmızıdır).</p>
+                  {isManager && (
+                    <button type="button" disabled={applyingMin} onClick={handleApplyMinStock} className="px-3 py-2 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm disabled:opacity-50">
+                      {applyingMin ? "Uygulanıyor..." : "Gruplara göre tüm ürünlere uygula"}
+                    </button>
+                  )}
+                  <p className="text-xs text-slate-500">Uyarısı <b className="text-slate-300">açık</b> grupta stoğu belirtilen adede ya da altına düşen ürünler Envanter'de <b className="text-amber-400">sarı (kritik)</b> görünür ve uyarı listesine girer. <b className="text-slate-300">Kapalı</b> gruptaki ürünler uyarı listesine girmez (telefonlar, hiç gelmeyen yedek parçalar gibi); stoğu 0 olunca kartta yine kırmızı "Tükendi" görünür. Bu ayar yeni eklenen ürünlerin varsayılanıdır. Tek bir ürünü istisna yapmak için Envanter'de kartındaki <b className="text-slate-300">🔔 / 🔕</b> düğmesine dokunun. "Tüm ürünlere uygula" mevcut bütün ürünleri bu ayara çeker (kartlarda elle yaptığınız açma/kapamalar da sıfırlanır).</p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-300">Teknik Servis Hazır İşlem Fiyatları (başlangıç fiyatı)</label>

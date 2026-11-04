@@ -1,6 +1,6 @@
 "use client"
 
-import { getDefaultMinStock } from "@/lib/stockLevel"
+import { getStockAlertConfig, desiredMinQuantity } from "@/lib/stockAlerts"
 import { PhoneInput } from "@/components/PhoneInput"
 import { useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -51,7 +51,7 @@ function LineEditor({
   const [currency, setCurrency] = useState<Currency>("TRY")
   const [margin, setMargin] = useState("20")
   const [salePrice, setSalePrice] = useState("")
-  const [minQty, setMinQty] = useState(kind === "supplier" ? String(getDefaultMinStock()) : "0")
+  const [minQty, setMinQty] = useState("")
   const [imei, setImei] = useState("")
   const [condition, setCondition] = useState("")
   const [discType, setDiscType] = useState<"pct" | "amt">("pct")
@@ -105,7 +105,7 @@ function LineEditor({
       if (imei.trim() && quantity !== 1) return notify("IMEI girilen ürün 1 adet olmalı.", "error")
       onAdd({
         isNew: true, name: name.trim(), category: typeLabel || "Diğer", quantity, unitPrice: netPrice, currency, rate, ...discInfo, unitCostTRY: cost,
-        salePrice: Number(salePrice) || auto, profitMargin: Number(margin) || 0, minQuantity: Number(minQty) || 0,
+        salePrice: Number(salePrice) || auto, profitMargin: Number(margin) || 0, minQuantity: minQty.trim() === "" ? (kind === "supplier" ? desiredMinQuantity(typeLabel || "Diğer", getStockAlertConfig()) : 0) : (Number(minQty) || 0),
         imei: imei.trim() || undefined, conditionNote: condition.trim() || undefined,
       })
     }
@@ -180,7 +180,7 @@ function LineEditor({
         <div className="grid grid-cols-3 gap-2">
           <Input type="number" inputMode="decimal" value={margin} onChange={(e) => setMargin(e.target.value)} placeholder="Kâr %" className="bg-slate-800 border-slate-600 text-white" />
           <Input type="number" inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder={`Satış: ${auto || "—"}`} className="bg-slate-800 border-slate-600 text-white" />
-          <Input type="number" inputMode="numeric" value={minQty} onChange={(e) => setMinQty(e.target.value)} placeholder="Min. stok" className="bg-slate-800 border-slate-600 text-white" />
+          <Input type="number" inputMode="numeric" value={minQty} onChange={(e) => setMinQty(e.target.value)} placeholder="Min. stok (boş = otomatik)" className="bg-slate-800 border-slate-600 text-white" />
         </div>
       ) : (
         existing && (
@@ -303,7 +303,7 @@ export function NewPurchaseDialog({
     const rawLines = pasteText.split(/\r?\n/)
     rows.forEach((r) => {
       if (r.error) { bad.push({ text: rawLines[r.lineNo - 1], error: `Satır ${r.lineNo}: ${r.error}` }); return }
-      ok.push(makePurchaseLine(r, { inventory, currency: pasteCurrency, category: pasteCategory, rates, defaultMinQuantity: kind === "supplier" ? getDefaultMinStock() : 0 }, byName))
+      ok.push(makePurchaseLine(r, { inventory, currency: pasteCurrency, category: pasteCategory, rates, minFor: kind === "supplier" ? (c: string) => desiredMinQuantity(c, getStockAlertConfig()) : undefined }, byName))
     })
     if (ok.length > 0) setLines((prev) => [...prev, ...ok])
     setPasteText(bad.map((b) => b.text).join("\n"))

@@ -277,3 +277,10 @@ Yüklemeden sonra yeniden denenecekler: 1.8 (taksitli satış), 2.1 (Hareket ge�
 ## v45 — Tamir düzenleme başlığı ve kullanılan parçalar görünümü
 - **Uzun kimlik kaldırıldı:** "Tamir Düzenle" penceresinin başlığında tamirin uzun iç kimliği (168b2858-3972-45be-...) yazıyordu ve kapat düğmesinin üstüne taşıyordu. Artık sadece kısa tamir kodu görünür ("Tamir Düzenle • YTT-0007"). Tüm sayfalar tarandı: başka hiçbir yerde ham kimlik yazdırılmıyor.
 - **Kullanılan parçalar tıklanınca görünür:** Teknik Servis listesinde parça kullanılmış (ya da işlem seçilmiş) her kartta **"🔩 Kullanılan parçalar / işlemler (N) ▼"** bağlantısı çıkar. Basınca parça adları, adetleri, her parçanın maliyeti, toplam parça maliyeti ve seçilen işlemler (ekran değişimi vb.) açılır; tekrar basınca kapanır.
+
+## v46 — Stok uyarısı: ürün grubuna göre ve ürün bazında aç/kapat
+v44'teki "Tüm ürünlere uygula" bütün ürünlerin minimum stoğunu 5 yaptığı için telefonlar ve hiç gelmeyen yedek parçalar da kritik stok uyarısına giriyordu. Düzeltme iki katmanlı:
+- **Ayarlar > Stok Uyarısı (ürün grubuna göre):** 5 grup (📱 Cihazlar, 🛡️ Telefon aksesuarları, 🔌 Genel aksesuarlar, 🔧 Yedek parça, 🧰 Diğer) için uyarı açık/kapalı kutusu ve minimum adet. Varsayılan: Cihazlar ve Yedek parça **kapalı**, aksesuarlar ve Diğer **açık (min. 5)**. **"Gruplara göre tüm ürünlere uygula"** düğmesi envanterdeki bütün ürünleri bu ayara çeker (uyarı açık grupta minimum adet, kapalı grupta 0; sadece değişen ürünler yazılır). Aynı ayar yeni eklenen ürünlerin (Envanter formu, Excel ile yükleme, tedarikçiden alış) varsayılan minimum stoğudur.
+- **Ürün kartında 🔔 Uyarı açık / 🔕 Uyarı kapalı düğmesi:** Tek dokunuşla o ürünün uyarısı kapanır (minimum stok 0) ya da açılır (grubun minimum adedi, en az 1). Kapalı ürün kritik stok kutusunda ve sipariş listesinde çıkmaz; stoğu 0 olunca kartta yine kırmızı "Tükendi" görünür.
+- Kategori → grup eşlemesi ürün kataloğundan yapılır ("Kılıf", "Yedek Parça - Ekran", "Telefon (İkinci El)"...); katalogda olmayan kategoriler adına göre tahmin edilir, tutmayanlar "Diğer" olur.
+- Eski tek kutu ("Envanter Minimum Stok Adedi") kaldırıldı.
