@@ -10,6 +10,7 @@ export interface SaleItem {
   quantity: number
   imei?: string // ikinci el telefon / seri no (opsiyonel)
   listPrice?: number // iskontosuz liste (satış) fiyatı; satır iskontosu varsa price bundan düşüktür
+  note?: string // ikinci el cihazın ekspertiz özeti (satış fişine basılır)
   disc?: { type: "pct" | "amt"; value: number } // girilen satır iskontosu (amt = satırın toplamından düşülen tutar)
 }
 

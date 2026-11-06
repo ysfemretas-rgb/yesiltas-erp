@@ -1,5 +1,11 @@
 "use client"
 
+import { ExpertiseFields } from "@/components/ExpertiseFields"
+import { Expertise, EMPTY_EXPERTISE, formatExpertise } from "@/lib/expertise"
+import { fetchRepairs, updateRepair, consumeRepairParts, Repair } from "@/lib/repairs"
+import { stageOf } from "@/lib/repairWorkflow"
+import { appendNote, partsArrivedMessage } from "@/lib/partOrder"
+import { openWhatsApp } from "@/lib/whatsapp"
 import { getStockAlertConfig, desiredMinQuantity } from "@/lib/stockAlerts"
 import { PhoneInput } from "@/components/PhoneInput"
 import { useEffect, useMemo, useState } from "react"
@@ -54,6 +60,7 @@ function LineEditor({
   const [minQty, setMinQty] = useState("")
   const [imei, setImei] = useState("")
   const [condition, setCondition] = useState("")
+  const [expertise, setExpertise] = useState<Expertise>(EMPTY_EXPERTISE) // ikinci el alımda ekspertiz
   const [discType, setDiscType] = useState<"pct" | "amt">("pct")
   const [discValue, setDiscValue] = useState("")
 
@@ -83,7 +90,7 @@ function LineEditor({
   const auto = suggestedSalePrice(netPrice, currency, Number(margin) || 0, rates)
 
   const reset = () => {
-    setExistingLabel(""); setVariant(""); setName(""); setQty("1"); setUnitPrice(""); setSalePrice(""); setImei(""); setCondition(""); setDiscValue("")
+    setExistingLabel(""); setVariant(""); setName(""); setQty("1"); setUnitPrice(""); setSalePrice(""); setImei(""); setCondition(""); setExpertise(EMPTY_EXPERTISE); setDiscValue("")
   }
 
   const add = () => {
@@ -106,7 +113,7 @@ function LineEditor({
       onAdd({
         isNew: true, name: name.trim(), category: typeLabel || "Diğer", quantity, unitPrice: netPrice, currency, rate, ...discInfo, unitCostTRY: cost,
         salePrice: Number(salePrice) || auto, profitMargin: Number(margin) || 0, minQuantity: minQty.trim() === "" ? (kind === "supplier" ? desiredMinQuantity(typeLabel || "Diğer", getStockAlertConfig()) : 0) : (Number(minQty) || 0),
-        imei: imei.trim() || undefined, conditionNote: condition.trim() || undefined,
+        imei: imei.trim() || undefined, conditionNote: [kind === "customer" ? formatExpertise(expertise) : "", condition.trim()].filter(Boolean).join(" | ") || undefined,
       })
     }
     reset()
@@ -193,7 +200,8 @@ function LineEditor({
       {mode === "new" && type?.isPhone && (
         <div className="grid grid-cols-1 gap-2">
           <Input value={imei} onChange={(e) => setImei(e.target.value)} placeholder="IMEI / Seri No (aynı IMEI iki kez stoğa girilemez)" className="bg-slate-800 border-slate-600 text-white" />
-          <Input value={condition} onChange={(e) => setCondition(e.target.value)} placeholder="Cihaz durumu (çizik, pil sağlığı, aksesuar...)" className="bg-slate-800 border-slate-600 text-white" />
+          {kind === "customer" && <ExpertiseFields value={expertise} onChange={setExpertise} />}
+          <Input value={condition} onChange={(e) => setCondition(e.target.value)} placeholder="Ek not (aksesuar, kutu, fatura...)" className="bg-slate-800 border-slate-600 text-white" />
         </div>
       )}
       <p className="text-xs text-slate-500">
@@ -252,12 +260,21 @@ export function NewPurchaseDialog({
   const [pasteText, setPasteText] = useState("")
   const [pasteCurrency, setPasteCurrency] = useState<Currency>("TRY")
   const [pasteCategory, setPasteCategory] = useState("Diğer")
+  // Parça bekleyen bir tamir için alış: parça stoğa girer ve o tamire eklenir
+  const [awaitingRepairs, setAwaitingRepairs] = useState<Repair[]>([])
+  const [linkRepairId, setLinkRepairId] = useState("")
 
   useEffect(() => {
     if (open) {
       setGenValue(""); setGenType("pct"); setPasteOpen(false); setPasteText(""); setPasteCurrency("TRY"); setPasteCategory("Diğer")
       setPartyName(initialPartyName || ""); setPartyPhone(initialPartyName ? (suppliers.find((s) => s.name === initialPartyName)?.phone || "") : ""); setCustomerId(""); setSellerIdNo(""); setInvoiceNo(""); setDate(localDateStr()); setNote("")
       setLines([]); setPayMode("paid"); setPaidInput(""); setQuickSupplier(false)
+      setLinkRepairId("")
+      if (kind === "supplier") {
+        fetchRepairs()
+          .then((list) => setAwaitingRepairs(list.filter((r) => stageOf(r) === "awaiting_parts" && r.status !== "completed")))
+          .catch(() => setAwaitingRepairs([]))
+      }
     }
   }, [open, kind])
 
@@ -320,6 +337,27 @@ export function NewPurchaseDialog({
       const { purchase, warnings } = await createPurchase({ kind, partyName, partyPhone, invoiceNo, date, lines: finalLines, paid, note: `${note}${genDisc > 0 ? `${note ? " | " : ""}Genel iskonto ${money(genDisc)}` : ""}` })
       warnings.forEach((w) => notify(w, "error"))
       notify(`Alış kaydedildi (${purchase.code}). Ürünler envantere eklendi, Satışlar'da satılabilir.`, "success")
+      // Bu alış parça bekleyen bir tamir içinse: alınan ürünler tamire eklenir (stoktan düşer), tamir "Tamirde" aşamasına geçer
+      const rep = kind === "supplier" ? awaitingRepairs.find((r) => r.id === linkRepairId) : undefined
+      if (rep) {
+        const parts = purchase.items.filter((l) => l.inventoryId).map((l) => ({ productId: l.inventoryId as string, name: l.name, quantity: l.quantity, unitCost: l.unitCostTRY }))
+        const device = `${rep.brand} ${rep.model}`.trim()
+        try {
+          const withParts = await consumeRepairParts({ id: rep.id, repairCode: rep.repairCode }, parts, { merge: true })
+          await updateRepair(rep.id, {
+            stage: "in_repair",
+            status: "in_progress",
+            notes: appendNote(withParts.notes, `✅ Parça geldi: ${parts.map((x) => `${x.name} x${x.quantity}`).join(", ")} (Alış ${purchase.code}) — ${localDateStr()}`),
+          })
+          notify(`Parça ${rep.repairCode || "tamire"} eklendi; tamir "Tamirde" aşamasına alındı.`, "success")
+          if (rep.phone1 && window.confirm(`Parça ${rep.repairCode || "tamire"} eklendi.\n\n${rep.customerName} müşterisine "parçanız geldi" WhatsApp mesajı gönderilsin mi?`)) {
+            openWhatsApp(rep.phone1, partsArrivedMessage(rep.customerName, device))
+          }
+        } catch (e: any) {
+          console.error(e)
+          notify(`Alış kaydedildi ama parça tamire eklenemedi: ${e?.message || e}. Tamirin içinden "Kullanılan Parçalar"a ekleyin.`, "error")
+        }
+      }
       onCreated(purchase, { sellerIdNo })
       onOpenChange(false)
     } catch (e: any) {
@@ -458,6 +496,18 @@ export function NewPurchaseDialog({
               <p className="text-xs text-slate-500">Cihaz bedeli ({money(total)}) peşin ödenir ve kasaya gider olarak yazılır. Kaydedince alım belgesi yazdırılır.</p>
             )}
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Not (opsiyonel)" className="bg-slate-900 border-slate-600 text-white" />
+            {kind === "supplier" && awaitingRepairs.length > 0 && (
+              <div className="space-y-1 rounded-md border border-amber-700/60 bg-amber-900/15 p-2">
+                <label className="text-xs text-amber-200">🔧 Bu alış parça bekleyen bir tamir için mi?</label>
+                <select value={linkRepairId} onChange={(e) => setLinkRepairId(e.target.value)} className="w-full h-10 rounded-md bg-slate-900 border border-slate-600 text-white px-2 text-sm">
+                  <option value="">Hayır, sadece stoğa girsin</option>
+                  {awaitingRepairs.map((r) => (
+                    <option key={r.id} value={r.id}>{r.repairCode || "Tamir"} — {r.customerName} — {r.brand} {r.model}</option>
+                  ))}
+                </select>
+                {linkRepairId && <p className="text-[11px] text-amber-200/80">Kaydedince alınan ürünler bu tamire parça olarak eklenir (stoktan düşer), tamir "🔧 Tamirde" aşamasına geçer ve müşteriye "parçanız geldi" mesajı önerilir.</p>}
+              </div>
+            )}
           </div>
 
           <Button onClick={save} disabled={saving || lines.length === 0 || !partyName.trim()} className="w-full bg-emerald-600 hover:bg-emerald-700">

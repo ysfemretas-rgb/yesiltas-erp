@@ -1,5 +1,6 @@
 "use client"
 
+import { AppBanners } from "@/components/AppBanners"
 import { APP_VERSION } from "@/lib/version"
 import { WhatsAppSheet } from "@/components/WhatsAppSheet"
 import { useState, useEffect } from "react"
@@ -459,7 +460,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          <div className="p-4 lg:p-6">{children}</div>
+          <div className="p-4 lg:p-6">
+            <AppBanners />
+            {children}
+          </div>
           <WhatsAppSheet />
         </main>
       </div>

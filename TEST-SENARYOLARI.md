@@ -173,3 +173,19 @@ Testler bitince Supabase SQL Editor'de **`supabase-test-kayitlarini-sil.sql`**'i
 
 ### Test kayıtlarını silme
 Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true` ile önizleme, sonra `false`). Silmeden önce Ayarlar > Yedekle ile yedek alın.
+
+## 8) v48 — Parça siparişi, teslim takibi, ekspertiz, garanti dönüşü, istisnalar
+**Hazırlık:** Menünün altında "Sürüm v48". Sadece TEST kayıtları; "Gruplara göre tüm ürünlere uygula"ya ajan basmasın; WhatsApp'ı açma.
+| # | Adım | Beklenen |
+|---|---|---|
+| 8.1 | TEST MÜŞTERİ için tamir aç (Samsung Galaxy A11, IMEI 351111111111111), kartta **📦 Parça sipariş** > TEST tedarikçi > "WhatsApp'sız Parça Bekliyor olarak işaretle" | Tamir aşaması "📦 Parça Bekliyor", notta "📦 Parça siparişi: … — tarih" |
+| 8.2 | Bugün sayfası | "📦 Parça Bekleyen Tamirler" grubunda bu tamir, "0 gündür parça bekliyor • parça — tedarikçi" |
+| 8.3 | Alışlar > Tedarikçiden Alış (TEST tedarikçi), "Çok ürün: listeyi yapıştır": `TEST A11 EKRAN; 1; 10`; "🔧 Bu alış bir tamir için mi?" > 8.1'deki tamir; kaydet; onay penceresinde **İptal** | Tamire "TEST A11 EKRAN x1" parça olarak eklendi, aşama "🔧 Tamirde", notta "✅ Parça geldi"; ürün stoğu 0 |
+| 8.4 | Aynı tamiri "🎁 Teslime Hazır" aşamasına getir, Bugün sayfasına bak | Bugün biten tamir "Teslim Alınmayı Bekleyen" grubunda **görünmez**; Ayarlar > Teslim Hatırlatma (varsayılan 3 gün) dolunca görünür, satırda "🤝 Teslim edildi" düğmesi olur |
+| 8.5 | Tamir kartında, aynı IMEI ile **yeni** bir tamir aç (önceki tamir tamamlanmış/teslim edilmiş olmalı) | Formda "↩️ Bu cihaz X gün önce … ile tamir edildi" uyarısı; kayıttan sonra kartta "↩️ Garanti dönüşü" |
+| 8.6 | Raporlar | "↩️ Garanti Dönüşleri" kartında 8.5'teki kayıt |
+| 8.7 | Alışlar > Müşteriden Alış > tür "Telefon (İkinci El)" | "🔎 Ekspertiz" bölümü; "Hesap kilidi: VAR" seçilince kırmızı uyarı |
+| 8.8 | Ekspertizi doldurup (pil 88, ekran orijinal, kilit yok, IMEI sorgulandı) TEST ürünü olarak al; sonra bu cihazı TEST MÜŞTERİ'ye sat ve satış detayına bak | Satış detayında ürünün altında "🔎 Ekspertiz: Pil %88 • …" |
+| 8.9 | Envanter'de bir TEST ürününün 🔔/🔕 düğmesine bas; Ayarlar > Stok Uyarısı | "Elle ayarlanmış (istisna) ürün: N" (en az 1) |
+| 8.10 | (Elle) Uygulamayı yeni sürüm yayınlandığında açık bırak | Üstte "🔄 Yeni sürüm … Yenile" şeridi |
+| 8.11 | (Elle) 7 günden uzun yedek alınmadıysa | Üstte "💾 Şimdi yedekle / Yarın hatırlat" şeridi |

@@ -1,5 +1,8 @@
 "use client"
 
+import { stageOf } from "@/lib/repairWorkflow"
+import { lastPartOrder, daysBetween, pickupReminderMessage } from "@/lib/partOrder"
+import { getAppValue, setAppValue } from "@/lib/appStore"
 import { openWhatsApp } from "@/lib/whatsapp"
 import { useEffect, useState } from "react"
 import { localDateStr } from "@/lib/dates"
@@ -10,13 +13,15 @@ import { Toast, useToast } from "@/components/toast"
 import { fetchWarranties } from "@/lib/warranties"
 import { fetchAppointments } from "@/lib/appointments"
 import { fetchCustomers } from "@/lib/customers"
-import { fetchRepairs, Repair } from "@/lib/repairs"
+import { fetchRepairs, updateRepair, Repair } from "@/lib/repairs"
 import { fetchSales } from "@/lib/sales"
 import { computeCustomerDebts } from "@/lib/customerDebt"
 
 interface ReminderItem {
   id: string
-  group: "warranty" | "appointment" | "debt" | "repair" | "installment" | "birthday"
+  group: "pickup" | "parts" | "warranty" | "appointment" | "debt" | "repair" | "installment" | "birthday"
+  repairId?: string
+  action?: "deliver" | "toRepair" // satırdaki ikinci düğme: teslim edildi / tamire al
   title: string
   subtitle: string
   phone: string
@@ -36,6 +41,8 @@ function cleanPhone(phone: string): string {
 }
 
 const GROUP_META: Record<ReminderItem["group"], { label: string; icon: any; color: string }> = {
+  pickup: { label: "🎁 Teslim Alınmayı Bekleyen Cihazlar", icon: Wrench, color: "text-emerald-400" },
+  parts: { label: "📦 Parça Bekleyen Tamirler", icon: Wrench, color: "text-amber-400" },
   warranty: { label: "🛡️ Garanti Süresi", icon: Shield, color: "text-indigo-400" },
   appointment: { label: "📅 Randevu Hatırlatma", icon: Calendar, color: "text-pink-400" },
   debt: { label: "💰 Ödeme Hatırlatma", icon: Wallet, color: "text-amber-400" },
@@ -48,6 +55,7 @@ export default function TodayPage() {
   const { toast, showToast, hideToast } = useToast()
   const [items, setItems] = useState<ReminderItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [reminderLog, setReminderLog] = useState<Record<string, string>>({}) // hangi hatırlatmaya en son ne zaman mesaj atıldı
 
   const load = async () => {
     setLoading(true)
@@ -196,6 +204,7 @@ export default function TodayPage() {
     try {
       for (const r of repairsData) {
         if (r.status !== "waiting" || !r.phone1 || !r.createdAt) continue
+        if (stageOf(r) === "awaiting_parts") continue // "Parça bekleyen" grubunda gösterilir
         const waitingDays = -daysUntil(r.createdAt)
         if (waitingDays < 2) continue
         newItems.push({
@@ -211,6 +220,55 @@ export default function TodayPage() {
       console.error("Tamir hatırlatmaları oluşturulamadı:", e)
     }
 
+    // Parça bekleyen tamirler ve tamiri bitip teslim alınmayan cihazlar
+    try {
+      let pickupDays = 3
+      try {
+        const raw = typeof window !== "undefined" ? localStorage.getItem("yt_company") : null
+        const n = raw ? Number(JSON.parse(raw)?.pickupReminderDays) : NaN
+        if (Number.isFinite(n) && n >= 1) pickupDays = Math.floor(n)
+      } catch {
+        // yoksay
+      }
+      const today = localDateStr()
+      for (const r of repairsData) {
+        const device = `${r.brand} ${r.model}`.trim()
+        const stage = stageOf(r)
+        if (stage === "awaiting_parts" && r.status !== "completed") {
+          const order = lastPartOrder(r.notes)
+          const days = Math.max(0, daysBetween(order?.date || r.createdAt, today))
+          newItems.push({
+            id: `p-${r.id}`,
+            group: "parts",
+            repairId: r.id,
+            action: "toRepair",
+            title: `${r.customerName} — ${device}${r.repairCode ? ` (${r.repairCode})` : ""}`,
+            subtitle: `${days} gündür parça bekliyor${order ? ` • ${order.part} x${order.qty} — ${order.supplier}` : ""}`,
+            phone: r.phone1 || "",
+            message: `\uD83D\uDC4B Merhaba *${r.customerName}*,\n\n\uD83D\uDCE6 *${device}* cihazınız için gerekli parça sipariş edildi. Parça gelir gelmez tamire alıp size haber vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`,
+          })
+        }
+        if (stage === "ready") {
+          const days = Math.max(0, daysBetween(r.completedAt || r.createdAt, today))
+          if (days < pickupDays) continue
+          newItems.push({
+            id: `k-${r.id}`,
+            group: "pickup",
+            repairId: r.id,
+            action: "deliver",
+            title: `${r.customerName} — ${device}${r.repairCode ? ` (${r.repairCode})` : ""}`,
+            subtitle: `${days} gündür teslim alınmayı bekliyor${(r.remaining || 0) > 0 ? ` • kalan ${(r.remaining || 0).toLocaleString("tr-TR")} TL` : ""}`,
+            phone: r.phone1 || "",
+            message: pickupReminderMessage(r.customerName, device, days, r.remaining || 0),
+          })
+        }
+      }
+    } catch (e) {
+      console.error("Parça/teslim hatırlatmaları oluşturulamadı:", e)
+    }
+
+    getAppValue<Record<string, string>>("reminder_log", {}).then((l) => setReminderLog(l && typeof l === "object" ? l : {})).catch(() => undefined)
+
     setItems(newItems)
     setLoading(false)
   }
@@ -220,8 +278,37 @@ export default function TodayPage() {
   }, [])
 
   const sendWhatsApp = (item: ReminderItem) => {
-    const phone = cleanPhone(item.phone)
-    openWhatsApp("90" + phone, item.message)
+    openWhatsApp(cleanPhone(item.phone), item.message) // numara openWhatsApp içinde 905… biçimine çevrilir
+    // Ne zaman mesaj atıldığı kaydedilir (60 günden eski kayıtlar silinir)
+    const now = new Date().toISOString()
+    const cutoff = Date.now() - 60 * 86400000
+    const next: Record<string, string> = { [item.id]: now }
+    for (const [k, v] of Object.entries(reminderLog as Record<string, string>)) {
+      const at = String(v)
+      if (k !== item.id && new Date(at).getTime() > cutoff) next[k] = at
+    }
+    setReminderLog(next)
+    setAppValue("reminder_log", next).catch(() => undefined)
+  }
+
+  const runAction = async (item: ReminderItem) => {
+    if (!item.repairId || !item.action) return
+    try {
+      if (item.action === "deliver") await updateRepair(item.repairId, { stage: "delivered", status: "completed" })
+      else await updateRepair(item.repairId, { stage: "in_repair", status: "in_progress" })
+      setItems((prev) => prev.filter((x) => x.id !== item.id))
+      showToast(item.action === "deliver" ? "Teslim edildi olarak işaretlendi." : "Tamir \"Tamirde\" aşamasına alındı.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Güncellenemedi.", "error")
+    }
+  }
+
+  const lastSent = (id: string) => {
+    const v = (reminderLog as Record<string, string>)[id]
+    if (!v) return ""
+    const d = Math.floor((Date.now() - new Date(String(v)).getTime()) / 86400000)
+    return d <= 0 ? " • bugün mesaj atıldı" : ` • son mesaj ${d} gün önce`
   }
 
   const grouped = items.reduce((acc, item) => {
@@ -236,7 +323,7 @@ export default function TodayPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">📋 Bugün Kimlere Mesaj Atmam Lazım</h1>
           <p className="text-sm text-slate-400 mt-1">
-            Garanti süresi yaklaşanlar, yarınki/bugünkü randevular, borcu olan müşteriler ve uzun süredir bekleyen tamirler otomatik listelenir.
+            Teslim alınmayı bekleyen cihazlar, parça bekleyen tamirler, garanti süresi yaklaşanlar, yarınki/bugünkü randevular, borcu olan müşteriler ve uzun süredir bekleyen tamirler otomatik listelenir.
           </p>
         </div>
         <Button onClick={load} disabled={loading} variant="outline" className="border-slate-600 text-slate-300">
@@ -271,15 +358,22 @@ export default function TodayPage() {
                   <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-slate-800 rounded-lg border border-slate-700 flex-wrap">
                     <div>
                       <div className="text-sm font-medium text-white">{item.title}</div>
-                      <div className={`text-xs ${meta.color}`}>{item.subtitle}</div>
+                      <div className={`text-xs ${meta.color}`}>{item.subtitle}<span className="text-slate-500">{lastSent(item.id)}</span></div>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => sendWhatsApp(item)}
-                      className="bg-emerald-600 hover:bg-emerald-700"
-                    >
-                      <MessageCircle className="h-4 w-4 mr-1" />WhatsApp Gönder
-                    </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      {item.action && (
+                        <Button size="sm" variant="outline" onClick={() => runAction(item)} className="border-slate-600 text-slate-200">
+                          {item.action === "deliver" ? "🤝 Teslim edildi" : "🔧 Parça geldi, tamire al"}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        onClick={() => sendWhatsApp(item)}
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        <MessageCircle className="h-4 w-4 mr-1" />WhatsApp Gönder
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </CardContent>

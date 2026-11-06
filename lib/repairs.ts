@@ -240,7 +240,8 @@ export async function deleteRepair(id: string): Promise<void> {
 
 // Yeni tamir kaydı açılırken seçilen parçaları stoktan düşer ve tamire (parça listesi + parça maliyeti) yazar.
 // Önce HEPSİ için stok yeterli mi diye bakılır (yetersizse hiçbir şey düşmez); düşme sırasında hata olursa düşülenler geri verilir.
-export async function consumeRepairParts(repair: { id: string; repairCode?: string }, parts: RepairPart[]): Promise<Repair> {
+// merge: true ise tamirde ÖNCEDEN olan parçalar korunur, yenileri eklenir (gelen parçanın sonradan tamire bağlanması)
+export async function consumeRepairParts(repair: { id: string; repairCode?: string }, parts: RepairPart[], opts: { merge?: boolean } = {}): Promise<Repair> {
   if (parts.length === 0) throw new Error("Parça listesi boş.")
   for (const p of parts) {
     const { data, error } = await supabase.from("inventory").select("quantity").eq("id", p.productId).single()
@@ -254,8 +255,14 @@ export async function consumeRepairParts(repair: { id: string; repairCode?: stri
       await adjustInventoryQuantity(p.productId, -p.quantity, `Tamir ${repair.repairCode || ""}`.trim(), p.name, true)
       done.push(p)
     }
-    const partsCost = Math.round(parts.reduce((sum, p) => sum + p.unitCost * p.quantity, 0) * 100) / 100
-    return await updateRepair(repair.id, { parts, partsCost })
+    let all = parts
+    if (opts.merge) {
+      const { data: cur } = await supabase.from("devices").select("parts").eq("id", repair.id).single()
+      const existing: RepairPart[] = Array.isArray(cur?.parts) ? cur.parts : []
+      all = [...existing, ...parts]
+    }
+    const partsCost = Math.round(all.reduce((sum, p) => sum + (Number(p.unitCost) || 0) * (Number(p.quantity) || 0), 0) * 100) / 100
+    return await updateRepair(repair.id, { parts: all, partsCost })
   } catch (e) {
     for (const d of done) await adjustInventoryQuantity(d.productId, d.quantity, "Tamir parça işlemi başarısız — stok iadesi", d.name).catch((err) => console.error(err))
     throw e

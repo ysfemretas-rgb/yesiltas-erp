@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input"
 // window.prompt yerine: telefonda SAYI TUŞ TAKIMI açan uygulama içi tutar penceresi (tarayıcı prompt'unun klavyesi değiştirilemiyor).
 // Kullanım: const { ask, node } = useNumberPrompt();  const v = await ask("Mesaj", "12");  (iptalde null döner)  ... return (<> ... {node} </>)
 export function useNumberPrompt() {
-  const [state, setState] = useState<{ message: string; value: string; resolve: (v: string | null) => void } | null>(null)
+  const [state, setState] = useState<{ message: string; value: string; integer: boolean; resolve: (v: string | null) => void } | null>(null)
 
   const ask = useCallback(
-    (message: string, defaultValue = ""): Promise<string | null> =>
-      new Promise((resolve) => setState({ message, value: defaultValue, resolve })),
+    (message: string, defaultValue = "", opts: { integer?: boolean } = {}): Promise<string | null> =>
+      new Promise((resolve) => setState({ message, value: defaultValue, integer: !!opts.integer, resolve })),
     []
   )
 
@@ -30,6 +30,7 @@ export function useNumberPrompt() {
         <p className="text-sm text-slate-300 whitespace-pre-line break-words">{state.message}</p>
         <Input
           type="number"
+          inputMode={state.integer ? "numeric" : "decimal"}
           autoFocus
           value={state.value}
           onChange={(e) => setState({ ...state, value: e.target.value })}

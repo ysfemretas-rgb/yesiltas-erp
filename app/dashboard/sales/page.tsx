@@ -1,5 +1,8 @@
 "use client"
 
+import { fetchPurchases } from "@/lib/purchases"
+import { fetchDevicePurchases } from "@/lib/devicePurchases"
+import { extractExpertise } from "@/lib/expertise"
 import { useNumberPrompt } from "@/components/NumberPrompt"
 import { saleDiscountInfo } from "@/lib/discountInfo"
 import { isSparePart } from "@/lib/productKinds"
@@ -70,7 +73,32 @@ const paymentMethods = [
 
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
-  const { ask: askNumber, node: numberPromptNode } = useNumberPrompt() // sayı girişi için uygulama içi pencere (telefonda sayı tuş takımı)
+  const { ask: askNumber, node: numberPromptNode } = useNumberPrompt()
+  // İkinci el cihazların ekspertiz özetleri (alım kaydından): ürün kimliğine ve IMEI'ye göre; satışta fişe yazılır
+  const [expertiseIndex, setExpertiseIndex] = useState<{ byProduct: Record<string, string>; byImei: Record<string, string> }>({ byProduct: {}, byImei: {} })
+  useEffect(() => {
+    Promise.all([fetchPurchases().catch(() => []), fetchDevicePurchases().catch(() => [])]).then(([purchases, devicePurchases]) => {
+      const byProduct: Record<string, string> = {}
+      const byImei: Record<string, string> = {}
+      for (const pu of purchases) {
+        if (pu.kind !== "customer") continue
+        for (const l of pu.items || []) {
+          const t = extractExpertise(l.conditionNote)
+          if (!t) continue
+          if (l.inventoryId) byProduct[l.inventoryId] = t
+          const im = String(l.imei || "").replace(/\D/g, "")
+          if (im.length >= 8) byImei[im] = t
+        }
+      }
+      for (const d of devicePurchases) {
+        const t = extractExpertise(d.conditionNote)
+        const im = String(d.imei || "").replace(/\D/g, "")
+        if (t && im.length >= 8) byImei[im] = t
+      }
+      setExpertiseIndex({ byProduct, byImei })
+    })
+  }, [])
+  const expertiseFor = (p: InventoryItem) => expertiseIndex.byProduct[p.id] || expertiseIndex.byImei[String(p.imei || "").replace(/\D/g, "")] || "" // sayı girişi için uygulama içi pencere (telefonda sayı tuş takımı)
   const router = useRouter()
   const { authorized, checking } = usePageAccess("Satış")
   const isManager = useIsManager()
@@ -395,7 +423,7 @@ export default function SalesPage() {
         item.productId === product.id ? { ...item, quantity: nextQty } : item
       ))
     } else {
-      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, listPrice: product.salePrice, purchasePrice: purchaseInTRY(product), quantity }])
+      setCart([...cart, { productId: product.id, name: product.name, price: product.salePrice, listPrice: product.salePrice, purchasePrice: purchaseInTRY(product), quantity, ...(expertiseFor(product) ? { note: expertiseFor(product) } : {}) }])
     }
   }
 
@@ -876,7 +904,7 @@ Bu işlem geri alınamaz!`)) return
   // bağlı borç ve kasa kaydı kaldırılır.
   // Satıştan tek tıkla garanti kaydı oluşturur (süre sorulur, varsayılan 12 ay).
   const handleCreateWarranty = async (sale: Sale) => {
-    const input = await askNumber(`${sale.customerName} — ürün garanti süresi (ay):`, "12")
+    const input = await askNumber(`${sale.customerName} — ürün garanti süresi (ay):`, "12", { integer: true })
     if (input === null) return
     const months = Math.round(Number(input))
     if (!months || months < 1 || months > 120) {
@@ -1544,7 +1572,7 @@ Bu işlem geri alınamaz!`)) return
                       <Label className="text-slate-300">📅 Taksit Planı</Label>
                       <div className="grid grid-cols-3 gap-2">
                         <Input type="number" inputMode="decimal" placeholder="Peşinat" value={instDown} onChange={(e) => setInstDown(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
-                        <Input type="number" min={1} max={24} placeholder="Taksit sayısı" value={instCount} onChange={(e) => setInstCount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                        <Input type="number" inputMode="numeric" min={1} max={24} placeholder="Taksit sayısı" value={instCount} onChange={(e) => setInstCount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
                         <Input type="date" value={instFirstDate} onChange={(e) => setInstFirstDate(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
                       </div>
                       <p className="text-xs text-slate-500">Peşinat düşüldükten sonra kalan tutar aylık eşit taksitlere bölünür; ilk vade tarihi boşsa 30 gün sonradır. Faiz uygulanmaz.</p>
@@ -1615,7 +1643,7 @@ Bu işlem geri alınamaz!`)) return
               <div className="space-y-1">
                 {viewSale.items.map((i, idx) => (
                   <div key={idx} className="flex justify-between p-2 bg-slate-800 rounded gap-2">
-                    <span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{i.imei && <span className="block text-[11px] font-mono text-slate-500">IMEI: {i.imei}</span>}</span>
+                    <span>{i.name} <span className="text-slate-500">x{i.quantity}</span>{i.imei && <span className="block text-[11px] font-mono text-slate-500">IMEI: {i.imei}</span>}{i.note && <span className="block text-[11px] text-sky-300">{i.note}</span>}</span>
                     <span>{formatCurrency(i.price * i.quantity)}</span>
                   </div>
                 ))}
@@ -1690,7 +1718,7 @@ Bu işlem geri alınamaz!`)) return
                     <div key={idx} className="flex items-center justify-between gap-2">
                       <span className="text-xs text-slate-400 truncate">{it.name} (en çok {it.quantity})</span>
                       <Input
-                        type="number"
+                        type="number" inputMode="numeric"
                         min={0}
                         max={it.quantity}
                         value={refundQty[idx] ?? ""}
@@ -1775,7 +1803,7 @@ Bu işlem geri alınamaz!`)) return
                     <div className="text-xs text-slate-400">{formatCurrency(product.salePrice)} | 📦 {product.quantity}</div>
                     <div className="flex items-center gap-1 mt-1">
                       <Input
-                        type="number"
+                        type="number" inputMode="numeric"
                         min={1}
                         max={product.quantity}
                         defaultValue={1}

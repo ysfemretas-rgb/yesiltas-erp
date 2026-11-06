@@ -1,5 +1,7 @@
 "use client"
 
+import { fetchStockAlertOverrides, clearStockAlertOverrides } from "@/lib/stockAlertOverrides"
+import { recordBackup } from "@/lib/backupStatus"
 import { applyStockAlertConfig } from "@/lib/inventory"
 import { STOCK_GROUPS, DEFAULT_STOCK_ALERT_CONFIG, normalizeStockAlertConfig, type StockAlertConfig } from "@/lib/stockAlerts"
 import { DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices"
@@ -37,6 +39,8 @@ interface CompanySettings {
   cardCommissionPercent: number
   stockAlertGroups?: StockAlertConfig // Envanter: grup bazında kritik stok uyarısı (açık/kapalı + minimum adet)
   repairServices?: { name: string; price: number }[] // hazır işlem fiyat listesi (Teknik Servis)
+  repairWarrantyDays?: number // tamir garantisi (gün): bu süre içinde aynı cihaz tekrar gelirse "garanti dönüşü"
+  pickupReminderDays?: number // tamiri bitip bu kadar gün teslim alınmayan cihazlar Bugün sayfasında hatırlatılır
   repairMarkupPercent: number // Teknik servis: parçaların satış fiyatı toplamının üzerine eklenen işçilik/kâr yüzdesi
 }
 
@@ -72,6 +76,8 @@ const getInitialCompany = (): CompanySettings => ({
   minMarginPercent: 0,
   cardCommissionPercent: 0,
   repairMarkupPercent: 30,
+  repairWarrantyDays: 90,
+  pickupReminderDays: 3,
   stockAlertGroups: DEFAULT_STOCK_ALERT_CONFIG,
   repairServices: DEFAULT_REPAIR_SERVICES,
 })
@@ -100,6 +106,7 @@ export default function SettingsPage() {
   const isManager = useIsManager()
   const [isLoaded, setIsLoaded] = useState(false)
   const [applyingMin, setApplyingMin] = useState(false)
+  const [overrideCount, setOverrideCount] = useState<number | null>(null) // stok uyarısı elle ayarlanmış ürün sayısı
   const [company, setCompany] = useState<CompanySettings>(getInitialCompany())
   const [waTemplates, setWaTemplates] = useState<WhatsAppTemplates>(DEFAULT_WA_TEMPLATES)
   const [users, setUsers] = useState<AppUser[]>([])
@@ -181,12 +188,14 @@ export default function SettingsPage() {
   // Stok uyarısı grup ayarını envanterdeki TÜM ürünlere uygular (uyarı açık gruplarda min. adet, kapalı gruplarda 0)
   const handleApplyMinStock = async () => {
     const cfg = normalizeStockAlertConfig(company.stockAlertGroups)
-    if (!window.confirm("Stok uyarısı ayarı envanterdeki TÜM ürünlere uygulanacak. Ürünlerde elle açıp kapattığınız uyarılar da bu ayara göre değişir. Devam edilsin mi?")) return
+    const keep = await fetchStockAlertOverrides()
+    if (!window.confirm(`Stok uyarısı ayarı envanterdeki ürünlere uygulanacak.${keep.length ? ` Elle ayarladığınız ${keep.length} ürün (istisna) KORUNACAK.` : ""} Devam edilsin mi?`)) return
     setApplyingMin(true)
     try {
-      const r = await applyStockAlertConfig(cfg)
+      const r = await applyStockAlertConfig(cfg, keep)
       handleSaveCompany()
-      showToast(`Uygulandı: ${r.on} üründe uyarı açık, ${r.off} üründe kapalı (${r.changed} ürün güncellendi).`, "success")
+      setOverrideCount(keep.length)
+      showToast(`Uygulandı: ${r.on} üründe uyarı açık, ${r.off} üründe kapalı (${r.changed} ürün güncellendi${r.kept ? `, ${r.kept} istisna korundu` : ""}).`, "success")
     } catch (e: any) {
       console.error(e)
       showToast(e?.message || "Stok uyarısı ayarı uygulanamadı.", "error")
@@ -194,6 +203,20 @@ export default function SettingsPage() {
       setApplyingMin(false)
     }
   }
+
+  // Stok uyarısı istisnalarını siler: sonraki "Gruplara uygula" bütün ürünleri gruba göre ayarlar
+  const handleClearOverrides = async () => {
+    if (!window.confirm("Elle ayarlanmış stok uyarısı istisnaları silinecek. Bir sonraki \"Gruplara uygula\" bütün ürünleri gruplarına göre ayarlar. Devam edilsin mi?")) return
+    const ok = await clearStockAlertOverrides()
+    if (ok) {
+      setOverrideCount(0)
+      showToast("İstisnalar silindi.", "success")
+    } else showToast("İstisnalar silinemedi.", "error")
+  }
+
+  useEffect(() => {
+    fetchStockAlertOverrides().then((l) => setOverrideCount(l.length)).catch(() => undefined)
+  }, [])
 
   const handleSaveCompany = () => {
     localStorage.setItem("yt_company", JSON.stringify(company))
@@ -498,7 +521,15 @@ export default function SettingsPage() {
                       {applyingMin ? "Uygulanıyor..." : "Gruplara göre tüm ürünlere uygula"}
                     </button>
                   )}
-                  <p className="text-xs text-slate-500">Uyarısı <b className="text-slate-300">açık</b> grupta stoğu belirtilen adede ya da altına düşen ürünler Envanter'de <b className="text-amber-400">sarı (kritik)</b> görünür ve uyarı listesine girer. <b className="text-slate-300">Kapalı</b> gruptaki ürünler uyarı listesine girmez (telefonlar, hiç gelmeyen yedek parçalar gibi); stoğu 0 olunca kartta yine kırmızı "Tükendi" görünür. Bu ayar yeni eklenen ürünlerin varsayılanıdır. Tek bir ürünü istisna yapmak için Envanter'de kartındaki <b className="text-slate-300">🔔 / 🔕</b> düğmesine dokunun. "Tüm ürünlere uygula" mevcut bütün ürünleri bu ayara çeker (kartlarda elle yaptığınız açma/kapamalar da sıfırlanır).</p>
+                  {overrideCount !== null && (
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-slate-400">
+                      <span>Elle ayarlanmış (istisna) ürün: <b className="text-slate-200">{overrideCount}</b> — "Gruplara uygula" bunlara dokunmaz.</span>
+                      {isManager && overrideCount > 0 && (
+                        <button type="button" onClick={handleClearOverrides} className="underline text-slate-300 hover:text-white">İstisnaları sıfırla</button>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-500">Uyarısı <b className="text-slate-300">açık</b> grupta stoğu belirtilen adede ya da altına düşen ürünler Envanter'de <b className="text-amber-400">sarı (kritik)</b> görünür ve uyarı listesine girer. <b className="text-slate-300">Kapalı</b> gruptaki ürünler uyarı listesine girmez (telefonlar, hiç gelmeyen yedek parçalar gibi); stoğu 0 olunca kartta yine kırmızı "Tükendi" görünür. Bu ayar yeni eklenen ürünlerin varsayılanıdır. Tek bir ürünü istisna yapmak için Envanter'de kartındaki <b className="text-slate-300">🔔 / 🔕</b> düğmesine dokunun. "Gruplara uygula" mevcut ürünleri bu ayara çeker; kartta 🔔/🔕 ile ya da ürün düzenlemede minimum stoğu elle değiştirilen ürünler istisnadır ve korunur.</p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-300">Teknik Servis Hazır İşlem Fiyatları (başlangıç fiyatı)</label>
@@ -513,6 +544,16 @@ export default function SettingsPage() {
                     <button type="button" onClick={() => setCompany({ ...company, repairServices: [...(company.repairServices || DEFAULT_REPAIR_SERVICES), { name: "Yeni işlem", price: 0 }] })} className="px-3 py-1.5 rounded-md border border-emerald-600 text-emerald-400 text-sm">+ İşlem ekle</button>
                   </div>
                   <p className="text-xs text-slate-500">Yeni tamir kaydında bu işlemler seçilir ve fiyatlar toplanır. "Özel fiyat" seçilirse tutarı kendiniz yazarsınız. Fiyatlar marka/modele göre değişir; kendi piyasanıza göre düzenleyin.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Tamir Garantisi (gün)</label>
+                  <Input type="number" inputMode="numeric" min={0} value={company.repairWarrantyDays ?? 90} onChange={(e) => setCompany({ ...company, repairWarrantyDays: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} className="bg-slate-700 border-slate-600 text-white" />
+                  <p className="text-xs text-slate-500">Aynı cihaz bu süre içinde tekrar gelirse "↩️ Garanti dönüşü" olarak işaretlenir; Raporlar'da hangi tedarikçinin parçasının geri geldiği görünür. 0 = kapalı.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Teslim Hatırlatma (gün)</label>
+                  <Input type="number" inputMode="numeric" min={1} value={company.pickupReminderDays ?? 3} onChange={(e) => setCompany({ ...company, pickupReminderDays: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} className="bg-slate-700 border-slate-600 text-white" />
+                  <p className="text-xs text-slate-500">Tamiri biten cihaz bu kadar gün teslim alınmazsa "Bugün" sayfasında müşteriye hatırlatma olarak çıkar.</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Teknik Servis İşçilik Yüzdesi (%)</label>
@@ -831,6 +872,7 @@ export default function SettingsPage() {
                     setBackupLoading(true)
                     try {
                       await exportBackup()
+                      recordBackup().catch(() => undefined) // son yedek tarihi (hatırlatma şeridi için)
                       showToast("Yedek indirildi.", "success")
                     } catch (err) {
                       console.error(err)

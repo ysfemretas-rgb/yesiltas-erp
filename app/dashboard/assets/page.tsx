@@ -408,7 +408,7 @@ export default function FixedAssetsPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-slate-300">Adet</Label>
-                <Input type="number" value={newAsset.quantity || 1} onChange={(e) => setNewAsset({ ...newAsset, quantity: Number(e.target.value) })} className="bg-slate-800 border-slate-600 text-white" />
+                <Input type="number" inputMode="numeric" value={newAsset.quantity || 1} onChange={(e) => setNewAsset({ ...newAsset, quantity: Number(e.target.value) })} className="bg-slate-800 border-slate-600 text-white" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -485,7 +485,7 @@ export default function FixedAssetsPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-slate-300">Adet</Label>
-                  <Input type="number" value={editingAsset.quantity} onChange={(e) => setEditingAsset({ ...editingAsset, quantity: Number(e.target.value) })} className="bg-slate-800 border-slate-600 text-white" />
+                  <Input type="number" inputMode="numeric" value={editingAsset.quantity} onChange={(e) => setEditingAsset({ ...editingAsset, quantity: Number(e.target.value) })} className="bg-slate-800 border-slate-600 text-white" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

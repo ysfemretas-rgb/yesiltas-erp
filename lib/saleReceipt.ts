@@ -7,7 +7,7 @@ interface ReceiptSale {
   customerName: string
   customerCode?: string
   customerPhone?: string
-  items: { name: string; price: number; quantity: number; imei?: string; listPrice?: number }[]
+  items: { name: string; price: number; quantity: number; imei?: string; listPrice?: number; note?: string }[]
   totalAmount: number
   discount: number
   paid: number
@@ -41,7 +41,7 @@ export function printSaleReceipt(sale: ReceiptSale) {
 
   const rows = sale.items.map((i, idx) => `<tr>
       <td style="width:6%">${idx + 1}</td>
-      <td>${esc(i.name)}${i.imei ? `<div style="font-size:9.5px;color:#6b7280">IMEI / Seri No: ${esc(i.imei)}</div>` : ""}</td>
+      <td>${esc(i.name)}${i.imei ? `<div style="font-size:9.5px;color:#6b7280">IMEI / Seri No: ${esc(i.imei)}</div>` : ""}${i.note ? `<div style="font-size:9.5px;color:#374151">${esc(i.note)}</div>` : ""}</td>
       <td style="text-align:center;width:10%">${i.quantity}</td>
       <td style="text-align:right;width:18%">${i.listPrice && i.listPrice > i.price + 0.004 ? `<s style="color:#94a3b8;font-size:0.85em">${money(i.listPrice)}</s><br/>` : ""}${money(i.price)}</td>
       <td style="text-align:right;width:18%">${money(i.price * i.quantity)}</td></tr>`).join("")

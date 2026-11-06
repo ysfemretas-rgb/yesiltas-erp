@@ -258,12 +258,19 @@ export async function findActiveImeiConflict(imei: string, excludeId?: string): 
 
 // Stok uyarısı ayarını (grup bazında açık/kapalı + minimum adet) mevcut TÜM ürünlere uygular: uyarı açık gruptaki ürünlerin minimum stoğu
 // grubun adedi, kapalı gruptakilerin 0 olur. Ürünler tek tek elle açılıp kapatılmış olsa bile bu ayara çekilir.
-export async function applyStockAlertConfig(cfg: StockAlertConfig): Promise<{ total: number; changed: number; on: number; off: number }> {
+// keepIds: stok uyarısı elle ayarlanmış (istisna) ürünler — bunların minimum stoğuna dokunulmaz
+export async function applyStockAlertConfig(cfg: StockAlertConfig, keepIds: string[] = []): Promise<{ total: number; changed: number; on: number; off: number; kept: number }> {
   const rows = await fetchAllRows("inventory", "created_at", false)
+  const keep = new Set(keepIds.map(String))
   const byValue = new Map<number, string[]>()
   let on = 0
   let off = 0
+  let kept = 0
   for (const r of rows) {
+    if (keep.has(String(r.id))) {
+      kept++
+      continue
+    }
     const want = desiredMinQuantity(r.category, cfg)
     if (want > 0) on++
     else off++
@@ -281,6 +288,6 @@ export async function applyStockAlertConfig(cfg: StockAlertConfig): Promise<{ to
       changed += chunk.length
     }
   }
-  logActivity("Envanter", "updated", `Stok uyarısı ayarı uygulandı: ${on} üründe açık, ${off} üründe kapalı (${changed} ürün güncellendi)`)
-  return { total: rows.length, changed, on, off }
+  logActivity("Envanter", "updated", `Stok uyarısı ayarı uygulandı: ${on} üründe açık, ${off} üründe kapalı (${changed} ürün güncellendi, ${kept} istisna korundu)`)
+  return { total: rows.length, changed, on, off, kept }
 }

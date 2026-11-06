@@ -10,6 +10,8 @@
 //
 // phone: ülke koduyla birlikte rakamlar (örn. 905551112233); boş olabilir (kişiyi WhatsApp'ta seçersiniz).
 // iPhone'da ana ekrandan açılan uygulama (standalone) mı?
+import { toWhatsAppNumber } from "@/lib/phone"
+
 export function isIOSStandalone(): boolean {
   if (typeof navigator === "undefined" || typeof window === "undefined") return false
   const ua = navigator.userAgent
@@ -32,8 +34,10 @@ export function rememberScroll(): void {
   }
 }
 
-export function openWhatsApp(phone: string | null | undefined, message: string): void {
+export function openWhatsApp(rawPhone: string | null | undefined, message: string): void {
   rememberScroll()
+  // Numara tek noktada düzeltilir (05…, 5…, +90…, "90"+"05…" → 905…): sayfalar farklı biçimlerde gönderebiliyor
+  const phone = toWhatsAppNumber(rawPhone)
   // iPhone'da ana ekrandan açılan uygulamada (standalone), kod ile başka adrese geçmek iOS'un "uygulama içi tarayıcı
   // penceresini" (X düğmeli beyaz sayfa) açmasına yol açıyordu. Bu modda mesaj küçük bir pencerede gösterilir ve
   // gerçek bir BAĞLANTIYA dokunarak WhatsApp açılır (iOS bunu doğrudan uygulamaya devreder); mesajı kopyalama ve

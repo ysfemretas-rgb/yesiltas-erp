@@ -1,38 +1,50 @@
-YEŞİLTAŞ ERP — v47 YAMA PAKETİ (23 dosya)
-
-Bu pakette v45'ten v47'ye değişen BÜTÜN dosyalar var (v46 değişiklikleri dahil).
-Klasör yapısı projenle aynıdır: bu klasörün İÇİNDEKİLERİ (app, components, lib, tests, DUZELTMELER.md, TEST-SENARYOLARI.md)
-GitHub'daki projenin aynı yerlerine yüklenip üzerine yazılmalıdır.
+YEŞİLTAŞ ERP — v48 YAMA PAKETİ (36 dosya: v47'den bu yana değişen/yeni dosyalar)
 
 GitHub'a yükleme (tarayıcıdan):
- 1) Depoda "Add file > Upload files" de.
- 2) Bu klasörün içindeki app, components, lib, tests klasörlerini ve iki .md dosyasını sürükle (toplam 23 dosya; 100 dosya sınırının altında).
- 3) Altta "Commit changes" de. Vercel kendiliğinden yeniden yayınlar.
+ 1) Depoda "Add file > Upload files".
+ 2) Bu klasörün İÇİNDEKİ app, components, lib, public, tests klasörlerini ve DUZELTMELER.md, TEST-SENARYOLARI.md dosyalarını sürükle.
+    (Bu BENI-OKU.txt dosyasını yükleme.) 36 dosya, 100 dosya sınırının altında, tek seferde gider.
+ 3) "Commit changes". Vercel kendiliğinden yeniden yayınlar.
 
-Kontrol: GitHub'da lib/version.ts dosyasını aç, içinde  APP_VERSION = "v47"  yazmalı.
-Vercel "Ready" olunca uygulamayı TAMAMEN kapatıp aç; menünün altında "Sürüm v47" görünmeli.
+Kontrol:
+ - GitHub'da lib/version.ts → APP_VERSION = "v48"  ve  public/version.json → "v48"
+ - Vercel "Ready" olunca uygulamayı TAMAMEN kapatıp aç; menünün altında "Sürüm v48".
+ - Yeni SQL YOK.
 
 Dosya listesi:
 DEĞİŞTİ DUZELTMELER.md
 DEĞİŞTİ TEST-SENARYOLARI.md
-DEĞİŞTİ app/dashboard/customers/page.tsx
+DEĞİŞTİ app/dashboard/assets/page.tsx
+DEĞİŞTİ app/dashboard/consumables/page.tsx
 DEĞİŞTİ app/dashboard/inventory/page.tsx
-DEĞİŞTİ app/dashboard/purchases/page.tsx
+DEĞİŞTİ app/dashboard/layout.tsx
 DEĞİŞTİ app/dashboard/repairs/page.tsx
+DEĞİŞTİ app/dashboard/reports/page.tsx
 DEĞİŞTİ app/dashboard/sales/page.tsx
 DEĞİŞTİ app/dashboard/settings/page.tsx
-DEĞİŞTİ app/dashboard/suppliers/page.tsx
+DEĞİŞTİ app/dashboard/today/page.tsx
+DEĞİŞTİ components/NumberPrompt.tsx
 DEĞİŞTİ components/purchases/NewPurchaseDialog.tsx
-DEĞİŞTİ components/ui/input.tsx
 DEĞİŞTİ lib/inventory.ts
-DEĞİŞTİ lib/purchaseLines.ts
-DEĞİŞTİ lib/repairReceipt.ts
-DEĞİŞTİ lib/stockLevel.ts
+DEĞİŞTİ lib/phone.ts
+DEĞİŞTİ lib/repairs.ts
+DEĞİŞTİ lib/saleReceipt.ts
+DEĞİŞTİ lib/sales.ts
 DEĞİŞTİ lib/version.ts
-YENİ     components/NumberPrompt.tsx
-YENİ     lib/discountInfo.ts
-YENİ     lib/numberInput.ts
-YENİ     lib/stockAlerts.ts
-YENİ     tests/discountInfo.test.ts
-YENİ     tests/numberInput.test.ts
-YENİ     tests/stockAlerts.test.ts
+DEĞİŞTİ lib/whatsapp.ts
+DEĞİŞTİ tests/phone.test.ts
+YENİ     components/AppBanners.tsx
+YENİ     components/ExpertiseFields.tsx
+YENİ     components/repairs/PartOrderDialog.tsx
+YENİ     lib/appStore.ts
+YENİ     lib/backupAge.ts
+YENİ     lib/backupStatus.ts
+YENİ     lib/expertise.ts
+YENİ     lib/partOrder.ts
+YENİ     lib/repairWarranty.ts
+YENİ     lib/stockAlertOverrides.ts
+YENİ     public/version.json
+YENİ     tests/expertise.test.ts
+YENİ     tests/partOrder.test.ts
+YENİ     tests/repairWarranty.test.ts
+YENİ     tests/version.test.ts

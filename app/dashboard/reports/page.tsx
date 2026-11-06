@@ -1,5 +1,7 @@
 "use client"
 
+import { warrantyReturnsBySupplier, supplierCounts } from "@/lib/repairWarranty"
+import { fetchInventory } from "@/lib/inventory"
 import { fetchSettlementDiscounts, SettlementDiscount } from "@/lib/settlement"
 import { toolbarHtml, openPrintWindow } from "@/lib/printTheme"
 import { netTotals } from "@/lib/financeTotals"
@@ -7,7 +9,7 @@ import { StatListDialog, StatRow } from "@/components/StatListDialog"
 import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { fetchTransactions } from "@/lib/finance"
-import { fetchRepairs } from "@/lib/repairs"
+import { fetchRepairs, Repair } from "@/lib/repairs"
 import { fetchSales } from "@/lib/sales"
 import { fetchCustomers } from "@/lib/customers"
 import { useState, useEffect, useMemo } from "react"
@@ -129,6 +131,8 @@ export default function ReportsPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
   const [discountsData, setDiscountsData] = useState<SettlementDiscount[]>([])
+  const [rawRepairs, setRawRepairs] = useState<Repair[]>([]) // garanti dönüşü hesabı için tam tamir kayıtları
+  const [supplierByProduct, setSupplierByProduct] = useState<Record<string, string>>({})
   const [dateRange, setDateRange] = useState({ start: "", end: "" })
   const [financeData, setFinanceData] = useState<FinanceRecord[]>([])
   const [repairsData, setRepairsData] = useState<RepairRecord[]>([])
@@ -148,8 +152,10 @@ export default function ReportsPage() {
 
     // Supabase'den verileri çek
     fetchSettlementDiscounts().then(setDiscountsData).catch(() => undefined) // SQL v12 çalıştırılmadıysa sessizce atlanır
+    fetchInventory().then((inv) => setSupplierByProduct(Object.fromEntries(inv.map((i) => [i.id, i.supplier || ""])))).catch(() => undefined)
     Promise.all([fetchTransactions(), fetchRepairs(), fetchSales(), fetchCustomers()])
       .then(([finance, repairs, sales, customers]) => {
+        setRawRepairs(repairs)
         const validFinance: FinanceRecord[] = finance
           .filter(f => f.date)
           .map(f => ({
@@ -752,6 +758,57 @@ export default function ReportsPage() {
   const def = statKey ? defs[statKey] : null
   return <StatListDialog open={!!def} onOpenChange={(o) => { if (!o) setStatKey(null) }} title={def?.title || ""} rows={def?.rows || []} summary={def?.summary} />
 })()}
+
+        {/* Garanti dönüşleri: aynı cihaz tamir garantisi içinde tekrar geldiyse; önceki tamirdeki parçaların tedarikçisine göre */}
+        {(() => {
+          let days = 90
+          try {
+            const n = Number(JSON.parse(localStorage.getItem("yt_company") || "{}")?.repairWarrantyDays)
+            if (Number.isFinite(n) && n >= 0) days = n
+          } catch {
+            // yoksay
+          }
+          if (days <= 0) return null
+          const all = warrantyReturnsBySupplier(rawRepairs as any, days, (id) => supplierByProduct[id] || "").returns
+          const inRange = all.filter((x) => filterByDate([{ date: x.repair.createdAt }]).length > 0)
+          const completed = filterByDate(rawRepairs.filter((r) => r.status === "completed").map((r) => ({ date: r.completedAt || r.createdAt }))).length
+          const bySupplier = supplierCounts(inRange as any, (id) => supplierByProduct[id] || "")
+          return (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white text-base">↩️ Garanti Dönüşleri (tamir garantisi {days} gün)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between gap-2 flex-wrap">
+                  <span className="text-slate-400">Bu dönemde garanti içinde geri gelen cihaz</span>
+                  <span className="text-white font-semibold">{inRange.length} {completed > 0 && <span className="text-slate-400 font-normal">/ {completed} tamamlanan tamir (%{Math.round((inRange.length / completed) * 100)})</span>}</span>
+                </div>
+                {bySupplier.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-slate-400">Önceki tamirde kullanılan parçanın tedarikçisine göre:</div>
+                    {bySupplier.map((b) => (
+                      <div key={b.supplier} className="flex justify-between gap-2 p-2 rounded bg-slate-900 border border-slate-700">
+                        <span className="text-slate-200 min-w-0 break-words">{b.supplier}</span>
+                        <span className="text-amber-300 font-semibold shrink-0">{b.count} dönüş</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {inRange.length > 0 ? (
+                  <div className="space-y-1">
+                    {inRange.slice(0, 10).map((x) => (
+                      <div key={x.repair.id} className="text-xs text-slate-300 break-words">
+                        • {x.repair.repairCode || "Tamir"} — {x.repair.customerName} — {x.repair.brand} {x.repair.model}: önceki {x.prev.repairCode || "tamir"}, {x.daysSince} gün sonra
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">Bu dönemde garanti dönüşü yok.</p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()}
 
         {/* Gerçek Kâr Analizi */}
         <Card className="bg-slate-800 border-slate-700">

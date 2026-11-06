@@ -1,5 +1,8 @@
 "use client"
 
+import { ExpertiseFields } from "@/components/ExpertiseFields"
+import { Expertise, EMPTY_EXPERTISE, formatExpertise } from "@/lib/expertise"
+import { addStockAlertOverride } from "@/lib/stockAlertOverrides"
 import { stockLevel } from "@/lib/stockLevel"
 import { getStockAlertConfig, desiredMinQuantity, alertOnMinQuantity } from "@/lib/stockAlerts"
 import { PhoneInput } from "@/components/PhoneInput"
@@ -95,6 +98,7 @@ export default function InventoryPage() {
   const [orderOpen, setOrderOpen] = useState(false)
   const [stockMove, setStockMove] = useState<{ item: InventoryItem; mode: "in" | "out" } | null>(null)
   const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [deviceExpertise, setDeviceExpertise] = useState<Expertise>(EMPTY_EXPERTISE) // ikinci el cihaz alımında ekspertiz
   const [purchaseForm, setPurchaseForm] = useState({ sellerName: "", sellerPhone: "", sellerIdNo: "", deviceName: "", imei: "", conditionNote: "", price: "", salePrice: "", addToStock: true })
   const [countOpen, setCountOpen] = useState(false)
   const [countScanOpen, setCountScanOpen] = useState(false)
@@ -354,13 +358,14 @@ export default function InventoryPage() {
         sellerIdNo: purchaseForm.sellerIdNo.trim(),
         deviceName: purchaseForm.deviceName.trim(),
         imei: purchaseForm.imei.trim(),
-        conditionNote: purchaseForm.conditionNote.trim(),
+        conditionNote: [formatExpertise(deviceExpertise), purchaseForm.conditionNote.trim()].filter(Boolean).join(" | "),
         price,
         addToStock: purchaseForm.addToStock,
         salePrice: Number(purchaseForm.salePrice) || undefined,
       })
       if (item) setInventory([item, ...inventory])
       setPurchaseOpen(false)
+      setDeviceExpertise(EMPTY_EXPERTISE)
       setPurchaseForm({ sellerName: "", sellerPhone: "", sellerIdNo: "", deviceName: "", imei: "", conditionNote: "", price: "", salePrice: "", addToStock: true })
       showToast("Cihaz alımı kaydedildi, kasaya gider yazıldı.", "success")
       printPurchaseDocument(purchase)
@@ -634,6 +639,7 @@ export default function InventoryPage() {
     const next = item.minQuantity > 0 ? 0 : alertOnMinQuantity(item.category, getStockAlertConfig())
     try {
       await updateInventoryItem(item.id, { minQuantity: next })
+      addStockAlertOverride(item.id).catch(() => undefined) // elle ayarlandı: "Gruplara uygula" bu ürüne dokunmasın
       setInventory((prev) => prev.map((i) => (i.id === item.id ? { ...i, minQuantity: next } : i)))
       showToast(next > 0 ? `${item.name}: stok uyarısı AÇILDI (min. ${next} adet).` : `${item.name}: stok uyarısı kapatıldı.`, "success")
     } catch (e) {
@@ -671,6 +677,8 @@ export default function InventoryPage() {
       rates
     )
     const original = inventory.find(i => i.id === editingItem.id)
+    // Minimum stok elle değiştirildiyse bu ürün stok uyarısı istisnası olur ("Gruplara uygula" dokunmaz)
+    if (original && Number(original.minQuantity) !== Number(editingItem.minQuantity)) addStockAlertOverride(editingItem.id).catch(() => undefined)
     const stockChange = original ? editingItem.quantity - original.quantity : 0
     const supplierName = (original?.supplier || "").trim()
     // Tedarikçili üründe adet değişirse Alışlar kaydı ve tedarikçi borcu da AYNI İŞLEMLE düzeltilir
@@ -924,7 +932,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Miktar</label>
                   <Input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={newItem.quantity || ""}
                     onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
@@ -933,7 +941,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>
                   <Input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={newItem.minQuantity ?? ""}
                     data-allow-empty
                     placeholder={`Boş = otomatik (${desiredMinQuantity(newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"), getStockAlertConfig())})`}
@@ -1533,7 +1541,8 @@ export default function InventoryPage() {
             <Input placeholder="T.C. Kimlik No (belgeye yazılır, kaydedilmez)" value={purchaseForm.sellerIdNo} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerIdNo: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <Input placeholder="Cihaz (marka / model) *" value={purchaseForm.deviceName} onChange={(e) => setPurchaseForm({ ...purchaseForm, deviceName: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <Input placeholder="IMEI / Seri No" value={purchaseForm.imei} onChange={(e) => setPurchaseForm({ ...purchaseForm, imei: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
-            <Input placeholder="Cihaz durumu (çizik, pil sağlığı, aksesuar...)" value={purchaseForm.conditionNote} onChange={(e) => setPurchaseForm({ ...purchaseForm, conditionNote: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            <ExpertiseFields value={deviceExpertise} onChange={setDeviceExpertise} />
+            <Input placeholder="Ek not (aksesuar, kutu, fatura...)" value={purchaseForm.conditionNote} onChange={(e) => setPurchaseForm({ ...purchaseForm, conditionNote: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <div className="grid grid-cols-2 gap-2">
               <Input type="number" inputMode="decimal" placeholder="Ödenen tutar (TL) *" value={purchaseForm.price} onChange={(e) => setPurchaseForm({ ...purchaseForm, price: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
               <Input type="number" inputMode="decimal" data-allow-empty placeholder="Satış fiyatı (boşsa +%20)" value={purchaseForm.salePrice} onChange={(e) => setPurchaseForm({ ...purchaseForm, salePrice: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
@@ -1754,7 +1763,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Miktar</label>
                   <Input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={editingItem.quantity}
                     onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
@@ -1764,7 +1773,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>
                   <Input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={editingItem.minQuantity}
                     onChange={(e) => setEditingItem({ ...editingItem, minQuantity: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"

@@ -1,5 +1,7 @@
 "use client"
 
+import { PartOrderDialog } from "@/components/repairs/PartOrderDialog"
+import { findWarrantyReturn } from "@/lib/repairWarranty"
 import { isSparePart } from "@/lib/productKinds"
 import { PhoneInput } from "@/components/PhoneInput"
 import { RepairService, DEFAULT_REPAIR_SERVICES, normalizeServices, servicesTotal } from "@/lib/repairServices"
@@ -113,6 +115,8 @@ function RepairsPageContent() {
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [customPrice, setCustomPrice] = useState(false)
   const [openPartsId, setOpenPartsId] = useState<string | null>(null) // listede "Kullanılan parçalar" detayı açık olan tamir
+  const [partOrderRepair, setPartOrderRepair] = useState<Repair | null>(null) // parça siparişi penceresi
+  const [repairWarrantyDays, setRepairWarrantyDays] = useState(90) // tamir garantisi (gün): bu süre içinde tekrar gelen cihaz "garanti dönüşü"
   const [discount, setDiscount] = useState("")
   const [maxDiscountPercent, setMaxDiscountPercent] = useState(20)
   const [paymentType, setPaymentType] = useState<string>("unpaid")
@@ -152,6 +156,27 @@ function RepairsPageContent() {
     if (!customPrice && costAuto && (formParts.length > 0 || selectedServices.length > 0)) setCost(String(autoPrice))
   }, [autoPrice, customPrice, costAuto, formParts.length, selectedServices.length])
 
+  // Garanti dönüşü: aynı cihaz önceki tamirden sonra garanti süresi içinde tekrar geldiyse kartta işaretlenir
+  const warrantyHits = useMemo(() => {
+    const m = new Map<string, { prev: Repair; daysSince: number }>()
+    if (repairWarrantyDays <= 0) return m
+    for (const r of repairs) {
+      const hit = findWarrantyReturn(r, repairs, repairWarrantyDays)
+      if (hit) m.set(r.id, { prev: hit.prev as Repair, daysSince: hit.daysSince })
+    }
+    return m
+  }, [repairs, repairWarrantyDays])
+
+  const formWarranty = useMemo(() => {
+    if (repairWarrantyDays <= 0 || (!imei.trim() && !model.trim())) return null
+    const cust = customers.find((c) => c.id === customerId)
+    return findWarrantyReturn(
+      { id: "__yeni__", imei, customerCode: cust?.customerCode, customerName: cust?.name || customerName, brand, model, createdAt: localDateStr() },
+      repairs,
+      repairWarrantyDays
+    )
+  }, [imei, model, brand, customerId, customerName, customers, repairs, repairWarrantyDays])
+
   useEffect(() => {
     let cancelled = false
 
@@ -160,6 +185,7 @@ function RepairsPageContent() {
       if (companyRaw) {
         const parsed = JSON.parse(companyRaw)
         if (typeof parsed?.maxDiscountPercent === "number") setMaxDiscountPercent(parsed.maxDiscountPercent)
+        if (typeof parsed?.repairWarrantyDays === "number" && parsed.repairWarrantyDays >= 0) setRepairWarrantyDays(parsed.repairWarrantyDays)
         if (Array.isArray(parsed?.repairServices)) setServices(normalizeServices(parsed.repairServices))
         if (typeof parsed?.repairMarkupPercent === "number") { setDefaultMarkup(parsed.repairMarkupPercent); setMarkupPct(String(parsed.repairMarkupPercent)) }
       }
@@ -982,6 +1008,11 @@ function RepairsPageContent() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <PartOrderDialog
+        repair={partOrderRepair}
+        onClose={() => setPartOrderRepair(null)}
+        onSaved={(u, msg) => { setRepairs((prev) => prev.map((r) => (r.id === u.id ? u : r))); setPartOrderRepair(null); showToast(msg, "success") }}
+      />
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🔧 Teknik Servis</h1>
         <div className="flex gap-2 flex-wrap">
@@ -1123,6 +1154,11 @@ function RepairsPageContent() {
                   <Input value={model} onChange={(e) => setModel(e.target.value)} className="bg-slate-800 border-slate-600 text-white" placeholder="Orn: iPhone 14 Pro" />
                 )}
               </div>
+              {formWarranty && (
+                <div className="rounded-md border border-amber-600 bg-amber-900/20 p-2 text-xs text-amber-200">
+                  ↩️ Bu cihaz <b>{formWarranty.daysSince} gün önce</b> {formWarranty.prev.repairCode || "önceki bir tamirle"} ile tamir edildi ({(formWarranty.prev as Repair).issue || "arıza"}). Tamir garantisi ({repairWarrantyDays} gün) içinde — garanti dönüşü olabilir.
+                </div>
+              )}
 
               <div className="space-y-3 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1158,7 +1194,7 @@ function RepairsPageContent() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Input type="number" min={1} value={formPartQty} onChange={(e) => setFormPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
+                      <Input type="number" inputMode="numeric" min={1} value={formPartQty} onChange={(e) => setFormPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
                       <Button type="button" aria-label="Parçayı ekle" onClick={addFormPart} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4" /></Button>
                     </div>
                     <button type="button" onClick={() => setShowAllParts((v) => !v)} className="text-xs text-slate-400 underline">{showAllParts ? "Sadece yedek parçaları göster" : `Listede yoksa tüm ürünleri göster (şu an ${partItems.length} yedek parça)`}</button>
@@ -1210,7 +1246,8 @@ function RepairsPageContent() {
                       </div>
                     )}
                     <div className="flex justify-between"><span className="text-slate-400">Önerilen ücret</span><span className="text-emerald-300 font-bold">{formatCurrency(autoPrice)}</span></div>
-                    {!costAuto && <button type="button" onClick={() => { setCostAuto(true); setCost(String(autoPrice)) }} className="text-xs text-emerald-400 underline">↺ Ücreti otomatik hesaplanana döndür</button>}
+                    {/* bağlantı belirince sayfa kaymasın diye satır yüksekliği sabit */}
+                    <div className="min-h-[1.25rem]">{!costAuto && <button type="button" onClick={() => { setCostAuto(true); setCost(String(autoPrice)) }} className="text-xs text-emerald-400 underline">↺ Ücreti otomatik hesaplanana döndür</button>}</div>
                   </div>
                 )}
               </div>
@@ -1218,7 +1255,7 @@ function RepairsPageContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-slate-300">Ücret (TL)</Label>
-                  <Input type="number" value={cost} onChange={(e) => { setCost(e.target.value); setCostAuto(false) }} className="bg-slate-800 border-slate-600 text-white" placeholder="4500" />
+                  <Input type="number" value={cost} onChange={(e) => { setCost(e.target.value); setCostAuto(false) }} className="bg-slate-800 border-slate-600 text-white" placeholder="Örn: 4500" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-slate-300">İskonto (TL)</Label>
@@ -1453,6 +1490,9 @@ function RepairsPageContent() {
                         <div className="text-xs text-slate-500 font-mono">IMEI: {repair.imei}</div>
                       )}
                       <div className="text-xs text-slate-500 mt-0.5">📅 {repair.createdAt}</div>
+                      {warrantyHits.get(repair.id) && (
+                        <div className="text-xs text-amber-300 mt-0.5">↩️ Garanti dönüşü: {warrantyHits.get(repair.id)!.prev.repairCode || "önceki tamir"} ({warrantyHits.get(repair.id)!.daysSince} gün sonra geldi)</div>
+                      )}
                       {((repair.parts || []).length > 0 || /İşlemler:/.test(repair.notes || "")) && (
                         <div className="mt-1">
                           <button
@@ -1561,6 +1601,16 @@ function RepairsPageContent() {
                     >
                       <Printer className="w-3 h-3 mr-1" />Fiş
                     </Button>
+                    {repair.status !== "completed" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-600 text-amber-300 hover:text-amber-200 hover:bg-amber-500/10"
+                        onClick={() => setPartOrderRepair(repair)}
+                      >
+                        📦 Parça sipariş
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -1829,7 +1879,7 @@ function RepairsPageContent() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="number" min={1} value={partQty} onChange={(e) => setPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
+                <Input type="number" inputMode="numeric" min={1} value={partQty} onChange={(e) => setPartQty(e.target.value)} className="w-16 bg-slate-800 border-slate-600 text-white" />
                 <Button type="button" onClick={addPart} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4" /></Button>
               </div>
               {selectedRepair && (selectedRepair.parts || []).length > 0 && (() => {

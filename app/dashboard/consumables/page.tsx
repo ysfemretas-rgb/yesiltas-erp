@@ -368,7 +368,7 @@ export default function ConsumablesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>
                   <Input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={newItem.minStock || ""}
                     onChange={(e) => setNewItem({ ...newItem, minStock: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
@@ -770,7 +770,7 @@ export default function ConsumablesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300">Min. Stok</label>
                   <Input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={editingItem.minStock}
                     onChange={(e) => setEditingItem({ ...editingItem, minStock: Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
