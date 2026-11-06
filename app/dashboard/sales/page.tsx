@@ -1,5 +1,7 @@
 "use client"
 
+import { useNumberPrompt } from "@/components/NumberPrompt"
+import { saleDiscountInfo } from "@/lib/discountInfo"
 import { isSparePart } from "@/lib/productKinds"
 import { PhoneInput } from "@/components/PhoneInput"
 import { lineNetUnitPrice, discountAmount } from "@/lib/settlementMath"
@@ -68,6 +70,7 @@ const paymentMethods = [
 
 export default function SalesPage() {
   const { toast, showToast, hideToast } = useToast()
+  const { ask: askNumber, node: numberPromptNode } = useNumberPrompt() // sayı girişi için uygulama içi pencere (telefonda sayı tuş takımı)
   const router = useRouter()
   const { authorized, checking } = usePageAccess("Satış")
   const isManager = useIsManager()
@@ -207,8 +210,9 @@ export default function SalesPage() {
   }, [customers, customerSearch])
 
   const filteredProducts = useMemo(() => {
-    // Satışta yedek parçalar (Yedek Parça - Ekran vb.) listelenmez; onlar teknik serviste kullanılır
-    const sellable = products.filter(p => !isSparePart(p))
+    // Satışta yedek parçalar (Yedek Parça - Ekran vb.) listelenmez; onlar teknik serviste kullanılır.
+    // Stoğu olmayan (0 ve altı) ürünler de listelenmez: satılamayacak ürün katalogda görünmesin.
+    const sellable = products.filter(p => !isSparePart(p) && p.quantity > 0)
     if (!searchTerm) return sellable
     const search = searchTerm.toLowerCase()
     return sellable.filter(p =>
@@ -872,7 +876,7 @@ Bu işlem geri alınamaz!`)) return
   // bağlı borç ve kasa kaydı kaldırılır.
   // Satıştan tek tıkla garanti kaydı oluşturur (süre sorulur, varsayılan 12 ay).
   const handleCreateWarranty = async (sale: Sale) => {
-    const input = window.prompt(`${sale.customerName} — ürün garanti süresi (ay):`, "12")
+    const input = await askNumber(`${sale.customerName} — ürün garanti süresi (ay):`, "12")
     if (input === null) return
     const months = Math.round(Number(input))
     if (!months || months < 1 || months > 120) {
@@ -1106,7 +1110,7 @@ Bu işlem geri alınamaz!`)) return
 
       const message = renderTemplate(getWhatsAppTemplates().sales, {
         musteri: customerName,
-        urunler: items || "Ürün bilgisi yok",
+        urunler: (items || "Ürün bilgisi yok") + (saleDiscountInfo(sale).total > 0 ? `\n\u{1F3F7}\uFE0F *İskonto:* -${saleDiscountInfo(sale).total.toLocaleString("tr-TR")} TL (liste ${saleDiscountInfo(sale).listTotal.toLocaleString("tr-TR")} TL)` : ""),
         toplam: (sale.totalAmount || 0).toLocaleString("tr-TR"),
         odeme_durumu: odemeDurumu,
         tarih: sale.date,
@@ -1150,6 +1154,7 @@ Bu işlem geri alınamaz!`)) return
 
   return (
     <div className="space-y-6">
+      {numberPromptNode}
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">🛒 Satışlar</h1>
@@ -1562,7 +1567,7 @@ Bu işlem geri alınamaz!`)) return
                         <Input placeholder="Cihaz adı" value={tradeName} onChange={(e) => setTradeName(e.target.value)} className="bg-slate-900 border-slate-600 text-white col-span-2" />
                         <Input type="number" inputMode="decimal" placeholder="Değer (TL)" value={tradeValue} onChange={(e) => setTradeValue(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                       </div>
-                      <Input placeholder="IMEI (opsiyonel)" value={tradeImei} onChange={(e) => setTradeImei(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                      <Input inputMode="numeric" placeholder="IMEI (opsiyonel)" value={tradeImei} onChange={(e) => setTradeImei(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                       {tradeVal > 0 && <p className="text-xs text-purple-300">Takas değeri {formatCurrency(tradeVal)} ödemeden düşülür; cihaz "İkinci El" olarak stoğa girer.</p>}
                     </div>
                   )}
@@ -1616,6 +1621,7 @@ Bu işlem geri alınamaz!`)) return
                 ))}
               </div>
               <div className="space-y-1 border-t border-slate-700 pt-2">
+                {saleDiscountInfo(viewSale).lineDiscount > 0 && <div className="flex justify-between text-slate-400"><span>Ürün İskontosu</span><span>-{formatCurrency(saleDiscountInfo(viewSale).lineDiscount)}</span></div>}
                 {viewSale.discount > 0 && <div className="flex justify-between text-slate-400"><span>İskonto</span><span>-{formatCurrency(viewSale.discount)}</span></div>}
                 <div className="flex justify-between font-bold"><span>Toplam</span><span>{formatCurrency(viewSale.totalAmount)}</span></div>
                 {viewSale.paymentMethod !== "gift" && <div className="flex justify-between text-emerald-400"><span>Alınan</span><span>{formatCurrency(viewSale.paid)}</span></div>}

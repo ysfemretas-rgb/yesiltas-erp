@@ -1,5 +1,6 @@
 "use client"
 
+import { useNumberPrompt } from "@/components/NumberPrompt"
 import { getStockAlertConfig, desiredMinQuantity } from "@/lib/stockAlerts"
 import { useEffect, useMemo, useState } from "react"
 import { Toast, useToast } from "@/components/toast"
@@ -42,6 +43,7 @@ const PURCHASE_IMPORT_FIELDS: ImportField[] = [
 
 export default function PurchasesPage() {
   const { toast, showToast, hideToast } = useToast()
+  const { ask: askNumber, node: numberPromptNode } = useNumberPrompt() // sayı girişi için uygulama içi pencere (telefonda sayı tuş takımı)
   const { authorized, checking } = usePageAccess("Envanter")
   const isManager = useIsManager()
   const { rates, isFallback } = useExchangeRates()
@@ -257,7 +259,7 @@ export default function PurchasesPage() {
 
   const doPay = async (p: Purchase) => {
     const rem = remainingOf(p)
-    const input = window.prompt(`${p.partyName} — ${p.code}\nKalan borç: ${money(rem)}\n\nÖdenen tutar (TL):`, String(rem))
+    const input = await askNumber(`${p.partyName} — ${p.code}\nKalan borç: ${money(rem)}\n\nÖdenen tutar (TL):`, String(rem))
     if (input === null) return
     const amount = Number(String(input).replace(",", "."))
     if (!(amount > 0)) return showToast("Geçerli bir tutar girin.", "error")
@@ -298,6 +300,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-6">
+      {numberPromptNode}
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="flex items-center justify-between flex-wrap gap-2">

@@ -118,3 +118,58 @@ Gerçek işlerde kullanmadan önce **küçük tutarlı** kayıtlarla bu senaryol
 
 ### Test kayıtlarını silme
 Testler bitince Supabase SQL Editor'de **`supabase-test-kayitlarini-sil.sql`**'i çalıştırın: önce olduğu gibi (deneme modu, hiçbir şey silinmez, "tablo / silinecek adet" listesi gelir), sayılar mantıklıysa son satırı `commit;` yapıp tekrar çalıştırın. Yalnızca **adı TEST ile başlayan** kayıtlar ve onlara bağlı satış/tamir/alış/borç/kasa kayıtları silinir. Silmeden önce Ayarlar > Yedekle ile yedek alın.
+
+## 7) v42–v47 yeni özellikler — Teknik servis, stok uyarısı, iskonto görünürlüğü, sayı kutuları
+**Hazırlık:** Menünün altında **"Sürüm v47"** yazıyor. Tüm kayıtlarda **TEST** adlarını kullanın. Ayarlar'daki **"Gruplara göre tüm ürünlere uygula"** düğmesine **basmayın** (gerçek ürünlerin minimum stoğunu değiştirir). Telefon klavyesi ve WhatsApp'ı ajan göremez, onlar "elle" işaretli adımlardır.
+
+### 7A) Stok uyarısı (v46–v47)
+| # | Adım | Beklenen |
+|---|---|---|
+| 7.1 | Ayarlar > **Stok Uyarısı (ürün grubuna göre)** | 5 satır: Cihazlar **kapalı**, Telefon aksesuarları **açık**, Genel aksesuarlar **açık**, Yedek parça **kapalı**, Diğer **açık** |
+| 7.2 | Envanter > Yeni Ürün: **TEST ÜRÜN P**, kategori **Telefon (İkinci El)**, miktar 1, Min. Stok **boş** | Min. Stok kutusunda "Boş = otomatik (0)"; kayıttan sonra kartta **🔕 Uyarı kapalı**; Kritik Stok Uyarısı kutusunda **yok** |
+| 7.3 | Hemen ardından **TEST ÜRÜN K**, kategori **Kılıf**, miktar 1, Min. Stok boş | Kartta **🔔 Uyarı açık**, sarı **Kritik Stok** rozeti, uyarı kutusunda var (minimum 5) |
+| 7.4 | **Üçüncü** bir ürün: **TEST ÜRÜN P2** (Telefon (İkinci El)), miktar 1 | Yine **🔕 Uyarı kapalı** (eskiden ilk üründen sonra hep 5 geliyordu) |
+| 7.5 | TEST ÜRÜN P kartında **🔕 Uyarı kapalı** düğmesine bas | **🔔 Uyarı açık**, min. 1; stok 1 olduğu için uyarı kutusuna girer. Tekrar basınca kapanır |
+| 7.6 | TEST ÜRÜN K'nın stoğunu 0 yap (− düğmesi) | Kart **kırmızı "Tükendi"**; TEST ÜRÜN P2'yi de 0 yap: uyarısı kapalı olsa da kart yine **kırmızı** |
+| 7.7 | Özet kartları | "Kritik Stok" (sarı) ve "Tükendi" (kırmızı) sayıları kartlarla uyumlu |
+
+### 7B) İskonto müşteriye görünür (v47)
+| # | Adım | Beklenen |
+|---|---|---|
+| 7.8 | TEST MÜŞTERİ'ye TEST ÜRÜN K satışı (fiyat 100 TL olsun), **ürün iskontosu %5** (Ayarlar'daki azami iskonto %5; daha yükseği reddedilir), ödeme: kısmi 0 | Satış kaydedilir, toplam ₺95 |
+| 7.9 | Müşteriler > TEST MÜŞTERİ > Detay > İşlem Geçmişi | Satışta **Liste: ~~₺100~~**, **🏷️ İskonto: −₺5**, **Toplam: ₺95** |
+| 7.10 | Teknik Servis: TEST MÜŞTERİ için tamir, **Ücret 1000, İskonto 50** | Kayıt açılır |
+| 7.11 | Müşteri detayı | Tamirde **Liste ₺1.000 → İskonto −₺50 → Toplam ₺950** |
+| 7.12 | Tamir kartı > **Fiş** | Fişte **Liste Ücreti ₺1.000**, **İskonto −₺50**, **Anlaşılan Ücret ₺950** |
+| 7.13 | İskontosuz bir TEST satışı/tamiri | Detayda ve fişte iskonto satırı **çıkmaz** |
+| 7.14 | (Elle) Müşteri detayı > WhatsApp > "Detaylı" | Mesajda **🏷️ İskonto: -… TL (liste … TL)** satırı |
+
+### 7C) Satışta stoksuz ürün (v47)
+| # | Adım | Beklenen |
+|---|---|---|
+| 7.15 | Satışlar > Yeni Satış > Envanter Kataloğu | Stoğu **0** olan TEST ürünleri ve **Yedek Parça** kategorisindeki ürünler **görünmez**; stoklu kılıf görünür |
+| 7.16 | Aynı ekranda stoksuz ürünün barkodunu okut/ara | "stokta yok" der, sepete girmez |
+
+### 7D) Sayı kutuları (v47)
+| # | Adım | Beklenen |
+|---|---|---|
+| 7.17 | Envanter > Yeni Ürün > **Kar Marjı** kutusunda `050` yaz | **50** olur |
+| 7.18 | Kutuyu tamamen sil | **Boş** kalır ("0" geri gelmez) |
+| 7.19 | Boş bırakıp başka kutuya geç | Otomatik **0** olur |
+| 7.20 | **Min. Stok** kutusunu boş bırakıp çık | **Boş kalır** (otomatik kural geçerli) |
+| 7.21 | Müşteriler > bir TEST borcunda **Tahsil et** | Tarayıcı kutusu değil, **uygulama içi sayı penceresi** açılır; İptal'de hiçbir şey olmaz; küçük bir tutarla Tamam: tahsilat yapılır |
+| 7.22 | (Elle, iPhone) Herhangi bir sayı kutusuna dokun | Sadece **sayı tuş takımı** açılır (rakam + simge klavyesi değil) |
+| 7.23 | (Elle, iPhone) Müşteri telefon kutusuna `+90 (532) 123 45 67` yapıştır | **05321234567** olur |
+
+### 7E) Teknik servis (v41–v45)
+| # | Adım | Beklenen |
+|---|---|---|
+| 7.24 | Yeni Tamir: marka "sam" yaz | Samsung önerilir; marka seçilince modelleri gelir |
+| 7.25 | Müşteriyi listeden **seçmeden** ad ve telefon yazıp kaydet | Müşteriler sayfasında yeni müşteri **görünür** |
+| 7.26 | "Yapılacak İşlem": **Ekran değişimi**, sonra **✏️ Özel fiyat** | Ücret **1.800** olur; Özel fiyatta kutu boşalır, tutarı kendin yazarsın |
+| 7.27 | Envanterde **TEST YEDEK PARÇA** (kategori **Yedek Parça - Ekran**, stok 3) ekle; Yeni Tamir > Parça belli > bu parçayı seç | Listede sadece yedek parçalar çıkar (kılıf, kablo yok); kayıttan sonra stok **2** |
+| 7.28 | Tamir kartında **🔩 Kullanılan parçalar / işlemler** bağlantısı | Parça adı, adet, maliyet ve seçilen işlemler açılır |
+| 7.29 | Tamir > Düzenle | Başlıkta uzun kimlik yok, sadece **"Tamir Düzenle • YTT-xxxx"** |
+
+### Test kayıtlarını silme
+Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true` ile önizleme, sonra `false`). Silmeden önce Ayarlar > Yedekle ile yedek alın.

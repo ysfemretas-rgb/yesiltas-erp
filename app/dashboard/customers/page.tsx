@@ -1,5 +1,7 @@
 "use client"
 
+import { useNumberPrompt } from "@/components/NumberPrompt"
+import { saleDiscountInfo, repairDiscountInfo } from "@/lib/discountInfo"
 import { PhoneInput } from "@/components/PhoneInput"
 import { SettleDialog } from "@/components/finance/SettleDialog"
 import { StatListDialog, StatRow } from "@/components/StatListDialog"
@@ -55,6 +57,7 @@ interface Repair {
   brand: string
   model?: string
   cost: number
+  discount?: number
   paid: number
   remaining: number
   status: string
@@ -73,12 +76,14 @@ interface Sale {
   paid: number
   remaining: number
   date: string
-  items: { name: string; quantity: number }[]
+  discount?: number
+  items: { name: string; quantity: number; price?: number; listPrice?: number }[]
 }
 
 // Normalize customer data to ensure phone1 field exists
 export default function CustomersPage() {
   const { toast, showToast, hideToast } = useToast()
+  const { ask: askNumber, node: numberPromptNode } = useNumberPrompt() // sayı girişi için uygulama içi pencere (telefonda sayı tuş takımı)
 
   const { authorized, checking } = usePageAccess("Müşteriler")
   const isManager = useIsManager()
@@ -224,6 +229,8 @@ export default function CustomersPage() {
       remaining: number
       date: string
       gift: boolean
+      discount: number // müşteriye yapılan toplam iskonto (tamir/satış/borç kapatma)
+      listTotal: number // iskontosuz liste tutarı
     }[] = []
 
     customerRepairs.forEach(r => {
@@ -239,6 +246,8 @@ export default function CustomersPage() {
           remaining: gift ? 0 : (r.remaining || 0),
           date: r.createdAt,
           gift,
+          discount: gift ? 0 : repairDiscountInfo(r).total,
+          listTotal: repairDiscountInfo(r).listTotal,
         })
       }
     })
@@ -255,6 +264,8 @@ export default function CustomersPage() {
         remaining: gift ? 0 : (s.remaining || 0),
         date: s.date,
         gift,
+        discount: gift ? 0 : saleDiscountInfo(s).total,
+        listTotal: saleDiscountInfo(s).listTotal,
       })
     })
 
@@ -515,6 +526,7 @@ export default function CustomersPage() {
         let detay = `\uD83D\uDCCB *İşlem Detaylarınız:*\n\n`
         transactions.forEach(t => {
           detay += `\uD83D\uDCCC *${t.description}*\n`
+          if (t.discount > 0) detay += `   \uD83C\uDFF7\uFE0F İskonto: -${t.discount.toLocaleString("tr-TR")} TL (liste ${t.listTotal.toLocaleString("tr-TR")} TL)\n`
           detay += `   \uD83D\uDCB0 Toplam: ${t.total.toLocaleString("tr-TR")} TL\n`
           detay += `   \uD83D\uDCB5 Alınan: ${t.paid.toLocaleString("tr-TR")} TL\n`
           if (t.remaining > 0) {
@@ -558,7 +570,7 @@ export default function CustomersPage() {
 
   // Satış / tamir bakiyesini (kısmen ya da tamamen) tahsil eder; kasaya gelir yazılır.
   const handleCollect = async (item: { kind: "sale" | "repair"; id: string; amount: number; label: string }) => {
-    const input = window.prompt(`${item.label}\nKalan: ${formatCurrency(item.amount)}\n\nTahsil edilen tutar (TL):`, String(item.amount))
+    const input = await askNumber(`${item.label}\nKalan: ${formatCurrency(item.amount)}\n\nTahsil edilen tutar (TL):`, String(item.amount))
     if (input === null) return
     const amount = Number(String(input).replace(",", "."))
     if (!amount || amount <= 0) {
@@ -650,6 +662,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
+      {numberPromptNode}
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-white">👥 Müşteri Yönetimi</h1>
@@ -1070,6 +1083,12 @@ export default function CustomersPage() {
                                 <div className="text-xs text-slate-400">{t.date} • {t.type === "repair" ? "Tamir" : "Satış"}</div>
                               </div>
                               <div className="text-right">
+                                {t.discount > 0 && (
+                                  <>
+                                    <div className="text-xs text-slate-500">Liste: <s>{formatCurrency(t.listTotal)}</s></div>
+                                    <div className="text-xs text-amber-400">🏷️ İskonto: −{formatCurrency(t.discount)}</div>
+                                  </>
+                                )}
                                 <div className="text-sm text-white">Toplam: {formatCurrency(t.total)}</div>
                                 {t.gift ? (
                                   <div className="text-xs text-purple-300">🎁 Bedelsiz (eşantiyon)</div>

@@ -1,0 +1,38 @@
+YEŞİLTAŞ ERP — v47 YAMA PAKETİ (23 dosya)
+
+Bu pakette v45'ten v47'ye değişen BÜTÜN dosyalar var (v46 değişiklikleri dahil).
+Klasör yapısı projenle aynıdır: bu klasörün İÇİNDEKİLERİ (app, components, lib, tests, DUZELTMELER.md, TEST-SENARYOLARI.md)
+GitHub'daki projenin aynı yerlerine yüklenip üzerine yazılmalıdır.
+
+GitHub'a yükleme (tarayıcıdan):
+ 1) Depoda "Add file > Upload files" de.
+ 2) Bu klasörün içindeki app, components, lib, tests klasörlerini ve iki .md dosyasını sürükle (toplam 23 dosya; 100 dosya sınırının altında).
+ 3) Altta "Commit changes" de. Vercel kendiliğinden yeniden yayınlar.
+
+Kontrol: GitHub'da lib/version.ts dosyasını aç, içinde  APP_VERSION = "v47"  yazmalı.
+Vercel "Ready" olunca uygulamayı TAMAMEN kapatıp aç; menünün altında "Sürüm v47" görünmeli.
+
+Dosya listesi:
+DEĞİŞTİ DUZELTMELER.md
+DEĞİŞTİ TEST-SENARYOLARI.md
+DEĞİŞTİ app/dashboard/customers/page.tsx
+DEĞİŞTİ app/dashboard/inventory/page.tsx
+DEĞİŞTİ app/dashboard/purchases/page.tsx
+DEĞİŞTİ app/dashboard/repairs/page.tsx
+DEĞİŞTİ app/dashboard/sales/page.tsx
+DEĞİŞTİ app/dashboard/settings/page.tsx
+DEĞİŞTİ app/dashboard/suppliers/page.tsx
+DEĞİŞTİ components/purchases/NewPurchaseDialog.tsx
+DEĞİŞTİ components/ui/input.tsx
+DEĞİŞTİ lib/inventory.ts
+DEĞİŞTİ lib/purchaseLines.ts
+DEĞİŞTİ lib/repairReceipt.ts
+DEĞİŞTİ lib/stockLevel.ts
+DEĞİŞTİ lib/version.ts
+YENİ     components/NumberPrompt.tsx
+YENİ     lib/discountInfo.ts
+YENİ     lib/numberInput.ts
+YENİ     lib/stockAlerts.ts
+YENİ     tests/discountInfo.test.ts
+YENİ     tests/numberInput.test.ts
+YENİ     tests/stockAlerts.test.ts

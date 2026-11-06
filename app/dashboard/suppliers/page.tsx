@@ -1,5 +1,6 @@
 "use client"
 
+import { useNumberPrompt } from "@/components/NumberPrompt"
 import { PhoneInput } from "@/components/PhoneInput"
 import { SettleDialog } from "@/components/finance/SettleDialog"
 import { supplierDebtInfo } from "@/lib/supplierDebt"
@@ -31,6 +32,7 @@ import { InventoryItem, fetchInventory } from "@/lib/inventory"
 
 export default function SuppliersPage() {
   const { toast, showToast, hideToast } = useToast()
+  const { ask: askNumber, node: numberPromptNode } = useNumberPrompt() // sayı girişi için uygulama içi pencere (telefonda sayı tuş takımı)
   const { authorized, checking } = usePageAccess("Tedarikçiler")
   const isManager = useIsManager()
   const { rates } = useExchangeRates()
@@ -95,7 +97,7 @@ export default function SuppliersPage() {
 
   const handleSupplierPayment = async (supplier: Supplier) => {
     const stats = supplierStats(supplier.name)
-    const input = window.prompt(`${supplier.name}\nMevcut borcumuz: ${new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(stats.debt)}\n\nÖdenen tutar (TL):`, String(Math.round(stats.debt * 100) / 100))
+    const input = await askNumber(`${supplier.name}\nMevcut borcumuz: ${new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(stats.debt)}\n\nÖdenen tutar (TL):`, String(Math.round(stats.debt * 100) / 100))
     if (input === null) return
     const amount = Number(String(input).replace(",", "."))
     if (!amount || amount <= 0) {
@@ -279,6 +281,7 @@ export default function SuppliersPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
+      {numberPromptNode}
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Başlık */}

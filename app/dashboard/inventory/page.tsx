@@ -613,7 +613,7 @@ export default function InventoryPage() {
           }).catch((e) => console.error("Stok alımı kasaya yazılamadı:", e))
         }
       }
-      setNewItem({ category: "Telefon (Sıfır)", quantity: 0, minQuantity: 5, purchasePrice: 0, purchaseCurrency: "TRY", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
+      setNewItem({ category: "Telefon (Sıfır)", quantity: 0, purchasePrice: 0, purchaseCurrency: "TRY", profitMargin: 30, salePrice: 0, paymentStatus: "unpaid", paidAmount: 0 })
       setCustomCategory("")
       setQpType(""); setQpBrand(""); setQpModel(""); setQpVariant("")
       setIsDialogOpen(false)
@@ -935,6 +935,8 @@ export default function InventoryPage() {
                   <Input
                     type="number"
                     value={newItem.minQuantity ?? ""}
+                    data-allow-empty
+                    placeholder={`Boş = otomatik (${desiredMinQuantity(newItem.category === "__new__" ? (customCategory.trim() || "Diğer") : (newItem.category || "Diğer"), getStockAlertConfig())})`}
                     onChange={(e) => setNewItem({ ...newItem, minQuantity: e.target.value === "" ? undefined : Number(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
                   />
@@ -1534,7 +1536,7 @@ export default function InventoryPage() {
             <Input placeholder="Cihaz durumu (çizik, pil sağlığı, aksesuar...)" value={purchaseForm.conditionNote} onChange={(e) => setPurchaseForm({ ...purchaseForm, conditionNote: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <div className="grid grid-cols-2 gap-2">
               <Input type="number" inputMode="decimal" placeholder="Ödenen tutar (TL) *" value={purchaseForm.price} onChange={(e) => setPurchaseForm({ ...purchaseForm, price: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
-              <Input type="number" inputMode="decimal" placeholder="Satış fiyatı (boşsa +%20)" value={purchaseForm.salePrice} onChange={(e) => setPurchaseForm({ ...purchaseForm, salePrice: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+              <Input type="number" inputMode="decimal" data-allow-empty placeholder="Satış fiyatı (boşsa +%20)" value={purchaseForm.salePrice} onChange={(e) => setPurchaseForm({ ...purchaseForm, salePrice: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
               <input type="checkbox" checked={purchaseForm.addToStock} onChange={(e) => setPurchaseForm({ ...purchaseForm, addToStock: e.target.checked })} />

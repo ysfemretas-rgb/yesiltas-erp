@@ -956,11 +956,13 @@ function RepairsPageContent() {
   const sendWhatsApp = (repair: Repair) => {
     const cleanPhone = repair.phone1.replace(/\D/g, "")
 
-    const odemeDurumu = repair.remaining > 0
+    // İskonto yapıldıysa müşteriye de yazılır (cost net ücrettir)
+    const iskontoSatiri = (repair.discount || 0) > 0 ? `\uD83D\uDCCB *Liste Ücreti:* ${formatCurrency(repair.cost + repair.discount)}\n\uD83C\uDFF7\uFE0F *İskonto:* -${formatCurrency(repair.discount)}\n` : ""
+    const odemeDurumu = iskontoSatiri + (repair.remaining > 0
       ? `\uD83D\uDCB0 *Toplam Ücret:* ${formatCurrency(repair.cost)}\n\uD83D\uDCB5 *Alınan:* ${formatCurrency(repair.paid)}\n\u23F3 *Kalan Bakiye:* ${formatCurrency(repair.remaining)}\n\n\uD83D\uDE4F Lütfen kalan tutarı getirerek cihazınızı teslim alınız.`
       : repair.remaining < 0
         ? `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\uD83D\uDCB5 *Fazla Ödeme (Alacağınız):* ${formatCurrency(-repair.remaining)}\n\u2705 Hemen teslim alabilirsiniz.`
-        : `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\u2705 Hemen teslim alabilirsiniz.`
+        : `\uD83C\uDF89 *Ücret tamamen ödenmiştir* (${formatCurrency(repair.cost)}).\n\u2705 Hemen teslim alabilirsiniz.`)
 
     // Mesaj tamirin gerçek durumuna göre hazırlanır (eskiden her zaman "tamamlandı" yazıyordu)
     const device = `${repair.brand} ${repair.model}`.trim()
@@ -1243,7 +1245,7 @@ function RepairsPageContent() {
                   value={imei}
                   onChange={(e) => setImei(e.target.value)}
                   className="bg-slate-800 border-slate-600 text-white font-mono"
-                  placeholder="15 haneli IMEI numarası"
+                  inputMode="numeric" placeholder="15 haneli IMEI numarası"
                   maxLength={17}
                 />
                 {imei && !validateIMEI(imei) && (
@@ -1669,7 +1671,7 @@ function RepairsPageContent() {
                 value={imei}
                 onChange={(e) => setImei(e.target.value)}
                 className="bg-slate-800 border-slate-600 text-white font-mono"
-                placeholder="15 haneli IMEI numarası"
+                inputMode="numeric" placeholder="15 haneli IMEI numarası"
                 maxLength={17}
               />
               {imei && !validateIMEI(imei) && (
