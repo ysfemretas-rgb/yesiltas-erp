@@ -179,13 +179,13 @@ function LineEditor({
       {mode === "new" ? (
         <div className="grid grid-cols-3 gap-2">
           <Input type="number" inputMode="decimal" value={margin} onChange={(e) => setMargin(e.target.value)} placeholder="Kâr %" className="bg-slate-800 border-slate-600 text-white" />
-          <Input type="number" inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder={`Satış: ${auto || "—"}`} className="bg-slate-800 border-slate-600 text-white" />
-          <Input type="number" inputMode="numeric" value={minQty} onChange={(e) => setMinQty(e.target.value)} placeholder="Min. stok (boş = otomatik)" className="bg-slate-800 border-slate-600 text-white" />
+          <Input type="number" inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} data-allow-empty placeholder={`Satış: ${auto || "—"}`} className="bg-slate-800 border-slate-600 text-white" />
+          <Input type="number" inputMode="numeric" value={minQty} onChange={(e) => setMinQty(e.target.value)} data-allow-empty placeholder="Min. stok (boş = otomatik)" className="bg-slate-800 border-slate-600 text-white" />
         </div>
       ) : (
         existing && (
           <div className="grid grid-cols-2 gap-2 items-center">
-            <Input type="number" inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder={`Yeni satış fiyatı (boş = ${money(existing.salePrice)} kalsın)`} className="bg-slate-800 border-slate-600 text-white col-span-2" />
+            <Input type="number" inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} data-allow-empty placeholder={`Yeni satış fiyatı (boş = ${money(existing.salePrice)} kalsın)`} className="bg-slate-800 border-slate-600 text-white col-span-2" />
           </div>
         )
       )}

@@ -1,7 +1,7 @@
 import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/lib/supabase"
 import { logActivity } from "@/lib/activityLog"
 import { logStockMovement } from "@/lib/stockMovements"
-import { desiredMinQuantity, type StockAlertConfig } from "@/lib/stockAlerts"
+import { desiredMinQuantity, getStockAlertConfig, type StockAlertConfig } from "@/lib/stockAlerts"
 
 export interface InventoryItem {
   id: string
@@ -105,8 +105,16 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
   return (data || []).map(fromRow)
 }
 
-export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id" | "productCode">[]): Promise<InventoryItem[]> {
-  const { data, error } = await supabase.from("inventory").insert(inputs.map(i => toRow({ ...i, purchasedQuantity: i.purchasedQuantity ?? i.quantity }))).select("*")
+// Minimum stok verilmeden eklenen HER yeni ürün (form, Excel, alış, takas...) kategorisinin stok uyarısı grup ayarına göre başlar:
+// uyarısı kapalı grupta (telefon, yedek parça...) 0, açık grupta grubun minimum adedi. (DB'nin varsayılanı 5 olduğu için eskiden uyarı açık geliyordu.)
+type NewInventoryItem = Omit<InventoryItem, "id" | "productCode" | "minQuantity"> & { minQuantity?: number }
+const withMinRule = <T extends NewInventoryItem>(i: T): T & { minQuantity: number } => ({
+  ...i,
+  minQuantity: i.minQuantity ?? desiredMinQuantity(i.category, getStockAlertConfig()),
+})
+
+export async function createInventoryItemsBulk(inputs: NewInventoryItem[]): Promise<InventoryItem[]> {
+  const { data, error } = await supabase.from("inventory").insert(inputs.map(withMinRule).map(i => toRow({ ...i, purchasedQuantity: i.purchasedQuantity ?? i.quantity }))).select("*")
   if (error) throw error
   const created = (data || []).map(fromRow)
   logActivity("Envanter", "created", `Excel ile ${created.length} ürün toplu eklendi`)
@@ -115,7 +123,8 @@ export async function createInventoryItemsBulk(inputs: Omit<InventoryItem, "id" 
 
 const OPTIONAL_INVENTORY_COLUMNS = ["imei", "total_purchased_qty"]
 
-export async function createInventoryItem(input: Omit<InventoryItem, "id" | "productCode">): Promise<InventoryItem> {
+export async function createInventoryItem(rawInput: NewInventoryItem): Promise<InventoryItem> {
+  const input = withMinRule(rawInput)
   const row = toRow({ ...input, purchasedQuantity: input.purchasedQuantity ?? input.quantity })
   if (!row.imei) delete row.imei
   let { data, error } = await supabase.from("inventory").insert(row).select("*").single()

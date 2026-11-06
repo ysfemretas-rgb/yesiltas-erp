@@ -22,6 +22,8 @@ test("katalogda olmayan (elle yazılmış) kategoriler tahmin edilir", () => {
   assert.equal(stockGroupOf("Samsung Kılıfı"), "phoneAcc")
   assert.equal(stockGroupOf("iPhone telefon"), "devices")
   assert.equal(stockGroupOf("Lehim malzemesi"), "other")
+  assert.equal(stockGroupOf("İkinci El"), "devices") // takas ve cihaz alımıyla gelen ikinci el ürünler
+  assert.equal(stockGroupOf("İKİNCİ EL"), "devices")
 })
 
 test("varsayılan ayar: telefon ve yedek parçada uyarı kapalı (0), aksesuarlarda açık", () => {

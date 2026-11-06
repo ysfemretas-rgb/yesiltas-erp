@@ -52,9 +52,10 @@ export function stockGroupOf(category: string | null | undefined): StockGroupKey
   const hit = CATEGORY_GROUP.get(norm(c))
   if (hit) return hit
   // Katalogda olmayan (elle yazılmış / Excel'den gelen) kategoriler için tahmin
-  if (/yedek\s*par[cç]a/i.test(c)) return "parts"
-  if (/k[ıi]l[ıi]f|koruyucu/i.test(c)) return "phoneAcc"
-  if (/telefon|tablet|laptop|bilgisayar|ak[ıi]ll[ıi]\s*saat/i.test(c)) return "devices"
+  const n = norm(c)
+  if (/yedek\s*par[cç]a/.test(n)) return "parts"
+  if (/k[ıi]l[ıi]f|koruyucu/.test(n)) return "phoneAcc"
+  if (/telefon|tablet|laptop|bilgisayar|ak[ıi]ll[ıi]\s*saat|ikinci\s*el|2\.\s*el|takas/.test(n)) return "devices"
   return "other"
 }
 

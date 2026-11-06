@@ -15,6 +15,7 @@ interface ReceiptRepair {
   issue: string
   imei?: string
   cost: number
+  discount?: number // yapılan iskonto (cost net ücrettir)
   paid: number
   remaining: number
   createdAt: string
@@ -51,6 +52,7 @@ export function printRepairReceipt(repair: ReceiptRepair) {
   </table>
 
   <div class="totals">
+    ${(repair.discount || 0) > 0.004 ? `<div class="row"><span>Liste Ücreti</span><span>${money(repair.cost + (repair.discount || 0))}</span></div><div class="row"><span>İskonto</span><span>-${money(repair.discount || 0)}</span></div>` : ""}
     <div class="row"><span>Tahmini / Anlaşılan Ücret</span><span>${money(repair.cost)}</span></div>
     <div class="row"><span>Alınan Ön Ödeme</span><span>${money(repair.paid)}</span></div>
     ${repair.remaining < 0
