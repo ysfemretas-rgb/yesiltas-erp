@@ -1,10 +1,11 @@
-YEŞİLTAŞ ERP — v49 YAMA PAKETİ (4 dosya)
+YEŞİLTAŞ ERP — v50 YAMA PAKETİ (5 dosya)
 
-Tek düzeltme: Ana sayfadaki "USD → ₺" çevirici kutusu artık boş bırakılabiliyor, "0"a sabitlenmiyor.
+Tek özellik: dövizli (USD/EUR) alış fiyatı girilince hemen altında TL karşılığı görünür.
+Üç yer: Envanter > Yeni Ürün, Envanter > Ürünü Düzenle, Alışlar (Tedarikçiden/Müşteriden Alış).
 
-GitHub'a yükleme: bu klasörün İÇİNDEKİ app, lib, public klasörlerini ve DUZELTMELER.md'yi
-"Add file > Upload files" ile yükleyip "Commit changes" deyin.
+GitHub'a yükleme: bu klasörün İÇİNDEKİ app, components, lib, public klasörlerini ve
+DUZELTMELER.md'yi "Add file > Upload files" ile yükleyip "Commit changes" deyin.
 
-Kontrol: lib/version.ts içinde APP_VERSION = "v49", public/version.json içinde "v49" olmalı.
-Vercel "Ready" olunca uygulamayı tamamen kapatıp açın; menünün altında "Sürüm v49" görünmeli.
+Kontrol: lib/version.ts → APP_VERSION = "v50", public/version.json → "v50".
+Vercel "Ready" olunca uygulamayı tamamen kapatıp açın; menünün altında "Sürüm v50".
 Yeni SQL yok.

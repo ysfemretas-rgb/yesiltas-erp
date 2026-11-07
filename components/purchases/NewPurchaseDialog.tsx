@@ -166,6 +166,9 @@ function LineEditor({
           </SelectContent>
         </Select>
       </div>
+      {currency !== "TRY" && price > 0 && (
+        <p className="text-xs text-sky-300">Birim alışın TL karşılığı: {unitCostTRY(price, currency, rates).toLocaleString("tr-TR", { style: "currency", currency: "TRY" })}</p>
+      )}
 
       {kind === "supplier" && (
         <div className="space-y-1">

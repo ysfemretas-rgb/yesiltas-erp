@@ -305,3 +305,6 @@ v44'teki "Tüm ürünlere uygula" bütün ürünlerin minimum stoğunu 5 yaptı�
 
 ## v49 — Ana sayfadaki dolar çevirici kutusu
 Üstteki "USD → ₺" çevirici kutusu, bir önceki sürümün "sayı kutusu boş bırakılırsa otomatik 0 olur" kuralına yanlışlıkla takılmıştı: tutar yazıp kutudan çıkınca ya da kutuyu boşaltınca "0"a sabitleniyor, boşken "USD" yazısı görünmüyordu. Bu kutu (hem masaüstü hem telefon görünümü) artık boş kalabiliyor: boşken "USD" placeholder'ı görünür, yazılan tutar kaybolmaz. Başka hiçbir sayı kutusu etkilenmedi.
+
+## v50 — Dövizli alış fiyatının TL karşılığı anında görünür
+Alış fiyatı USD ya da EUR girildiğinde, hemen altında "Alış fiyatının TL karşılığı: ₺…" satırı çıkar (güncel kura göre). TRY seçiliyken ya da fiyat boşken satır görünmez. Üç yerde: Envanter > Yeni Ürün, Envanter > Ürünü Düzenle, Alışlar > Tedarikçiden/Müşteriden Alış (ürün satırı).

@@ -1043,6 +1043,12 @@ export default function InventoryPage() {
                     />
                   </div>
                 </div>
+                {newItem.purchaseCurrency && newItem.purchaseCurrency !== "TRY" && (newItem.purchasePrice || 0) > 0 && (
+                  <div className="mt-2 p-2.5 rounded-lg border border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                    <span className="text-xs text-slate-400">Alış fiyatının TL karşılığı:</span>
+                    <span className="text-sm font-semibold text-sky-300">{formatCurrency(unitCostTRY(Number(newItem.purchasePrice) || 0, newItem.purchaseCurrency, rates))}</span>
+                  </div>
+                )}
                 <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-emerald-400">Tahmini Satış Fiyatı:</span>
@@ -1831,6 +1837,12 @@ export default function InventoryPage() {
                     />
                   </div>
                 </div>
+                {editingItem.purchaseCurrency && editingItem.purchaseCurrency !== "TRY" && (editingItem.purchasePrice || 0) > 0 && (
+                  <div className="mt-2 p-2.5 rounded-lg border border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                    <span className="text-xs text-slate-400">Alış fiyatının TL karşılığı:</span>
+                    <span className="text-sm font-semibold text-sky-300">{formatCurrency(unitCostTRY(Number(editingItem.purchasePrice) || 0, editingItem.purchaseCurrency, rates))}</span>
+                  </div>
+                )}
                 <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-emerald-400">Tahmini Satış Fiyatı:</span>
