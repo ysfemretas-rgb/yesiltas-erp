@@ -1,11 +1,10 @@
-YEŞİLTAŞ ERP — v50 YAMA PAKETİ (5 dosya)
+YEŞİLTAŞ ERP — v51 YAMA PAKETİ (4 dosya)
 
-Tek özellik: dövizli (USD/EUR) alış fiyatı girilince hemen altında TL karşılığı görünür.
-Üç yer: Envanter > Yeni Ürün, Envanter > Ürünü Düzenle, Alışlar (Tedarikçiden/Müşteriden Alış).
+Tek özellik: "Bugün" sayfasına Görevler eklendi (öncelik/vadeye göre erken uyarı, buradan "Tamamlandı" işaretlenebilir).
 
-GitHub'a yükleme: bu klasörün İÇİNDEKİ app, components, lib, public klasörlerini ve
-DUZELTMELER.md'yi "Add file > Upload files" ile yükleyip "Commit changes" deyin.
+GitHub'a yükleme: bu klasörün İÇİNDEKİ app, lib, public klasörlerini ve DUZELTMELER.md'yi
+"Add file > Upload files" ile yükleyip "Commit changes" deyin.
 
-Kontrol: lib/version.ts → APP_VERSION = "v50", public/version.json → "v50".
-Vercel "Ready" olunca uygulamayı tamamen kapatıp açın; menünün altında "Sürüm v50".
+Kontrol: lib/version.ts → APP_VERSION = "v51", public/version.json → "v51".
+Vercel "Ready" olunca uygulamayı tamamen kapatıp açın; menünün altında "Sürüm v51".
 Yeni SQL yok.

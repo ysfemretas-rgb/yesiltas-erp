@@ -8,7 +8,7 @@ import { useEffect, useState } from "react"
 import { localDateStr } from "@/lib/dates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MessageCircle, Shield, Calendar, Wallet, Wrench, RefreshCw, Loader2 } from "lucide-react"
+import { MessageCircle, Shield, Calendar, Wallet, Wrench, RefreshCw, Loader2, ListChecks } from "lucide-react"
 import { Toast, useToast } from "@/components/toast"
 import { fetchWarranties } from "@/lib/warranties"
 import { fetchAppointments } from "@/lib/appointments"
@@ -16,12 +16,14 @@ import { fetchCustomers } from "@/lib/customers"
 import { fetchRepairs, updateRepair, Repair } from "@/lib/repairs"
 import { fetchSales } from "@/lib/sales"
 import { computeCustomerDebts } from "@/lib/customerDebt"
+import { fetchTasks, updateTask } from "@/lib/tasks"
 
 interface ReminderItem {
   id: string
-  group: "pickup" | "parts" | "warranty" | "appointment" | "debt" | "repair" | "installment" | "birthday"
+  group: "pickup" | "parts" | "warranty" | "appointment" | "debt" | "repair" | "installment" | "birthday" | "task"
   repairId?: string
-  action?: "deliver" | "toRepair" // satırdaki ikinci düğme: teslim edildi / tamire al
+  taskId?: string
+  action?: "deliver" | "toRepair" | "complete" // satırdaki ikinci düğme: teslim edildi / tamire al / görevi tamamla
   title: string
   subtitle: string
   phone: string
@@ -49,6 +51,7 @@ const GROUP_META: Record<ReminderItem["group"], { label: string; icon: any; colo
   repair: { label: "🔧 Bekleyen Tamir", icon: Wrench, color: "text-orange-400" },
   installment: { label: "📅 Taksit Hatırlatma", icon: Wallet, color: "text-red-400" },
   birthday: { label: "🎂 Doğum Günü", icon: Calendar, color: "text-cyan-400" },
+  task: { label: "📝 Bugünün Görevleri", icon: ListChecks, color: "text-violet-400" },
 }
 
 export default function TodayPage() {
@@ -201,6 +204,31 @@ export default function TodayPage() {
       console.error("Doğum günü hatırlatmaları oluşturulamadı:", e)
     }
 
+    // Görev hatırlatmaları: tamamlanmamış, vadesi geçmiş ya da yaklaşan görevler (önceliğe göre ne kadar erken uyarır: yüksek 3, orta 2, düşük 1 gün)
+    try {
+      const tasks = await fetchTasks()
+      for (const t of tasks) {
+        if (t.status === "done" || !t.dueDate) continue
+        const d = daysUntil(t.dueDate)
+        const lead = t.priority === "high" ? 3 : t.priority === "medium" ? 2 : 1
+        if (d > lead) continue
+        const priorityLabel = t.priority === "high" ? "🔴 Yüksek öncelik" : t.priority === "medium" ? "🟡 Orta öncelik" : "🟢 Düşük öncelik"
+        const dueLabel = d < 0 ? `${-d} gün gecikti` : d === 0 ? "bugün son gün" : d === 1 ? "yarın son gün" : `${d} gün kaldı`
+        newItems.push({
+          id: `t-${t.id}`,
+          group: "task",
+          taskId: t.id,
+          action: "complete",
+          title: t.title,
+          subtitle: `${priorityLabel} • ${dueLabel}${t.assignedTo ? ` • ${t.assignedTo}` : ""}`,
+          phone: "",
+          message: "",
+        })
+      }
+    } catch (e) {
+      console.error("Görev hatırlatmaları oluşturulamadı:", e)
+    }
+
     try {
       for (const r of repairsData) {
         if (r.status !== "waiting" || !r.phone1 || !r.createdAt) continue
@@ -292,10 +320,18 @@ export default function TodayPage() {
   }
 
   const runAction = async (item: ReminderItem) => {
-    if (!item.repairId || !item.action) return
+    if (!item.action) return
     try {
+      if (item.action === "complete" && item.taskId) {
+        await updateTask(item.taskId, { status: "done" })
+        setItems((prev) => prev.filter((x) => x.id !== item.id))
+        showToast("Görev tamamlandı olarak işaretlendi.", "success")
+        return
+      }
+      if (!item.repairId) return
       if (item.action === "deliver") await updateRepair(item.repairId, { stage: "delivered", status: "completed" })
-      else await updateRepair(item.repairId, { stage: "in_repair", status: "in_progress" })
+      else if (item.action === "toRepair") await updateRepair(item.repairId, { stage: "in_repair", status: "in_progress" })
+      else return
       setItems((prev) => prev.filter((x) => x.id !== item.id))
       showToast(item.action === "deliver" ? "Teslim edildi olarak işaretlendi." : "Tamir \"Tamirde\" aşamasına alındı.", "success")
     } catch (e) {
@@ -323,13 +359,20 @@ export default function TodayPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">📋 Bugün Kimlere Mesaj Atmam Lazım</h1>
           <p className="text-sm text-slate-400 mt-1">
-            Teslim alınmayı bekleyen cihazlar, parça bekleyen tamirler, garanti süresi yaklaşanlar, yarınki/bugünkü randevular, borcu olan müşteriler ve uzun süredir bekleyen tamirler otomatik listelenir.
+            Teslim alınmayı bekleyen cihazlar, parça bekleyen tamirler, garanti süresi yaklaşanlar, yarınki/bugünkü randevular, borcu olan müşteriler, vadesi gelen görevler ve uzun süredir bekleyen tamirler otomatik listelenir.
           </p>
         </div>
-        <Button onClick={load} disabled={loading} variant="outline" className="border-slate-600 text-slate-300">
-          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Yenile
-        </Button>
+        <div className="flex items-center gap-2">
+          {items.length > 0 && (
+            <span className="text-sm font-semibold text-white bg-slate-800 border border-slate-700 rounded-full px-3 py-1.5">
+              {items.length} hatırlatma
+            </span>
+          )}
+          <Button onClick={load} disabled={loading} variant="outline" className="border-slate-600 text-slate-300">
+            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Yenile
+          </Button>
+        </div>
       </div>
 
       {loading && items.length === 0 ? (
@@ -363,16 +406,18 @@ export default function TodayPage() {
                     <div className="flex gap-2 flex-wrap">
                       {item.action && (
                         <Button size="sm" variant="outline" onClick={() => runAction(item)} className="border-slate-600 text-slate-200">
-                          {item.action === "deliver" ? "🤝 Teslim edildi" : "🔧 Parça geldi, tamire al"}
+                          {item.action === "deliver" ? "🤝 Teslim edildi" : item.action === "complete" ? "✅ Tamamlandı" : "🔧 Parça geldi, tamire al"}
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        onClick={() => sendWhatsApp(item)}
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                      >
-                        <MessageCircle className="h-4 w-4 mr-1" />WhatsApp Gönder
-                      </Button>
+                      {item.phone && (
+                        <Button
+                          size="sm"
+                          onClick={() => sendWhatsApp(item)}
+                          className="bg-emerald-600 hover:bg-emerald-700"
+                        >
+                          <MessageCircle className="h-4 w-4 mr-1" />WhatsApp Gönder
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

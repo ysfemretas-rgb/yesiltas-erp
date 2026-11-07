@@ -308,3 +308,10 @@ v44'teki "Tüm ürünlere uygula" bütün ürünlerin minimum stoğunu 5 yaptı�
 
 ## v50 — Dövizli alış fiyatının TL karşılığı anında görünür
 Alış fiyatı USD ya da EUR girildiğinde, hemen altında "Alış fiyatının TL karşılığı: ₺…" satırı çıkar (güncel kura göre). TRY seçiliyken ya da fiyat boşken satır görünmez. Üç yerde: Envanter > Yeni Ürün, Envanter > Ürünü Düzenle, Alışlar > Tedarikçiden/Müşteriden Alış (ürün satırı).
+
+## v51 — Bugün sayfasına görevler eklendi
+"Bugün" sayfasında (Bugün Kimlere Mesaj Atmam Lazım) artık yeni bir grup var: **📝 Bugünün Görevleri**. Görevler sayfasındaki tamamlanmamış görevler, vadesi geçmişse ya da yaklaştıysa burada da görünür:
+- Öncelik ne kadar yüksekse o kadar erken uyarır: Yüksek öncelik 3 gün kala, Orta 2 gün kala, Düşük 1 gün kala; vadesi geçmiş görevler önem sırası fark etmeksizin hep görünür.
+- Satırda öncelik, kalan/geciken gün sayısı ve atanan kişi yazar; **✅ Tamamlandı** düğmesiyle görev buradan da kapatılabilir (Görevler sayfasına gitmeye gerek yok).
+- Görevlerin telefonu olmadığı için bu kartlarda WhatsApp düğmesi çıkmaz (müşteri/tedarikçi kartlarında olduğu gibi kalır).
+- Üstte, toplam hatırlatma sayısını gösteren bir rozet eklendi ("N hatırlatma").
