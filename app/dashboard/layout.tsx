@@ -400,6 +400,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 type="number"
                 value={usdInput}
                 onChange={(e) => setUsdInput(e.target.value)}
+                data-allow-empty
                 placeholder="USD"
                 className="w-20 h-7 bg-transparent border-0 text-white text-sm p-0 focus-visible:ring-0"
               />
@@ -434,6 +435,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 type="number"
                 value={usdInput}
                 onChange={(e) => setUsdInput(e.target.value)}
+                data-allow-empty
                 placeholder="USD"
                 className="w-16 h-7 bg-slate-800 border-slate-700 text-white text-xs"
               />

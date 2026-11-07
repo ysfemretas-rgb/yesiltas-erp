@@ -302,3 +302,6 @@ v44'teki "Tüm ürünlere uygula" bütün ürünlerin minimum stoğunu 5 yaptı�
 7. **Garanti dönüşleri:** Aynı cihaz (IMEI ya da müşteri + marka/model) tamir garantisi içinde (Ayarlar > Tamir Garantisi, varsayılan 90 gün) tekrar gelirse kartta "↩️ Garanti dönüşü" yazar, yeni tamir açarken canlı uyarı çıkar. Raporlar'da dönem içindeki garanti dönüşleri, oranı ve önceki tamirde kullanılan parçanın tedarikçisine göre kırılım.
 - **Düzeltme — WhatsApp numarası:** Bazı sayfalar numarayı "90" + "05…" diye birleştiriyordu (9005… geçersiz numara; özellikle Bugün sayfası). Numara artık bütün WhatsApp yollarında tek noktada 905… biçimine çevrilir.
 - **Cilalar:** Ücret kutusunda "Örn: 4500"; 12 tam sayı kutusunda (adet, miktar, min. stok, taksit, iade adedi) virgülsüz sayı tuş takımı; garanti süresi (ay) penceresi tam sayı; tamirde ücret elle değişince sayfa kaymaz.
+
+## v49 — Ana sayfadaki dolar çevirici kutusu
+Üstteki "USD → ₺" çevirici kutusu, bir önceki sürümün "sayı kutusu boş bırakılırsa otomatik 0 olur" kuralına yanlışlıkla takılmıştı: tutar yazıp kutudan çıkınca ya da kutuyu boşaltınca "0"a sabitleniyor, boşken "USD" yazısı görünmüyordu. Bu kutu (hem masaüstü hem telefon görünümü) artık boş kalabiliyor: boşken "USD" placeholder'ı görünür, yazılan tutar kaybolmaz. Başka hiçbir sayı kutusu etkilenmedi.
