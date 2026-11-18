@@ -1,4 +1,4 @@
-YEŞİLTAŞ ERP — v55 YAMA PAKETİ (küçük, tanı amaçlı düzeltme)
+YEŞİLTAŞ ERP — v56 YAMA PAKETİ (otomatik tekrar deneme)
 ================================
 
 Bu pakette SADECE değişen dosyalar var. GitHub'a sürükle-bırakla yüklerken
@@ -6,35 +6,31 @@ klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın. Yeni SQL YOK.
 
 DEĞİŞEN DOSYALAR:
 - DUZELTMELER.md
-- components/AppBanners.tsx
+- lib/appStore.ts
 - lib/version.ts
 - public/version.json
 
 ================================
 NEDEN BU YAMA?
 ================================
-Gönderdiğiniz ekran görüntülerinde kullandığınız buton, ANA SAYFANIN
-üstündeki turuncu "Son yedek X gün önce alındı" şeridindeki "Şimdi
-yedekle" butonuydu — bu, Ayarlar sayfasındaki "Yedeği İndir" butonundan
-TAMAMEN FARKLI bir koddu ve v54'teki düzeltme (gerçek hata mesajını
-gösterme) oraya hiç uygulanmamıştı. O yüzden ne başarı ne hata
-görüyordunuz — buton sadece "Hazırlanıyor..." yazıp eski haline
-dönüyordu, hiçbir şey söylemiyordu.
+v55'teki gerçek hata mesajı sayesinde gördük ki sorun RLS/yetki değilmiş —
+"TypeError: Load failed" çıkıyor, yani yedek tarihini kaydetme isteği
+ağ seviyesinde (muhtemelen zayıf 4G sinyalinde) yarıda kesiliyormuş.
 
-v55 bu şeride de görünür bir sonuç mesajı ekliyor:
-- Başarılıysa: yeşil "✅ Yedek indirildi ve kaydedildi."
-- Başarısızsa: kırmızı "⚠️ ... Hata: <gerçek sebep>"
+Wi-Fi'niz olmadığı için bunu ağ tarafında test edemedik. Bunun yerine kodu
+daha dayanıklı yaptık: yazma isteği bu şekilde başarısız olursa, kısa
+aralıklarla (0.7sn, 1.4sn) toplam 3 kez OTOMATİK tekrar denenecek —
+siz hiçbir şey yapmadan, arka planda. Gerçek bir yetki/izin hatası
+olursa (ağ sorunu değilse) tekrar denenmez, hemen gösterilir.
 
 ================================
 BU YAMADAN SONRA YAPMANIZ GEREKEN
 ================================
-1. Bu dosyaları GitHub'a yükleyin, Vercel'in deploy etmesini bekleyin
-   ("v55" yazısını görünce hazır demektir — sayfayı/telefonu yenileyin).
-2. Ana sayfadaki turuncu şeritte "Şimdi yedekle" butonuna basın.
-3. Çıkan mesajın TAM metnini (yeşil mi kırmızı mı, "Hata: ..." kısmı varsa
-   onunla birlikte) ekran görüntüsüyle gönderin. Bu, şeridin kendi
-   içinde, buton altında küçük yazıyla çıkacak.
-
-Bu bilgiyle, yedek tarihinin neden kaydedilemediğinin gerçek sebebini
-(RLS/yetki mi, yanlış Supabase projesi mi, başka bir şey mi) kesin olarak
-görüp asıl düzeltmeyi yapacağız.
+1. Bu dosyaları GitHub'a yükleyin, Vercel deploy etsin ("v56" görününce
+   hazır).
+2. Normal kullandığınız yerden (ana sayfadaki "Şimdi yedekle" ya da
+   Ayarlar > Yedeği İndir) yedek almayı deneyin.
+3. Hâlâ "Load failed" hatası alırsanız (3 denemeden sonra da), lütfen
+   şunu da belirtin: o sırada sinyal kaç çubuktu, ve hata her defasında
+   mı yoksa bazen mi çıkıyor. Bu, operatör/ağ filtresi ihtimalini
+   kesinleştirmemize yardımcı olur.
