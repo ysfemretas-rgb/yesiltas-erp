@@ -1,4 +1,4 @@
-YEŞİLTAŞ ERP — v58 YAMA PAKETİ (Claude test raporundan 2 gerçek hata düzeltmesi)
+YEŞİLTAŞ ERP — v59 YAMA PAKETİ (servis sorgulama linki her mesajda)
 ================================
 
 Bu pakette SADECE değişen dosyalar var. GitHub'a sürükle-bırakla yüklerken
@@ -7,37 +7,24 @@ klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın. Yeni SQL YOK.
 DEĞİŞEN DOSYALAR:
 - DUZELTMELER.md
 - app/dashboard/repairs/page.tsx
-- app/dashboard/settings/page.tsx
 - lib/version.ts
 - public/version.json
 
 ================================
-NELER DÜZELTİLDİ?
+NE DEĞİŞTİ?
 ================================
-Yaptırdığınız uçtan uca testte bulunan 2 gerçek hata:
+Servis sorgulama linki (/servis-sorgula) artık tamirin hangi aşamada
+olduğuna bakılmaksızın (Bekliyor / Devam Ediyor / Tamamlandı) WhatsApp
+düğmesine her basıldığında mesaja otomatik ekleniyor. Eskiden sadece
+"Bekliyor" aşamasındaki mesaja ekleniyordu.
 
-1. Tamir kartının SAĞ ÜSTÜNDEKİ eski "Durum" seçicisinden (Bekliyor /
-   Devam Ediyor / Tamamlandı) doğrudan "Tamamlandı" seçilirse, ödenmemiş
-   bakiye uyarısı HİÇ çıkmıyordu — cihaz sessizce "teslim edilmiş"
-   gösteriliyordu. "Servis Aşaması" seçicisinden (Teslime Hazır → Teslim
-   Edildi) geçerken bu uyarı zaten vardı, ama ikinci bir yoldan (eski
-   Durum menüsü) bu kontrol atlanıyordu. Artık HER İKİ yoldan da aynı
-   uyarı/ödeme penceresi çıkıyor.
-
-2. Bir tamiri "Tamamlandı" yapıp sonra "Bekliyor"a geri alınca, eski
-   tamamlanma tarihi kayıtta kalmaya devam ediyordu — bu da herkese açık
-   servis sorgulama sayfasında (/servis-sorgula) yanlışlıkla
-   görünebiliyordu. Artık durum "Tamamlandı" dışına alınınca tamamlanma
-   tarihi de temizleniyor.
-
-Küçük bir tutarlılık düzeltmesi de var: Ayarlar sayfasındaki yedek
-başarı mesajı artık ana sayfadakiyle aynı ("✅ Yedek indirildi ve
-kaydedildi.").
+Artık ayrı bir şey yapmanıza gerek yok — Tamirler sayfasında herhangi bir
+kayıt için WhatsApp düğmesine bastığınızda, müşteri mesajın sonunda
+linki ve kendi durumunu nasıl sorgulayacağını görecek.
 
 ================================
-TEST ÖNERİSİ
+YAPMANIZ GEREKEN
 ================================
-Bir TEST tamiri oluşturup kısmi ödeme yapın (bakiye kalsın), sonra kartın
-sağ üstündeki eski "Durum" menüsünden doğrudan "Tamamlandı" seçin —
-artık ödenmemiş bakiye uyarısı çıkmalı (Servis Aşaması seçicisindeki
-gibi). Testten sonra TEST kaydını silmeyi unutmayın.
+Bu dosyaları GitHub'a yükleyin, Vercel deploy etsin ("v59" görününce
+hazır). Bir TEST kaydı üzerinde WhatsApp düğmesine basıp mesajın sonunda
+linkin göründüğünü doğrulayabilirsiniz.

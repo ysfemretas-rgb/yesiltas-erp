@@ -1099,7 +1099,7 @@ function RepairsPageContent() {
 
     // Mesaj tamirin gerçek durumuna göre hazırlanır (eskiden her zaman "tamamlandı" yazıyordu)
     const device = `${repair.brand} ${repair.model}`.trim()
-    const message = repair.status === "completed"
+    const baseMessage = repair.status === "completed"
       ? renderTemplate(getWhatsAppTemplates().repairs, {
           musteri: repair.customerName,
           cihaz: device,
@@ -1107,7 +1107,13 @@ function RepairsPageContent() {
         })
       : repair.status === "in_progress"
         ? `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDD27 *${device}* cihazınızın tamir işlemi devam etmektedir. Tamamlandığında size haber vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
-        : `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDCE5 *${device}* cihazınız teslim alınmıştır${repair.repairCode ? ` (Kayıt No: ${repair.repairCode})` : ""}. İnceleme sonrası size bilgi vereceğiz.\n\n\uD83D\uDCF1 Durumu aramadan sorgulayabilirsiniz: ${typeof window !== "undefined" ? window.location.origin : ""}/servis-sorgula (Servis No: ${repair.repairCode || "-"}, telefon son 4 hane)\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
+        : `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDCE5 *${device}* cihazınız teslim alınmıştır${repair.repairCode ? ` (Kayıt No: ${repair.repairCode})` : ""}. İnceleme sonrası size bilgi vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
+
+    // Servis sorgulama linki ARTIK HER DURUMDA (bekliyor/devam ediyor/tamamlandı) ekleniyor —
+    // eskiden sadece "teslim alındı" mesajına ekleniyordu; müşteri hangi aşamada olursa olsun
+    // tek tıkla gönderilen mesajda linki görsün diye tüm mesajlara eklendi.
+    const takipLinki = `\uD83D\uDCF1 Durumu aramadan sorgulayabilirsiniz: ${typeof window !== "undefined" ? window.location.origin : ""}/servis-sorgula (Servis No: ${repair.repairCode || "-"}, telefon son 4 hane)`
+    const message = `${baseMessage}\n\n${takipLinki}`
 
     openWhatsApp("90" + cleanPhone, message)
   }

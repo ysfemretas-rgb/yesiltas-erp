@@ -346,3 +346,6 @@ Yaptırılan uçtan uca testte bulunan 2 gerçek hata düzeltildi:
 2. **Tamamlandı'dan geri alınınca "Tamamlanma" tarihi temizlenmiyordu.** Bir tamiri "Tamamlandı" yapıp sonra "Bekliyor"a geri alınca, eski tamamlanma tarihi kayıtta kalmaya devam ediyordu ve bu, herkese açık servis sorgulama sayfasında yanlışlıkla görünebiliyordu. Artık durum "Tamamlandı" dışına alındığında tamamlanma tarihi de temizleniyor.
 
 Ayrıca: Ayarlar sayfasındaki yedek başarı mesajı, ana sayfadaki ile aynı metne ("✅ Yedek indirildi ve kaydedildi.") getirildi — ikisi farklı yazıyordu.
+
+## v59 — Servis sorgulama linki artık HER WhatsApp mesajında
+Daha önce servis sorgulama linki (`/servis-sorgula`) yalnızca cihaz "Bekliyor" aşamasındayken gönderilen "teslim alındı" WhatsApp mesajına ekleniyordu. Artık tamirin hangi aşamada olduğuna bakılmaksızın (Bekliyor / Devam Ediyor / Tamamlandı) WhatsApp düğmesine her basıldığında mesajın sonuna otomatik ekleniyor — müşteri hangi mesajı alırsa alsın tek tıkla kendi durumunu sorgulayabiliyor, ayrıca elle link göndermeye gerek kalmıyor.
