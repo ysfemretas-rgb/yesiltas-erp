@@ -1,10 +1,42 @@
-YEŞİLTAŞ ERP — v51 YAMA PAKETİ (4 dosya)
+YEŞİLTAŞ ERP — v52 YAMA PAKETİ
+================================
 
-Tek özellik: "Bugün" sayfasına Görevler eklendi (öncelik/vadeye göre erken uyarı, buradan "Tamamlandı" işaretlenebilir).
+Bu pakette SADECE değişen/yeni dosyalar var (17 dosya). GitHub'a sürükle-bırakla
+yüklerken klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın:
+(app/, components/, lib/, public/ klasörlerinin içine, dosya adları aynı kalacak)
 
-GitHub'a yükleme: bu klasörün İÇİNDEKİ app, lib, public klasörlerini ve DUZELTMELER.md'yi
-"Add file > Upload files" ile yükleyip "Commit changes" deyin.
+YENİ DOSYALAR:
+- app/servis-sorgula/page.tsx
+- components/TextPrompt.tsx
+- components/repairs/DeliveryBalanceDialog.tsx
+- lib/extraCost.ts
+- lib/inventoryRemoved.ts
+- supabase-repair-public-lookup-migration.sql
 
-Kontrol: lib/version.ts → APP_VERSION = "v51", public/version.json → "v51".
-Vercel "Ready" olunca uygulamayı tamamen kapatıp açın; menünün altında "Sürüm v51".
-Yeni SQL yok.
+DEĞİŞEN DOSYALAR:
+- DUZELTMELER.md, MIGRATION-SIRASI.md, TEST-SENARYOLARI.md
+- app/dashboard/inventory/page.tsx
+- app/dashboard/repairs/page.tsx
+- app/dashboard/today/page.tsx
+- lib/repairReceipt.ts
+- lib/repairs.ts
+- lib/version.ts, public/version.json
+- supabase-saglik-kontrolu.sql
+
+ÖNEMLİ — SUPABASE'DE ÇALIŞTIRILACAK:
+1. Ayarlar > Yedekle ile önce yedek alın.
+2. Supabase SQL Editor'de "supabase-repair-public-lookup-migration.sql" dosyasını
+   çalıştırın (müşterinin /servis-sorgula sayfasından servis no + telefonun son
+   4 hanesiyle sorgu yapabilmesi için gerekli — yeni bir fonksiyon ekler, mevcut
+   veriye dokunmaz).
+3. İsterseniz "supabase-saglik-kontrolu.sql" ile kontrol edin (yeni fonksiyonun
+   ✅ göründüğünü doğrular).
+
+Bu sürümde eklenenler (detay: DUZELTMELER.md > "v52"):
+1. Teslimde ödenmemiş bakiye uyarısı (Ödeme Al / Cariye İşle ve Teslim Et seçimi)
+2. Müşterinin kendi kendine servis sorgulaması (/servis-sorgula, giriş gerektirmez)
+3. Ek ücret onayı (WhatsApp ile müşteriden onay istenir, onaysız eklenmez)
+4. Envanter'de "Çıkanlar" sekmesi (iade/elden çıkarılan ürünler)
+
+Test adımları: TEST-SENARYOLARI.md > "9) v52 — Teslim bakiye uyarısı, servis
+sorgulama, ek ücret onayı, Çıkanlar"

@@ -30,7 +30,7 @@ with checks as (
   -- Fonksiyonlar
   select 'fonksiyon: ' || v.f,
          exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = v.f)
-  from (values ('adjust_inventory_quantity'),('get_repair_public'),('protect_profile_columns'),('assign_sale_code')) as v(f)
+  from (values ('adjust_inventory_quantity'),('get_repair_public'),('get_repair_public_by_code'),('protect_profile_columns'),('assign_sale_code')) as v(f)
 
   union all
   -- Sütun TİPLERİ (aynı adlı eski sütun farklı tipteyse kayıt başarısız olur)

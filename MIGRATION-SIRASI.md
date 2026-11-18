@@ -7,7 +7,7 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 2. Eski özellik migrasyonları (şema zaten bunlarla uyumluysa atlanabilir): `supabase-*-migration.sql` dosyaları (customers, sales, inventory, repairs, products, suppliers, ...).
 3. `supabase-auth-migration.sql` — kullanıcı profilleri ve temel RLS (sonra kullanıcıları Supabase Auth'tan oluşturun).
 4. `supabase-fine-permissions-migration.sql` — silme sadece Yönetici.
-5. `supabase-repair-public-view-migration.sql`, `supabase-product-images-storage.sql`, `supabase-activity-log-migration.sql`.
+5. `supabase-repair-public-view-migration.sql`, `supabase-repair-public-lookup-migration.sql`, `supabase-product-images-storage.sql`, `supabase-activity-log-migration.sql`.
 
 ## 2) Düzeltme paketleri (mevcut kurulumlarda sırayla)
 | Sıra | Dosya | Zorunlu mu? | İçeriği |
@@ -25,6 +25,7 @@ Sıfırdan kurulum için dosyalar şu sırayla çalıştırılır. Her dosya tek
 | 11 | `supabase-fixes-v10-migration.sql` | **Evet** | taksit planı sütunu düzeltmesi (taksitli satış için) |
 | 12 | `supabase-fixes-v11-migration.sql` | **Evet** | demirbaşlara tedarikçi bilgisi (tekrar sipariş / fiyat isteme için) |
 | 13 | `supabase-fixes-v12-migration.sql` | **Evet** | indirimli borç kapatma kaydı (settlement_discounts tablosu) |
+| 14 | `supabase-repair-public-lookup-migration.sql` | **Evet (v52 için)** | müşterinin servis no + telefon son 4 hane ile giriş yapmadan sorgulaması (`/servis-sorgula`) |
 
 ## Kontrol
 Çalıştırdıktan sonra Supabase > Database > Policies (veya `select * from pg_policies`) ile politikaları kontrol edin.

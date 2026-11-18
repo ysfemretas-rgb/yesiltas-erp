@@ -28,6 +28,7 @@ export function printRepairReceipt(repair: ReceiptRepair) {
   const company = readCompany()
   const no = repair.repairCode || repair.id.slice(0, 8).toUpperCase()
   const deviceName = [repair.brand, repair.model].filter(Boolean).join(" ") || repair.device || "-"
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
 
   const html = `<!DOCTYPE html>
 <html lang="tr"><head><meta charset="utf-8" /><title>Teslim Belgesi - ${esc(no)}</title>
@@ -71,6 +72,10 @@ export function printRepairReceipt(repair: ReceiptRepair) {
       <li>Cihazın teslim alınabilmesi için bu belgenin ibrazı gerekmektedir.</li>
       <li>Yapılan işleme, kullanılan parça bazında garanti verilir; kullanıcı kaynaklı hasarlar garanti kapsamı dışındadır.</li>
     </ol>
+  </div>
+
+  <div class="note" style="border-top:none;margin-top:6px">
+    📱 Cihazınızın durumunu aramadan sorgulayabilirsiniz: <strong>${esc(origin)}/servis-sorgula</strong> — Servis No: <strong>${esc(no)}</strong>, Telefon son 4 hane.
   </div>
 
   <div class="sigs">

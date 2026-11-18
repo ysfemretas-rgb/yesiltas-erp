@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MessageCircle, Shield, Calendar, Wallet, Wrench, RefreshCw, Loader2, ListChecks } from "lucide-react"
 import { Toast, useToast } from "@/components/toast"
+import { useNumberPrompt } from "@/components/NumberPrompt"
+import { useDeliveryBalanceChoice } from "@/components/repairs/DeliveryBalanceDialog"
 import { fetchWarranties } from "@/lib/warranties"
 import { fetchAppointments } from "@/lib/appointments"
 import { fetchCustomers } from "@/lib/customers"
@@ -28,6 +30,8 @@ interface ReminderItem {
   subtitle: string
   phone: string
   message: string
+  remaining?: number
+  paid?: number
 }
 
 function daysUntil(dateStr: string): number {
@@ -56,6 +60,8 @@ const GROUP_META: Record<ReminderItem["group"], { label: string; icon: any; colo
 
 export default function TodayPage() {
   const { toast, showToast, hideToast } = useToast()
+  const { ask: askDeliveryChoice, node: deliveryChoiceNode } = useDeliveryBalanceChoice()
+  const { ask: askAmount, node: numberPromptNode } = useNumberPrompt()
   const [items, setItems] = useState<ReminderItem[]>([])
   const [loading, setLoading] = useState(true)
   const [reminderLog, setReminderLog] = useState<Record<string, string>>({}) // hangi hatırlatmaya en son ne zaman mesaj atıldı
@@ -288,6 +294,8 @@ export default function TodayPage() {
             subtitle: `${days} gündür teslim alınmayı bekliyor${(r.remaining || 0) > 0 ? ` • kalan ${(r.remaining || 0).toLocaleString("tr-TR")} TL` : ""}`,
             phone: r.phone1 || "",
             message: pickupReminderMessage(r.customerName, device, days, r.remaining || 0),
+            remaining: r.remaining || 0,
+            paid: r.paid || 0,
           })
         }
       }
@@ -329,7 +337,25 @@ export default function TodayPage() {
         return
       }
       if (!item.repairId) return
-      if (item.action === "deliver") await updateRepair(item.repairId, { stage: "delivered", status: "completed" })
+      if (item.action === "deliver") {
+        const remaining = item.remaining || 0
+        if (remaining > 0) {
+          const choice = await askDeliveryChoice(remaining)
+          if (!choice) return
+          if (choice === "pay") {
+            const amt = await askAmount(`Alınan ödeme tutarını girin (kalan: ${remaining.toLocaleString("tr-TR")} TL):`, String(remaining))
+            if (amt === null) return
+            const paidNow = Math.max(0, Number(amt) || 0)
+            const newPaid = (item.paid || 0) + paidNow
+            const newRemaining = Math.round((remaining - paidNow) * 100) / 100
+            await updateRepair(item.repairId, { stage: "delivered", status: "completed", paid: newPaid, remaining: newRemaining, paymentType: newRemaining <= 0.01 ? "cash" : "partial" })
+          } else {
+            await updateRepair(item.repairId, { stage: "delivered", status: "completed" })
+          }
+        } else {
+          await updateRepair(item.repairId, { stage: "delivered", status: "completed" })
+        }
+      }
       else if (item.action === "toRepair") await updateRepair(item.repairId, { stage: "in_repair", status: "in_progress" })
       else return
       setItems((prev) => prev.filter((x) => x.id !== item.id))
@@ -355,6 +381,8 @@ export default function TodayPage() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      {deliveryChoiceNode}
+      {numberPromptNode}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">📋 Bugün Kimlere Mesaj Atmam Lazım</h1>

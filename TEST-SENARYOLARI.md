@@ -189,3 +189,24 @@ Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true`
 | 8.9 | Envanter'de bir TEST ürününün 🔔/🔕 düğmesine bas; Ayarlar > Stok Uyarısı | "Elle ayarlanmış (istisna) ürün: N" (en az 1) |
 | 8.10 | (Elle) Uygulamayı yeni sürüm yayınlandığında açık bırak | Üstte "🔄 Yeni sürüm … Yenile" şeridi |
 | 8.11 | (Elle) 7 günden uzun yedek alınmadıysa | Üstte "💾 Şimdi yedekle / Yarın hatırlat" şeridi |
+
+## 9) v52 — Teslim bakiye uyarısı, servis sorgulama, ek ücret onayı, Çıkanlar
+**Hazırlık:** Menünün altında "Sürüm v52". Sadece TEST kayıtları; WhatsApp'ı açmak zorunda değilsiniz (açılan pencereyi kapatabilirsiniz).
+| # | Adım | Beklenen |
+|---|---|---|
+| 9.1 | TEST MÜŞTERİ için tamir aç, ücret 500 TL gir, ödeme "Ödenmedi" bırak, "🎁 Teslime Hazır" aşamasına getir. Bugün sayfasında (ya da Ayarlar > Teslim Hatırlatma'yı 0 yapıp) "🤝 Teslim edildi"ye bas | "⚠️ Ödenmemiş Bakiye Var" penceresi açılır, teslim **hemen gerçekleşmez** |
+| 9.2 | Pencerede "💳 Ödeme Al" seç, tutar penceresinde **200** gir | Tamir teslim edilir; kartta kalan bakiye **300 TL**, ödeme "Kısmi Ödendi" |
+| 9.3 | Aynı senaryoyu tekrarla (yeni tamir, 500 TL, ödenmedi, teslime hazır), bu kez "📒 Cariye İşle ve Teslim Et" seç | Tamir teslim edilir, kalan bakiye **değişmez** (500 TL); Müşteriler sayfasında bu müşterinin borcunda 500 TL görünür |
+| 9.4 | Teknik Servis sayfasında bir tamirin aşama kutusundan direkt "Teslim Edildi" seç (kalan bakiyesi olan bir tamirde) | Aynı "⚠️ Ödenmemiş Bakiye Var" penceresi burada da çıkar |
+| 9.5 | **(Supabase'de önce `supabase-repair-public-lookup-migration.sql` çalıştırılmış olmalı.)** Bir tamirin servis kodunu (örn. YTT-xxxx) ve müşterinin telefon numarasının son 4 hanesini not al. Tarayıcıda `/servis-sorgula` adresine git (giriş yapmadan) | Form açılır; doğru kod+son 4 hane ile tamirin durumu, cihazı, ücreti ve ödeme durumu görünür |
+| 9.6 | `/servis-sorgula`'da yanlış son 4 hane dene | "Kayıt bulunamadı" mesajı, kişisel bilgi **sızdırılmaz** |
+| 9.7 | Teknik Servis > tamir kartı > "➕ Ek Ücret Onayı": tutar 150, sebep "anakart arızası çıktı" yaz, "Talebi Kaydet" | Kart üstünde "Müşteri yanıtı bekleniyor — ₺150,00 (anakart arızası çıktı)" rozeti çıkar |
+| 9.8 | "WhatsApp ile Onay İste" düğmesine bas (pencereyi kapatabilirsiniz), sonra "✅ Müşteri Onayladı" | Tamirin toplam ücreti **150 TL artar**; rozet "Müşteri onayladı" olur |
+| 9.9 | Yeni bir ek ücret talebi oluştur, bu kez "❌ Reddetti" seç | Ücret **değişmez**; rozet "Müşteri reddetti" olur |
+| 9.10 | Envanter sayfasında bir TEST ürününde "🗑️ Çıkar" düğmesine bas, sebep yaz ("iade") | Ürün aktif listeden kaybolur; "Çıkanlar" sekmesinde sayı artar |
+| 9.11 | "🗑️ Çıkanlar" sekmesine geç | Ürün burada, sebep ve tarihiyle görünür; "↩️ Geri Al" düğmesi var |
+| 9.12 | Üstteki "Kritik Stok Uyarısı" kartına ve toplam stok değerine bak | Çıkarılan ürün bu hesaplara **dahil edilmiyor** |
+| 9.13 | "↩️ Geri Al" düğmesine bas | Ürün tekrar "Aktif" sekmesinde görünür, eski haline döner |
+
+### Test kayıtlarını silme
+Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true` ile önizleme, sonra `false`). Silmeden önce Ayarlar > Yedekle ile yedek alın.

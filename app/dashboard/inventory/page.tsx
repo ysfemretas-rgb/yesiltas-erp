@@ -14,6 +14,8 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { InventoryItem, fetchInventory, findActiveImeiConflict, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem, adjustInventoryQuantity } from "@/lib/inventory"
 import { createTransaction } from "@/lib/finance"
+import { RemovedEntry, fetchRemovedInventory, markInventoryRemoved, restoreInventoryItem } from "@/lib/inventoryRemoved"
+import { useTextPrompt } from "@/components/TextPrompt"
 
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,7 +31,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
-import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle, Download, ClipboardList, RefreshCw, History as HistoryIcon, Copy, Smartphone } from "lucide-react"
+import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon, Pencil, Trash2, Save, TrendingUp, DollarSign, Upload, UserPlus, MessageCircle, Download, ClipboardList, RefreshCw, History as HistoryIcon, Copy, Smartphone, PackageX, Undo2 } from "lucide-react"
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 import { ImageUploadField } from "@/components/ImageUploadField"
@@ -86,6 +88,9 @@ export default function InventoryPage() {
 
   const [statKey, setStatKey] = useState<string | null>(null)
   const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [removedList, setRemovedList] = useState<RemovedEntry[]>([]) // "Çıkanlar": iade/elden çıkarılan ürünler
+  const [viewTab, setViewTab] = useState<"active" | "removed">("active")
+  const { ask: askReason, node: textPromptNode } = useTextPrompt()
   const [searchTerm, setSearchTerm] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
@@ -160,8 +165,40 @@ export default function InventoryPage() {
     fetchSuppliers()
       .then((data) => { if (!cancelled) setSuppliers(data) })
       .catch((e) => console.error("Tedarikçiler yüklenemedi:", e))
+    fetchRemovedInventory()
+      .then((data) => { if (!cancelled) setRemovedList(data) })
+      .catch((e) => console.error("Çıkanlar yüklenemedi:", e))
     return () => { cancelled = true }
   }, [])
+
+  const removedIds = new Set(removedList.map((e) => e.id))
+
+  const handleRemoveItem = async (item: InventoryItem) => {
+    const reason = await askReason(
+      `🗑️ "${item.name}" ürününü çıkar`,
+      "Bu ürün aktif stok listesinden kaldırılıp \"Çıkanlar\" sekmesine taşınır (silinmez, istenirse geri alınabilir). Sebep (iade, hurda, kayıp, hasarlı vb.):"
+    )
+    if (reason === null) return
+    try {
+      const next = await markInventoryRemoved(item.id, reason, localDateStr())
+      setRemovedList(next)
+      showToast(`"${item.name}" Çıkanlar'a taşındı.`, "success")
+    } catch (e) {
+      console.error(e)
+      showToast("İşlem kaydedilemedi.", "error")
+    }
+  }
+
+  const handleRestoreItem = async (item: InventoryItem) => {
+    try {
+      const next = await restoreInventoryItem(item.id)
+      setRemovedList(next)
+      showToast(`"${item.name}" aktif listeye geri alındı.`, "success")
+    } catch (e) {
+      console.error(e)
+      showToast("İşlem kaydedilemedi.", "error")
+    }
+  }
 
   // Karekod / arama ile gelindiğinde (?open=ID) ürünü listede göster
   useEffect(() => {
@@ -173,7 +210,7 @@ export default function InventoryPage() {
     window.history.replaceState(null, "", window.location.pathname)
   }, [isLoaded])
 
-  useEffect(() => { setListPage(1) }, [searchTerm, filterCategory])
+  useEffect(() => { setListPage(1) }, [searchTerm, filterCategory, viewTab])
 
   if (checking) {
     return (
@@ -214,20 +251,23 @@ export default function InventoryPage() {
       (item.supplierBarcode || "").toLowerCase().includes(search) ||
       item.supplier.toLowerCase().includes(search)
     const matchesCategory = filterCategory === "all" || item.category === filterCategory
-    return matchesSearch && matchesCategory
+    const matchesTab = viewTab === "removed" ? removedIds.has(item.id) : !removedIds.has(item.id)
+    return matchesSearch && matchesCategory && matchesTab
   })
 
+  // "Çıkanlar" (iade/elden çıkarılan) ürünler stok uyarılarına ve toplamlara dahil edilmez.
+  const activeInventory = inventoryWithPrices.filter(item => !removedIds.has(item.id))
   // Min. stok 0 = uyarı yok (ör. ikinci el cihazlar); 0 stoğa düşmek kritik sayılmaz
-  const lowStockItems = inventoryWithPrices.filter(item => item.minQuantity > 0 && item.quantity <= item.minQuantity) // sipariş gerektirenler (tükenenler dahil)
-  const outItems = inventoryWithPrices.filter(item => stockLevel(item) === "out") // stoğu 0 olan HER ürün (kırmızı)
-  const criticalItems = inventoryWithPrices.filter(item => stockLevel(item) === "low") // stoğu min. adede inmiş ama 0 olmayan (sarı)
-  const totalPurchaseValue = inventoryWithPrices.reduce((sum, item) => {
+  const lowStockItems = activeInventory.filter(item => item.minQuantity > 0 && item.quantity <= item.minQuantity) // sipariş gerektirenler (tükenenler dahil)
+  const outItems = activeInventory.filter(item => stockLevel(item) === "out") // stoğu 0 olan HER ürün (kırmızı)
+  const criticalItems = activeInventory.filter(item => stockLevel(item) === "low") // stoğu min. adede inmiş ama 0 olmayan (sarı)
+  const totalPurchaseValue = activeInventory.reduce((sum, item) => {
     let priceInTRY = item.purchasePrice
     if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
     else if (item.purchaseCurrency === "EUR") priceInTRY = item.purchasePrice * rates.EUR
     return sum + (priceInTRY * item.quantity)
   }, 0)
-  const totalSaleValue = inventoryWithPrices.reduce((sum, item) => sum + (item.salePrice * item.quantity), 0)
+  const totalSaleValue = activeInventory.reduce((sum, item) => sum + (item.salePrice * item.quantity), 0)
   const totalProfit = totalSaleValue - totalPurchaseValue
 
   const updateQuantity = async (id: string, delta: number) => {
@@ -786,6 +826,7 @@ export default function InventoryPage() {
     try {
       await deleteInventoryItem(id)
       setInventory(inventory.filter(item => item.id !== id))
+      if (removedIds.has(id)) restoreInventoryItem(id).then(setRemovedList).catch(() => undefined)
       showToast("Ürün silindi.", "success")
     } catch (e) {
       console.error(e)
@@ -813,6 +854,7 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      {textPromptNode}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">📦 Envanter</h1>
         <div className="flex gap-2 flex-wrap">
@@ -1308,6 +1350,24 @@ export default function InventoryPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex gap-2 mb-3">
+            <Button
+              size="sm"
+              variant={viewTab === "active" ? "default" : "outline"}
+              onClick={() => setViewTab("active")}
+              className={viewTab === "active" ? "bg-blue-600 hover:bg-blue-700" : "border-slate-600 text-slate-300"}
+            >
+              <Package className="h-4 w-4 mr-1" />Aktif
+            </Button>
+            <Button
+              size="sm"
+              variant={viewTab === "removed" ? "default" : "outline"}
+              onClick={() => setViewTab("removed")}
+              className={viewTab === "removed" ? "bg-slate-600 hover:bg-slate-700" : "border-slate-600 text-slate-300"}
+            >
+              <PackageX className="h-4 w-4 mr-1" />Çıkanlar{removedList.length > 0 ? ` (${removedList.length})` : ""}
+            </Button>
+          </div>
           <div className="flex flex-col gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-slate-500 shrink-0" />
@@ -1381,6 +1441,12 @@ export default function InventoryPage() {
                         {level === "out" && <Badge className="bg-red-600 text-xs">Tükendi</Badge>}
                         {level === "low" && <Badge className="bg-amber-500 text-black text-xs">Kritik Stok</Badge>}
                       </div>
+                      {viewTab === "removed" && (
+                        <div className="text-xs text-slate-400 mt-1">
+                          🗑️ Çıkarıldı{removedList.find((e) => e.id === item.id)?.date ? ` • ${removedList.find((e) => e.id === item.id)?.date}` : ""}
+                          {removedList.find((e) => e.id === item.id)?.reason ? ` — ${removedList.find((e) => e.id === item.id)?.reason}` : ""}
+                        </div>
+                      )}
                       <div className="text-sm text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
                         {item.productCode && (
                           <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-800">
@@ -1496,6 +1562,26 @@ export default function InventoryPage() {
                       >
                         <Pencil className="h-4 w-4 mr-1" />Düzenle
                       </Button>
+                      {viewTab === "active" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemoveItem(item)}
+                          title="İade edilen ya da elden çıkarılan ürünü 'Çıkanlar' sekmesine taşı"
+                          className="border-slate-600 text-slate-400 hover:text-slate-200 hover:bg-slate-500/10"
+                        >
+                          <PackageX className="h-4 w-4 mr-1" />Çıkar
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestoreItem(item)}
+                          className="border-emerald-600 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                        >
+                          <Undo2 className="h-4 w-4 mr-1" />Geri Al
+                        </Button>
+                      )}
                       {isManager && (
                       <Button
                         variant="outline"

@@ -21,6 +21,7 @@ import { SignaturePad } from "@/components/SignaturePad"
 import { CustomerPicker } from "@/components/CustomerPicker"
 import { RepairBoardDialog } from "@/components/repairs/RepairBoardDialog"
 import { REPAIR_STAGES, RepairStage, QC_ITEMS, RepairQuote, QUOTE_LABELS, stageOf, stageLabel, statusForStage, reconcileStage, qcProgress, deliveryState } from "@/lib/repairWorkflow"
+import { lastExtraCost, extraCostRequestNote, extraCostDecisionNote, extraCostApprovalMessage, appendNote as appendExtraCostNote } from "@/lib/extraCost"
 import { printRepairQuote } from "@/lib/repairQuote"
 import { logActivity } from "@/lib/activityLog"
 import { resolveScan } from "@/lib/recordLookup"
@@ -34,6 +35,8 @@ import { getWhatsAppTemplates, renderTemplate } from "@/lib/whatsappTemplates"
 import { QrDialog } from "@/components/repairs/QrDialog"
 import { NoteDialog } from "@/components/repairs/NoteDialog"
 import { getRepairStatusBadge as getStatusBadge, getRepairPaymentBadge as getPaymentBadge, formatCurrency } from "@/components/repairs/RepairBadges"
+import { useDeliveryBalanceChoice } from "@/components/repairs/DeliveryBalanceDialog"
+import { useNumberPrompt } from "@/components/NumberPrompt"
 
 import { useState, useEffect, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -74,6 +77,8 @@ interface Customer {
 
 function RepairsPageContent() {
   const { toast, showToast, hideToast } = useToast()
+  const { ask: askDeliveryChoice, node: deliveryChoiceNode } = useDeliveryBalanceChoice()
+  const { ask: askAmount, node: numberPromptNode } = useNumberPrompt()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { authorized, checking } = usePageAccess("Tamir")
@@ -129,6 +134,8 @@ function RepairsPageContent() {
   const [statDialog, setStatDialog] = useState<null | "all" | "waiting" | "in_progress" | "completed" | "revenue" | "remaining" | "credit">(null)
   const [quoteAmount, setQuoteAmount] = useState("")
   const [quoteNote, setQuoteNote] = useState("")
+  const [extraCostAmount, setExtraCostAmount] = useState("")
+  const [extraCostNote, setExtraCostNote] = useState("")
   const [staffList, setStaffList] = useState<StaffMember[]>([])
   const [stockItems, setStockItems] = useState<InventoryItem[]>([])
   const [showAllParts, setShowAllParts] = useState(false) // varsayılan: sadece yedek parça kategorisi; gerekirse tüm ürünler
@@ -874,11 +881,29 @@ function RepairsPageContent() {
       const q = qcProgress(repair.qc)
       if (!confirm(`Kalite kontrol listesi tamamlanmadı (${q.done}/${q.total}).\n\n"${stageLabel(stage)}" aşamasına yine de geçilsin mi?`)) return
     }
+    let extraPatch: Partial<Repair> = {}
+    if (stage === "delivered" && (repair.remaining || 0) > 0) {
+      const remaining = repair.remaining || 0
+      const choice = await askDeliveryChoice(remaining)
+      if (!choice) return
+      if (choice === "pay") {
+        const amt = await askAmount(`Alınan ödeme tutarını girin (kalan: ${remaining.toLocaleString("tr-TR")} TL):`, String(remaining))
+        if (amt === null) return
+        const paidNow = Math.max(0, Number(amt) || 0)
+        const newRemaining = Math.round((remaining - paidNow) * 100) / 100
+        extraPatch = {
+          paid: (repair.paid || 0) + paidNow,
+          remaining: newRemaining,
+          paymentType: newRemaining <= 0.01 ? "cash" : "partial",
+        }
+      }
+    }
     try {
       const updated = await updateRepair(repair.id, {
         stage,
         status,
         completedAt: status === "completed" ? (repair.completedAt || localDateStr()) : "",
+        ...extraPatch,
       })
       applyUpdated(updated)
       logActivity("Teknik Servis", "updated", `${repair.repairCode || ""} ${repair.customerName}: aşama ${stageLabel(current)} → ${stageLabel(stage)}`.trim())
@@ -965,6 +990,64 @@ function RepairsPageContent() {
     }
   }
 
+  // ---- Ek ücret onayı: tamir sırasında çıkan beklenmeyen ücretler, müşteri WhatsApp'tan
+  // onaylamadan tamir ücretine eklenmez (bkz. lib/extraCost.ts). Tamir notuna etiketli satır olarak yazılır.
+  const requestExtraCost = async () => {
+    if (!selectedRepair) return
+    const amount = Number(extraCostAmount)
+    if (!(amount > 0)) {
+      showToast("Ek ücret tutarını girin.", "error")
+      return
+    }
+    const line = extraCostRequestNote(amount, extraCostNote, localDateStr())
+    try {
+      const updated = await updateRepair(selectedRepair.id, { notes: appendExtraCostNote(selectedRepair.notes, line) })
+      applyUpdated(updated)
+      setExtraCostAmount("")
+      setExtraCostNote("")
+      logActivity("Teknik Servis", "updated", `${selectedRepair.repairCode || ""} ${selectedRepair.customerName}: ek ücret talebi — ${amount.toLocaleString("tr-TR")} TL`.trim())
+      showToast("Ek ücret talebi kaydedildi. WhatsApp ile onay isteyebilirsiniz.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Ek ücret talebi kaydedilemedi.", "error")
+    }
+  }
+
+  const sendExtraCostWhatsApp = () => {
+    if (!selectedRepair) return
+    const info = lastExtraCost(selectedRepair.notes)
+    if (!info) return
+    const phone = (selectedRepair.phone1 || "").replace(/\D/g, "").replace(/^0/, "").replace(/^90/, "")
+    if (phone.length < 10) {
+      showToast("Müşterinin telefon numarası geçersiz.", "error")
+      return
+    }
+    const device = [selectedRepair.brand, selectedRepair.model].filter(Boolean).join(" ")
+    openWhatsApp("90" + phone, extraCostApprovalMessage(selectedRepair.customerName, device, info.amount, info.note))
+  }
+
+  const decideExtraCost = async (decision: "approved" | "rejected") => {
+    if (!selectedRepair) return
+    const info = lastExtraCost(selectedRepair.notes)
+    if (!info) return
+    const line = extraCostDecisionNote(decision, info.amount, localDateStr())
+    const patch: Partial<Repair> = { notes: appendExtraCostNote(selectedRepair.notes, line) }
+    if (decision === "approved") {
+      const net = selectedRepair.cost + info.amount
+      patch.cost = net
+      patch.remaining = selectedRepair.paymentType === "gift" ? 0 : net - selectedRepair.paid
+    }
+    try {
+      const updated = await updateRepair(selectedRepair.id, patch)
+      applyUpdated(updated)
+      logActivity("Teknik Servis", "updated", `${selectedRepair.repairCode || ""} ${selectedRepair.customerName}: ek ücret ${decision === "approved" ? "ONAYLANDI" : "REDDEDİLDİ"} (${info.amount.toLocaleString("tr-TR")} TL)`.trim())
+      showToast(decision === "approved" ? "Ek ücret onaylandı ve tamir ücretine eklendi." : "Ek ücret reddedildi olarak kaydedildi.", "success")
+    } catch (e) {
+      console.error(e)
+      showToast("Karar kaydedilemedi.", "error")
+    }
+  }
+
   // İmza kayda hemen yazılır (Güncelle'ye basmayı beklemez)
   const saveSignature = async (url: string) => {
     if (!selectedRepair) return
@@ -1000,7 +1083,7 @@ function RepairsPageContent() {
         })
       : repair.status === "in_progress"
         ? `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDD27 *${device}* cihazınızın tamir işlemi devam etmektedir. Tamamlandığında size haber vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
-        : `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDCE5 *${device}* cihazınız teslim alınmıştır${repair.repairCode ? ` (Kayıt No: ${repair.repairCode})` : ""}. İnceleme sonrası size bilgi vereceğiz.\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
+        : `\uD83D\uDC4B Merhaba *${repair.customerName}*,\n\n\uD83D\uDCE5 *${device}* cihazınız teslim alınmıştır${repair.repairCode ? ` (Kayıt No: ${repair.repairCode})` : ""}. İnceleme sonrası size bilgi vereceğiz.\n\n\uD83D\uDCF1 Durumu aramadan sorgulayabilirsiniz: ${typeof window !== "undefined" ? window.location.origin : ""}/servis-sorgula (Servis No: ${repair.repairCode || "-"}, telefon son 4 hane)\n\n\uD83C\uDFEA *Yeşiltaş Teknoloji*`
 
     openWhatsApp("90" + cleanPhone, message)
   }
@@ -1008,6 +1091,8 @@ function RepairsPageContent() {
   return (
     <div className="space-y-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      {deliveryChoiceNode}
+      {numberPromptNode}
       <PartOrderDialog
         repair={partOrderRepair}
         onClose={() => setPartOrderRepair(null)}
@@ -1814,6 +1899,35 @@ function RepairsPageContent() {
                 <div className="flex gap-2 pt-1">
                   <Button type="button" size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => decideQuote("approved")}>✅ Müşteri Onayladı</Button>
                   <Button type="button" size="sm" variant="outline" className="border-red-600 text-red-400" onClick={() => decideQuote("rejected")}>❌ Reddetti</Button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+              <Label className="text-slate-300">➕ Ek Ücret Onayı</Label>
+              <p className="text-xs text-slate-500">Tamir sırasında beklenmeyen bir ek ücret çıktığında, müşteri WhatsApp'tan onaylamadan ücrete eklenmez.</p>
+              {selectedRepair && lastExtraCost(selectedRepair.notes) && (() => {
+                const info = lastExtraCost(selectedRepair.notes)!
+                return (
+                  <div className={`text-xs px-2 py-1 rounded border ${info.status === "approved" ? "border-emerald-700 text-emerald-300 bg-emerald-900/20" : info.status === "rejected" ? "border-red-700 text-red-300 bg-red-900/20" : "border-amber-700 text-amber-300 bg-amber-900/20"}`}>
+                    {info.status === "approved" ? "Müşteri onayladı" : info.status === "rejected" ? "Müşteri reddetti" : "Müşteri yanıtı bekleniyor"} — {formatCurrency(info.amount)} ({info.note || "-"})
+                  </div>
+                )
+              })()}
+              <div className="grid grid-cols-3 gap-2">
+                <Input type="number" inputMode="decimal" placeholder="Ek tutar (TL)" value={extraCostAmount} onChange={(e) => setExtraCostAmount(e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+                <Input placeholder="Sebep (örn: anakart arızası çıktı)" value={extraCostNote} onChange={(e) => setExtraCostNote(e.target.value)} className="bg-slate-800 border-slate-600 text-white col-span-2" />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button type="button" size="sm" variant="outline" className="border-blue-600 text-blue-400" onClick={requestExtraCost}>Talebi Kaydet</Button>
+                {selectedRepair && lastExtraCost(selectedRepair.notes) && (
+                  <Button type="button" size="sm" variant="outline" className="border-green-600 text-green-400" onClick={sendExtraCostWhatsApp}>WhatsApp ile Onay İste</Button>
+                )}
+              </div>
+              {selectedRepair && lastExtraCost(selectedRepair.notes)?.status === "pending" && (
+                <div className="flex gap-2 pt-1">
+                  <Button type="button" size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => decideExtraCost("approved")}>✅ Müşteri Onayladı</Button>
+                  <Button type="button" size="sm" variant="outline" className="border-red-600 text-red-400" onClick={() => decideExtraCost("rejected")}>❌ Reddetti</Button>
                 </div>
               )}
             </div>
