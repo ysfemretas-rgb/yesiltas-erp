@@ -1,42 +1,76 @@
-YEŞİLTAŞ ERP — v52 YAMA PAKETİ
+YEŞİLTAŞ ERP — v53 YAMA PAKETİ
 ================================
 
-Bu pakette SADECE değişen/yeni dosyalar var (17 dosya). GitHub'a sürükle-bırakla
-yüklerken klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın:
-(app/, components/, lib/, public/ klasörlerinin içine, dosya adları aynı kalacak)
+Bu pakette SADECE değişen/yeni dosyalar var. GitHub'a sürükle-bırakla yüklerken
+klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın.
 
 YENİ DOSYALAR:
-- app/servis-sorgula/page.tsx
-- components/TextPrompt.tsx
-- components/repairs/DeliveryBalanceDialog.tsx
-- lib/extraCost.ts
-- lib/inventoryRemoved.ts
-- supabase-repair-public-lookup-migration.sql
+- app/api/cron/push-digest/route.ts
+- lib/push.ts
+- supabase-app-settings-yazma-onar.sql
+- supabase-push-subscriptions-migration.sql
+- vercel.json
 
 DEĞİŞEN DOSYALAR:
 - DUZELTMELER.md, MIGRATION-SIRASI.md, TEST-SENARYOLARI.md
-- app/dashboard/inventory/page.tsx
-- app/dashboard/repairs/page.tsx
-- app/dashboard/today/page.tsx
-- lib/repairReceipt.ts
-- lib/repairs.ts
-- lib/version.ts, public/version.json
+- app/dashboard/layout.tsx (Personel menüden kaldırıldı)
+- app/dashboard/settings/page.tsx (Kullanıcılar sekmesi kaldırıldı, Sistem Bilgileri
+  gerçek veri gösteriyor, "Telefonuma Bildirim Aç" düğmesi eklendi)
+- components/AppBanners.tsx, lib/backupStatus.ts (yedek hatırlatma düzeltmesi)
+- lib/version.ts, public/version.json (v53)
+- package.json (web-push eklendi)
+- public/sw.js (telefon bildirimini gösteren kod eklendi)
 - supabase-saglik-kontrolu.sql
 
-ÖNEMLİ — SUPABASE'DE ÇALIŞTIRILACAK:
+================================
+1) SUPABASE'DE ÇALIŞTIRILACAK (sırayla)
+================================
 1. Ayarlar > Yedekle ile önce yedek alın.
-2. Supabase SQL Editor'de "supabase-repair-public-lookup-migration.sql" dosyasını
-   çalıştırın (müşterinin /servis-sorgula sayfasından servis no + telefonun son
-   4 hanesiyle sorgu yapabilmesi için gerekli — yeni bir fonksiyon ekler, mevcut
-   veriye dokunmaz).
-3. İsterseniz "supabase-saglik-kontrolu.sql" ile kontrol edin (yeni fonksiyonun
-   ✅ göründüğünü doğrular).
+2. SQL Editor'de "supabase-app-settings-yazma-onar.sql" çalıştırın.
+   (Bu, "yedek aldım ama hâlâ yedek al diyor" sorununun kök nedenini düzeltir —
+    app_settings tablosuna yazma izni yanlışlıkla sadece Yönetici ile sınırlıydı.)
+3. SQL Editor'de "supabase-push-subscriptions-migration.sql" çalıştırın.
+   (Telefon bildirimi aboneliklerini saklayan yeni tablo.)
+4. İsterseniz "supabase-saglik-kontrolu.sql" ile kontrol edin.
 
-Bu sürümde eklenenler (detay: DUZELTMELER.md > "v52"):
-1. Teslimde ödenmemiş bakiye uyarısı (Ödeme Al / Cariye İşle ve Teslim Et seçimi)
-2. Müşterinin kendi kendine servis sorgulaması (/servis-sorgula, giriş gerektirmez)
-3. Ek ücret onayı (WhatsApp ile müşteriden onay istenir, onaysız eklenmez)
-4. Envanter'de "Çıkanlar" sekmesi (iade/elden çıkarılan ürünler)
+================================
+2) VERCEL'DE EKLENECEK ORTAM DEĞİŞKENLERİ (telefon bildirimi için ŞART)
+================================
+Vercel projenizde: Settings > Environment Variables > aşağıdaki 4 değişkeni ekleyin,
+sonra projeyi yeniden deploy edin (ya da bu yamayı yükledikten sonraki deploy
+otomatik alır).
 
-Test adımları: TEST-SENARYOLARI.md > "9) v52 — Teslim bakiye uyarısı, servis
-sorgulama, ek ücret onayı, Çıkanlar"
+NEXT_PUBLIC_VAPID_PUBLIC_KEY = BJ_lw8VuU-FDdBdaOeq1BoCP9iPNS1CuIly75CR_ogNFio3qHLYQnvzf8GRuU_E3zErDk9qbWRbH3zZP389JGDM
+VAPID_PRIVATE_KEY            = aLfcH7TH0KlfCGWqs6yXiqeH10JJF_yocZKT80KtyfE
+VAPID_SUBJECT                = mailto:info@yesiltasteknoloji.com
+CRON_SECRET                  = ED0FGJr7lulyGYhIxP9INx4O-nPvAwwD
+
+ÖNEMLİ: VAPID_PRIVATE_KEY ve CRON_SECRET GİZLİ bilgilerdir — başka kimseyle
+paylaşmayın, GitHub'a YÜKLEMEYİN (bunlar sadece Vercel ortam değişkeni olarak
+kalmalı, hiçbir kod dosyasına yazılmadı zaten).
+
+Not: "VAPID_SUBJECT" bir e-posta adresi olmalı (push servislerinin, sorun
+olursa size ulaşabilmesi için ister) — isterseniz kendi gerçek e-postanızla
+değiştirebilirsiniz, zorunlu değil ama önerilir.
+
+================================
+3) BU ÖZELLİĞİN SINIRLARI (okuyun)
+================================
+- Vercel'in ÜCRETSİZ (Hobby) planında otomatik görev ("cron") GÜNDE SADECE 1 KEZ
+  çalışabiliyor ve saati birebir garanti değil (birkaç dakika kayabilir). Bu
+  yüzden bildirim ANLIK değil, günde bir kez (sabah ~09:00 Türkiye saati)
+  gönderilir — o gün için hatırlatma (teslim bekleyen cihaz, parça bekleyen
+  tamir, vadesi gelen görev, bugünkü randevu) varsa.
+- Daha sık / daha kesin saatte bildirim isterseniz Vercel planının (Pro)
+  yükseltilmesi gerekir — o zaman cron'u günde birkaç kez çalışacak şekilde
+  ayarlayabiliriz (vercel.json'daki "schedule" satırı değişir).
+- iPhone'da ÇALIŞMASI İÇİN ŞART: Uygulama önce Safari'de açılıp Paylaş menüsünden
+  "Ana Ekrana Ekle" ile eklenmeli, sonra Safari sekmesi yerine o ana ekran
+  simgesinden açılmalı. Bu Apple'ın kuralı — sekmede açıkken iOS push
+  bildirimi vermiyor.
+- Ayarlar > Sistem sekmesindeki "📱 Telefonuma Bildirim Aç" düğmesine HER
+  CİHAZDA (telefon, tablet) ayrı ayrı basılması gerekir — her cihaz kendi
+  bildirim aboneliğini açar.
+
+Bu sürümde eklenenler (detay: DUZELTMELER.md > "v53").
+Test adımları: TEST-SENARYOLARI.md > "10) v53 — ..."

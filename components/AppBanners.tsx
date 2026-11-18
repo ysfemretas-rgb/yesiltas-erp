@@ -43,15 +43,20 @@ export function AppBanners() {
   useEffect(() => {
     if (!isManager) return
     try { setSnoozed(localStorage.getItem(SNOOZE_KEY) === localDateStr()) } catch { /* yoksay */ }
-    getLastBackup().then((at) => setBackupAge(backupAgeDays(at))).catch(() => undefined)
+    const refresh = () => { getLastBackup().then((at) => setBackupAge(backupAgeDays(at))).catch(() => undefined) }
+    refresh()
+    // Yedek başka bir sayfadan (ör. Ayarlar > Yedeği İndir) alınsa da şerit hemen güncellensin.
+    window.addEventListener("yt:backup-recorded", refresh)
+    return () => window.removeEventListener("yt:backup-recorded", refresh)
   }, [isManager])
 
   const backupNow = async () => {
     setBusy(true)
     try {
       await exportBackup()
-      await recordBackup()
-      setBackupAge(0)
+      const ok = await recordBackup()
+      if (ok) setBackupAge(0)
+      else console.error("Yedek tarihi kaydedilemedi (yetki/izin sorunu olabilir — supabase-app-settings-yazma-onar.sql).")
     } catch (e) {
       console.error("Yedek alınamadı:", e)
     } finally {

@@ -1,7 +1,10 @@
 "use client"
 
 import { fetchStockAlertOverrides, clearStockAlertOverrides } from "@/lib/stockAlertOverrides"
-import { recordBackup } from "@/lib/backupStatus"
+import { getLastBackup, recordBackup } from "@/lib/backupStatus"
+import { backupAgeDays } from "@/lib/backupAge"
+import { APP_VERSION, APP_VERSION_DATE } from "@/lib/version"
+import { subscribeToPush, isPushSubscribed } from "@/lib/push"
 import { applyStockAlertConfig } from "@/lib/inventory"
 import { STOCK_GROUPS, DEFAULT_STOCK_ALERT_CONFIG, normalizeStockAlertConfig, type StockAlertConfig } from "@/lib/stockAlerts"
 import { DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices"
@@ -102,6 +105,9 @@ export default function SettingsPage() {
 
   const { authorized, checking } = usePageAccess("Ayarlar")
   const [backupLoading, setBackupLoading] = useState(false)
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const isManager = useIsManager()
   const [isLoaded, setIsLoaded] = useState(false)
@@ -133,6 +139,11 @@ export default function SettingsPage() {
   })
 
   // localStorage'dan yükle
+  useEffect(() => {
+    getLastBackup().then(setLastBackupAt).catch(() => undefined)
+    isPushSubscribed().then(setPushEnabled).catch(() => undefined)
+  }, [])
+
   useEffect(() => {
     try {
       const companySaved = localStorage.getItem("yt_company")
@@ -382,7 +393,6 @@ export default function SettingsPage() {
           <TabsList className="flex w-full gap-1 overflow-x-auto bg-slate-800 p-1">
             <TabsTrigger value="company" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Şirket</TabsTrigger>
             <TabsTrigger value="whatsapp" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">WhatsApp Mesajları</TabsTrigger>
-            <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Kullanıcılar</TabsTrigger>
             <TabsTrigger value="logins" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Giriş/Çıkış</TabsTrigger>
             <TabsTrigger value="system" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Sistem</TabsTrigger>
             <TabsTrigger value="status" className="flex-shrink-0 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Bağlantı Durumu</TabsTrigger>
@@ -828,14 +838,31 @@ export default function SettingsPage() {
                     Değiştir
                   </Button>
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-600 bg-slate-700/50">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-600 bg-slate-700/50 flex-wrap gap-2">
                   <div className="flex items-center gap-3">
                     <Bell className="h-5 w-5 text-blue-400" />
                     <div>
                       <div className="font-medium text-white">Bildirimler</div>
-                      <div className="text-sm text-slate-400">Stok, garanti ve borç uyarıları — sağ üstteki zil ikonundan takip edilir</div>
+                      <div className="text-sm text-slate-400">Uygulama açıkken zil ikonundan görünür. Aşağıdaki düğmeyle, günde bir kez telefonunuza da gerçek bildirim düşer.</div>
                     </div>
                   </div>
+                  <Button
+                    size="sm"
+                    disabled={pushBusy}
+                    onClick={async () => {
+                      setPushBusy(true)
+                      const r = await subscribeToPush()
+                      setPushBusy(false)
+                      setPushEnabled(r.ok)
+                      showToast(r.message, r.ok ? "success" : "error")
+                    }}
+                    className={pushEnabled ? "bg-emerald-700 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"}
+                  >
+                    {pushBusy ? "Açılıyor..." : pushEnabled ? "✅ Telefon Bildirimi Açık" : "📱 Telefonuma Bildirim Aç"}
+                  </Button>
+                </div>
+                <div className="text-xs text-slate-500 px-1">
+                  iPhone'da çalışması için önce bu uygulamayı Paylaş menüsünden "Ana Ekrana Ekle" ile eklemeniz, sonra Safari sekmesi yerine ana ekrandaki simgeden açmanız gerekir. Bildirimler günde bir kez (o gün için hatırlatma varsa) gönderilir, anlık değildir.
                 </div>
 
                 <Separator className="bg-slate-600" />
@@ -844,9 +871,15 @@ export default function SettingsPage() {
                   <h3 className="font-medium text-white">Sistem Bilgileri</h3>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="text-slate-500">Versiyon:</div>
-                    <div className="text-slate-300">v1.0.0</div>
+                    <div className="text-slate-300">{APP_VERSION}</div>
                     <div className="text-slate-500">Son Güncelleme:</div>
-                    <div className="text-slate-300">04.08.2026</div>
+                    <div className="text-slate-300">{APP_VERSION_DATE}</div>
+                    <div className="text-slate-500">Son Yedek:</div>
+                    <div className="text-slate-300">
+                      {lastBackupAt
+                        ? `${new Date(lastBackupAt).toLocaleDateString("tr-TR")} ${new Date(lastBackupAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })} (${backupAgeDays(lastBackupAt) || 0} gün önce)`
+                        : "Hiç yedek alınmadı"}
+                    </div>
                     <div className="text-slate-500">Lisans:</div>
                     <div className="text-slate-300">Yeşiltaş ERP Pro</div>
                   </div>
@@ -872,8 +905,13 @@ export default function SettingsPage() {
                     setBackupLoading(true)
                     try {
                       await exportBackup()
-                      recordBackup().catch(() => undefined) // son yedek tarihi (hatırlatma şeridi için)
-                      showToast("Yedek indirildi.", "success")
+                      const ok = await recordBackup() // son yedek tarihi (hatırlatma şeridi + Sistem Bilgileri için)
+                      if (ok) {
+                        setLastBackupAt(new Date().toISOString())
+                        showToast("Yedek indirildi.", "success")
+                      } else {
+                        showToast("Yedek indirildi, ama son yedek tarihi kaydedilemedi (yetki sorunu — supabase-app-settings-yazma-onar.sql çalıştırın).", "error")
+                      }
                     } catch (err) {
                       console.error(err)
                       showToast("Yedek indirilirken bir sorun oluştu.", "error")

@@ -18,6 +18,35 @@ self.addEventListener("activate", (event) => {
   self.clients.claim()
 })
 
+// Telefona GERÇEK bildirim (Web Push): sunucudan (günlük cron) gelen push olayını
+// işletim sistemi bildirimi olarak gösterir. Uygulama kapalıyken de tetiklenir.
+self.addEventListener("push", (event) => {
+  let data = {}
+  try { data = event.data ? event.data.json() : {} } catch { data = {} }
+  const title = data.title || "Yeşiltaş ERP"
+  const options = {
+    body: data.body || "",
+    icon: "/app-icon-192x192.png",
+    badge: "/app-icon-192x192.png",
+    data: { url: data.url || "/dashboard/today" },
+  }
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+// Bildirime dokununca: uygulama zaten açıksa o sekmeye odaklan, değilse yeni aç.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || "/dashboard/today"
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) return client.focus().then(() => client.navigate ? client.navigate(url) : undefined)
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url)
+    })
+  )
+})
+
 self.addEventListener("fetch", (event) => {
   const req = event.request
   if (req.method !== "GET") return

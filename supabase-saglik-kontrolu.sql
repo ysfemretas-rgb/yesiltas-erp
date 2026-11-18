@@ -6,7 +6,7 @@
 with checks as (
   -- Tablolar
   select 'tablo: ' || v.t as item, to_regclass('public.' || v.t) is not null as ok
-  from (values ('purchases'),('cash_counts'),('scheduled_payments'),('stock_movements'),('supplier_payments'),('device_purchases'),('app_settings'),('activity_log'),('settlement_discounts'),('profiles')) as v(t)
+  from (values ('purchases'),('cash_counts'),('scheduled_payments'),('stock_movements'),('supplier_payments'),('device_purchases'),('app_settings'),('activity_log'),('settlement_discounts'),('profiles'),('push_subscriptions')) as v(t)
 
   union all
   -- Sütunlar
@@ -55,7 +55,7 @@ with checks as (
   -- Yetki politikaları
   select 'politika: ' || v.p,
          exists (select 1 from pg_policies where policyname = v.p)
-  from (values ('activity_log_delete_manager'),('stock_movements_insert_authenticated'),('purchases_select_authenticated'),('cash_counts_select_authenticated'),('scheduled_payments_select_authenticated')) as v(p)
+  from (values ('activity_log_delete_manager'),('stock_movements_insert_authenticated'),('purchases_select_authenticated'),('cash_counts_select_authenticated'),('scheduled_payments_select_authenticated'),('app_settings_all_authenticated'),('push_subscriptions_select_public')) as v(p)
 )
 select item as kontrol, case when ok then '✅ var' else '❌ EKSİK' end as durum
 from checks

@@ -30,7 +30,6 @@ const menuItems = [
   { href: "/dashboard/finance", icon: DollarSign, label: "Kasa", color: "text-green-400" },
   { href: "/dashboard/warranties", icon: Shield, label: "Garantiler", color: "text-indigo-400" },
   { href: "/dashboard/reports", icon: BarChart3, label: "Raporlar", color: "text-teal-400" },
-  { href: "/dashboard/staff", icon: Users2, label: "Personel", color: "text-sky-400" },
   { href: "/dashboard/suppliers", icon: Truck, label: "Tedarikçiler", color: "text-rose-400" },
   { href: "/dashboard/settings", icon: Settings, label: "Ayarlar", color: "text-slate-400" },
 ]

@@ -210,3 +210,20 @@ Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true`
 
 ### Test kayıtlarını silme
 Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true` ile önizleme, sonra `false`). Silmeden önce Ayarlar > Yedekle ile yedek alın.
+
+## 10) v53 — Yedek düzeltmesi, Personel menüden kalktı, Sistem bilgileri, telefon bildirimi
+**Hazırlık:** Menünün altında "Sürüm v53". Supabase'de önce `supabase-app-settings-yazma-onar.sql` ve `supabase-push-subscriptions-migration.sql` çalıştırılmış, Vercel'de VAPID ortam değişkenleri eklenmiş olmalı (bkz. BENİ-OKU.txt).
+| # | Adım | Beklenen |
+|---|---|---|
+| 10.1 | Ayarlar > Sistem > "Yedeği İndir" | İndirme biter, yeşil "Yedek indirildi" bildirimi çıkar (kırmızı hata **çıkmamalı**) |
+| 10.2 | Ana Sayfa'ya dön (sayfayı yenilemeden) | Üstteki "💾 Son yedek X gün önce" şeridi **kaybolur** (az önce yedek alındığı için) |
+| 10.3 | Ayarlar > Sistem > "Sistem Bilgileri" | Versiyon **v53**, Son Güncelleme **gerçek tarih**, Son Yedek **az önceki tarih/saat** yazar (sabit "v1.0.0" / "04.08.2026" değil) |
+| 10.4 | Sol menüye bak | **Personel** satırı **görünmüyor** |
+| 10.5 | Ayarlar sekmelerine bak | **Kullanıcılar** sekmesi **görünmüyor** |
+| 10.6 | (iPhone'da, uygulama Ana Ekrana Eklenmiş olarak) Ayarlar > Sistem > "📱 Telefonuma Bildirim Aç" | iOS bildirim izni sorar; izin verilince düğme "✅ Telefon Bildirimi Açık" olur, yeşil bildirim çıkar |
+| 10.7 | (Safari sekmesinde, Ana Ekrana eklenmeden) aynı düğmeye bas | Anlaşılır bir hata mesajı çıkar ("önce Ana Ekrana Ekle...") |
+| 10.8 | (Ertesi gün veya Vercel'den manuel tetikleyerek) `/api/cron/push-digest` çalıştığında, o gün için en az bir hatırlatma (teslim bekleyen/parça bekleyen/görev/randevu) varsa | Telefona gerçek bir bildirim düşer; dokununca uygulama **Bugün** sayfasını açar |
+| 10.9 | O gün hiç hatırlatma yoksa | Bildirim **gönderilmez** (gereksiz bildirim yok) |
+
+### Test kayıtlarını silme
+Testler bitince `supabase-test-kayitlarini-sil.sql` (önce `dry boolean := true` ile önizleme, sonra `false`). Silmeden önce Ayarlar > Yedekle ile yedek alın.
