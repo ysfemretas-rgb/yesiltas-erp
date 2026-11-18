@@ -20,6 +20,7 @@ export function AppBanners() {
   const [backupAge, setBackupAge] = useState<number | null | undefined>(undefined) // undefined: bilinmiyor, null: hiç yedek yok
   const [snoozed, setSnoozed] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -52,13 +53,21 @@ export function AppBanners() {
 
   const backupNow = async () => {
     setBusy(true)
+    setMsg(null)
     try {
       await exportBackup()
       const r = await recordBackup()
-      if (r.ok) setBackupAge(0)
-      else console.error("Yedek tarihi kaydedilemedi:", r.error)
+      if (r.ok) {
+        setBackupAge(0)
+        setMsg({ text: "Yedek indirildi ve kaydedildi.", ok: true })
+      } else {
+        console.error("Yedek tarihi kaydedilemedi:", r.error)
+        setMsg({ text: `Yedek dosyası indirildi, ama tarihi kaydedilemedi. Hata: ${r.error || "bilinmeyen"}`, ok: false })
+      }
     } catch (e) {
+      const text = e instanceof Error ? e.message : "bilinmeyen hata"
       console.error("Yedek alınamadı:", e)
+      setMsg({ text: `Yedek alınamadı: ${text}`, ok: false })
     } finally {
       setBusy(false)
     }
@@ -90,6 +99,11 @@ export function AppBanners() {
               Yarın hatırlat
             </button>
           </span>
+          {msg && (
+            <div className={`w-full text-sm font-medium ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>
+              {msg.ok ? "✅" : "⚠️"} {msg.text}
+            </div>
+          )}
         </div>
       )}
     </div>
