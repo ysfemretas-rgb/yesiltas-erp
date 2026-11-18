@@ -905,12 +905,12 @@ export default function SettingsPage() {
                     setBackupLoading(true)
                     try {
                       await exportBackup()
-                      const ok = await recordBackup() // son yedek tarihi (hatırlatma şeridi + Sistem Bilgileri için)
-                      if (ok) {
+                      const r = await recordBackup() // son yedek tarihi (hatırlatma şeridi + Sistem Bilgileri için)
+                      if (r.ok) {
                         setLastBackupAt(new Date().toISOString())
                         showToast("Yedek indirildi.", "success")
                       } else {
-                        showToast("Yedek indirildi, ama son yedek tarihi kaydedilemedi (yetki sorunu — supabase-app-settings-yazma-onar.sql çalıştırın).", "error")
+                        showToast(`Yedek indirildi, ama son yedek tarihi kaydedilemedi. Hata: ${r.error || "bilinmeyen"}`, "error")
                       }
                     } catch (err) {
                       console.error(err)

@@ -54,9 +54,9 @@ export function AppBanners() {
     setBusy(true)
     try {
       await exportBackup()
-      const ok = await recordBackup()
-      if (ok) setBackupAge(0)
-      else console.error("Yedek tarihi kaydedilemedi (yetki/izin sorunu olabilir — supabase-app-settings-yazma-onar.sql).")
+      const r = await recordBackup()
+      if (r.ok) setBackupAge(0)
+      else console.error("Yedek tarihi kaydedilemedi:", r.error)
     } catch (e) {
       console.error("Yedek alınamadı:", e)
     } finally {

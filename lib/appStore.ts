@@ -12,10 +12,18 @@ export async function getAppValue<T>(key: string, fallback: T): Promise<T> {
 }
 
 export async function setAppValue(key: string, value: unknown): Promise<boolean> {
+  const r = await setAppValueDetailed(key, value)
+  return r.ok
+}
+
+// Hatanın GERÇEK sebebini (RLS/yetki mi, eksik sütun mu, bağlantı sorunu mu vs.) görmek
+// gerektiğinde bu kullanılır — setAppValue sadece true/false döner, hatayı yutar.
+export async function setAppValueDetailed(key: string, value: unknown): Promise<{ ok: boolean; error?: string }> {
   try {
     const { error } = await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() })
-    return !error
-  } catch {
-    return false
+    if (error) return { ok: false, error: error.message || error.code || "bilinmeyen hata" }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "bilinmeyen hata" }
   }
 }
