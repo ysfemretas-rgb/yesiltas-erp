@@ -55,8 +55,11 @@ export function AppBanners() {
     setBusy(true)
     setMsg(null)
     try {
-      await exportBackup()
+      // ÖNCE son yedek tarihi kaydedilir, SONRA dosya indirilir: dosya indirme
+      // iPhone'da "Dosyalara Kaydet" ekranını açıp sayfayı arka plana atabiliyor —
+      // bu sırada ağ isteği kesiliyordu ("Load failed"). Sıra tersine çevrildi.
       const r = await recordBackup()
+      await exportBackup()
       if (r.ok) {
         setBackupAge(0)
         setMsg({ text: "Yedek indirildi ve kaydedildi.", ok: true })

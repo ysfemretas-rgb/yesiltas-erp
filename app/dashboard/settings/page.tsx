@@ -904,8 +904,11 @@ export default function SettingsPage() {
                   onClick={async () => {
                     setBackupLoading(true)
                     try {
-                      await exportBackup()
+                      // ÖNCE son yedek tarihi kaydedilir, SONRA dosya indirilir: dosya indirme
+                      // iPhone'da "Dosyalara Kaydet" ekranını açıp sayfayı arka plana atabiliyor —
+                      // bu sırada ağ isteği kesiliyordu ("Load failed"). Sıra tersine çevrildi.
                       const r = await recordBackup() // son yedek tarihi (hatırlatma şeridi + Sistem Bilgileri için)
+                      await exportBackup()
                       if (r.ok) {
                         setLastBackupAt(new Date().toISOString())
                         showToast("Yedek indirildi.", "success")

@@ -1,4 +1,4 @@
-YEŞİLTAŞ ERP — v56 YAMA PAKETİ (otomatik tekrar deneme)
+YEŞİLTAŞ ERP — v57 YAMA PAKETİ (asıl düzeltme — işlem sırası)
 ================================
 
 Bu pakette SADECE değişen dosyalar var. GitHub'a sürükle-bırakla yüklerken
@@ -6,31 +6,33 @@ klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın. Yeni SQL YOK.
 
 DEĞİŞEN DOSYALAR:
 - DUZELTMELER.md
-- lib/appStore.ts
+- app/dashboard/settings/page.tsx
+- components/AppBanners.tsx
 - lib/version.ts
 - public/version.json
 
 ================================
-NEDEN BU YAMA?
+NEDEN BU YAMA? (asıl sebep bulundu)
 ================================
-v55'teki gerçek hata mesajı sayesinde gördük ki sorun RLS/yetki değilmiş —
-"TypeError: Load failed" çıkıyor, yani yedek tarihini kaydetme isteği
-ağ seviyesinde (muhtemelen zayıf 4G sinyalinde) yarıda kesiliyormuş.
+"3 kez otomatik tekrar deneme" (v56) bile aynı hatayı verdiğinden, bu
+rastgele bir sinyal kopukluğu değil, HER SEFERİNDE AYNI ANDA olan bir
+şeydi. Gerçek sebep: yedekleme kodu önce verinizi indirip dosya olarak
+kaydediyordu (iPhone'da bu "Dosyalara Kaydet" ekranını açıyor — az önce
+gönderdiğiniz ekran görüntüsündeki o ekran), SONRA yedek tarihini
+kaydetmeye çalışıyordu. Ama o ekran açılırken Safari sayfası arka plana
+düşüyor ve iOS tam o anda devam eden ağ isteğini kesiyor.
 
-Wi-Fi'niz olmadığı için bunu ağ tarafında test edemedik. Bunun yerine kodu
-daha dayanıklı yaptık: yazma isteği bu şekilde başarısız olursa, kısa
-aralıklarla (0.7sn, 1.4sn) toplam 3 kez OTOMATİK tekrar denenecek —
-siz hiçbir şey yapmadan, arka planda. Gerçek bir yetki/izin hatası
-olursa (ağ sorunu değilse) tekrar denenmez, hemen gösterilir.
+v57'de SIRA TERSİNE ÇEVRİLDİ: artık önce yedek tarihi kaydediliyor
+(sayfa hâlâ önde, arka plana düşmemişken), sonra dosya indiriliyor.
 
 ================================
 BU YAMADAN SONRA YAPMANIZ GEREKEN
 ================================
-1. Bu dosyaları GitHub'a yükleyin, Vercel deploy etsin ("v56" görününce
-   hazır).
-2. Normal kullandığınız yerden (ana sayfadaki "Şimdi yedekle" ya da
-   Ayarlar > Yedeği İndir) yedek almayı deneyin.
-3. Hâlâ "Load failed" hatası alırsanız (3 denemeden sonra da), lütfen
-   şunu da belirtin: o sırada sinyal kaç çubuktu, ve hata her defasında
-   mı yoksa bazen mi çıkıyor. Bu, operatör/ağ filtresi ihtimalini
-   kesinleştirmemize yardımcı olur.
+1. Bu dosyaları GitHub'a yükleyin, Vercel deploy etsin ("v57" görününce
+   hazır — sayfayı/telefonu yenileyin).
+2. Hem ana sayfadaki "Şimdi yedekle" hem Ayarlar > "Yedeği İndir"
+   butonlarını deneyin.
+3. Artık yeşil "✅ Yedek indirildi ve kaydedildi." mesajı çıkmalı ve
+   "Sistem Bilgileri > Son Yedek" bugünün tarihini göstermeli.
+
+Hâlâ sorun olursa (umarım olmaz), yine ekran görüntüsüyle bildirin.
