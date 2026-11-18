@@ -624,12 +624,36 @@ function RepairsPageContent() {
     const repair = repairs.find(r => r.id === id)
     if (!repair) return
 
+    // Bu, üstteki eski "Durum" seçicisi — "Teslim Edildi"ye karşılık gelen aşamaya
+    // (delivered) geçerken, aşama seçicisindeki (changeStage) ile AYNI ödenmemiş
+    // bakiye kontrolü burada da yapılmalı; yoksa bu yoldan uyarısız teslim edilebiliyordu.
+    const newStage = reconcileStage(repair.stage, newStatus)
+    let extraPatch: Partial<Repair> = {}
+    if (newStage === "delivered" && (repair.remaining || 0) > 0) {
+      const remaining = repair.remaining || 0
+      const choice = await askDeliveryChoice(remaining)
+      if (!choice) return
+      if (choice === "pay") {
+        const amt = await askAmount(`Alınan ödeme tutarını girin (kalan: ${remaining.toLocaleString("tr-TR")} TL):`, String(remaining))
+        if (amt === null) return
+        const paidNow = Math.max(0, Number(amt) || 0)
+        const newRemaining = Math.round((remaining - paidNow) * 100) / 100
+        extraPatch = {
+          paid: (repair.paid || 0) + paidNow,
+          remaining: newRemaining,
+          paymentType: newRemaining <= 0.01 ? "cash" : "partial",
+        }
+      }
+    }
 
     try {
       const updatedRepair = await updateRepair(id, {
         status: newStatus,
-        stage: reconcileStage(repair.stage, newStatus),
-        completedAt: newStatus === "completed" ? localDateStr() : repair.completedAt,
+        stage: newStage,
+        // Tamamlandı dışına dönüldüğünde tamamlanma tarihi de temizlenir
+        // (geri alınca eski tarih public sorgulamada yanlışlıkla kalmasın diye).
+        completedAt: newStatus === "completed" ? (repair.completedAt || localDateStr()) : "",
+        ...extraPatch,
       })
 
       setRepairs(repairs.map((r) => r.id === id ? updatedRepair : r))

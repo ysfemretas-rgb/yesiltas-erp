@@ -911,7 +911,7 @@ export default function SettingsPage() {
                       await exportBackup()
                       if (r.ok) {
                         setLastBackupAt(new Date().toISOString())
-                        showToast("Yedek indirildi.", "success")
+                        showToast("✅ Yedek indirildi ve kaydedildi.", "success")
                       } else {
                         showToast(`Yedek indirildi, ama son yedek tarihi kaydedilemedi. Hata: ${r.error || "bilinmeyen"}`, "error")
                       }

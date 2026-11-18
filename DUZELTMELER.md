@@ -339,3 +339,10 @@ v55'teki gerçek hata mesajı sayesinde asıl sorun ortaya çıktı: RLS/yetki s
 
 ## v57 — "Load failed" hatasının GERÇEK sebebi: işlem sırası
 v56'daki otomatik tekrar deneme de aynı hatayı verdiğinden (3 denemenin HEPSİ aynı anda başarısız oluyordu), bu rastgele bir sinyal kopukluğu değil, **her seferinde aynı anda** olan bir şeydi. Asıl sebep bulundu: yedekleme kodu önce tüm veriyi indirip dosya olarak kaydediyordu (bu iPhone'da "Dosyalara Kaydet" ekranını açıyor), SONRA yedek tarihini kaydetmeye çalışıyordu. Ama "Dosyalara Kaydet" ekranı açılırken Safari sayfası arka plana düşüyor ve iOS tam o anda devam eden ağ isteklerini kesiyor — yedek tarihi isteği her seferinde bu yüzden "Load failed" ile başarısız oluyordu. **Çözüm: sıra tersine çevrildi** — artık ÖNCE yedek tarihi kaydediliyor (sayfa hâlâ tam önde, arka plana düşmemişken), SONRA dosya indiriliyor. Hem Ayarlar sayfasındaki "Yedeği İndir" hem ana sayfadaki "Şimdi yedekle" düzeltildi.
+
+## v58 — Claude test raporundan: teslim uyarısı atlanabiliyordu, tamamlanma tarihi temizlenmiyordu
+Yaptırılan uçtan uca testte bulunan 2 gerçek hata düzeltildi:
+1. **Üstteki eski "Durum" seçicisi (Bekliyor/Devam Ediyor/Tamamlandı) ödenmemiş bakiye uyarısını atlıyordu.** v52'de eklenen uyarı yalnızca "Servis Aşaması" seçicisindeki (Teslime Hazır → Teslim Edildi) geçişte çalışıyordu; aynı karta sağ üstte duran eski "Durum" menüsünden doğrudan "Tamamlandı" seçilirse bakiye kontrol edilmeden sessizce teslim edilmiş gösteriliyordu. Artık her iki yoldan da (hangisiyle "Teslim Edildi" aşamasına geçilirse geçilsin) aynı uyarı/ödeme penceresi çıkıyor.
+2. **Tamamlandı'dan geri alınınca "Tamamlanma" tarihi temizlenmiyordu.** Bir tamiri "Tamamlandı" yapıp sonra "Bekliyor"a geri alınca, eski tamamlanma tarihi kayıtta kalmaya devam ediyordu ve bu, herkese açık servis sorgulama sayfasında yanlışlıkla görünebiliyordu. Artık durum "Tamamlandı" dışına alındığında tamamlanma tarihi de temizleniyor.
+
+Ayrıca: Ayarlar sayfasındaki yedek başarı mesajı, ana sayfadaki ile aynı metne ("✅ Yedek indirildi ve kaydedildi.") getirildi — ikisi farklı yazıyordu.

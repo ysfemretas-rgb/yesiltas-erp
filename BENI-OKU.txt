@@ -1,4 +1,4 @@
-YEŞİLTAŞ ERP — v57 YAMA PAKETİ (asıl düzeltme — işlem sırası)
+YEŞİLTAŞ ERP — v58 YAMA PAKETİ (Claude test raporundan 2 gerçek hata düzeltmesi)
 ================================
 
 Bu pakette SADECE değişen dosyalar var. GitHub'a sürükle-bırakla yüklerken
@@ -6,33 +6,38 @@ klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın. Yeni SQL YOK.
 
 DEĞİŞEN DOSYALAR:
 - DUZELTMELER.md
+- app/dashboard/repairs/page.tsx
 - app/dashboard/settings/page.tsx
-- components/AppBanners.tsx
 - lib/version.ts
 - public/version.json
 
 ================================
-NEDEN BU YAMA? (asıl sebep bulundu)
+NELER DÜZELTİLDİ?
 ================================
-"3 kez otomatik tekrar deneme" (v56) bile aynı hatayı verdiğinden, bu
-rastgele bir sinyal kopukluğu değil, HER SEFERİNDE AYNI ANDA olan bir
-şeydi. Gerçek sebep: yedekleme kodu önce verinizi indirip dosya olarak
-kaydediyordu (iPhone'da bu "Dosyalara Kaydet" ekranını açıyor — az önce
-gönderdiğiniz ekran görüntüsündeki o ekran), SONRA yedek tarihini
-kaydetmeye çalışıyordu. Ama o ekran açılırken Safari sayfası arka plana
-düşüyor ve iOS tam o anda devam eden ağ isteğini kesiyor.
+Yaptırdığınız uçtan uca testte bulunan 2 gerçek hata:
 
-v57'de SIRA TERSİNE ÇEVRİLDİ: artık önce yedek tarihi kaydediliyor
-(sayfa hâlâ önde, arka plana düşmemişken), sonra dosya indiriliyor.
+1. Tamir kartının SAĞ ÜSTÜNDEKİ eski "Durum" seçicisinden (Bekliyor /
+   Devam Ediyor / Tamamlandı) doğrudan "Tamamlandı" seçilirse, ödenmemiş
+   bakiye uyarısı HİÇ çıkmıyordu — cihaz sessizce "teslim edilmiş"
+   gösteriliyordu. "Servis Aşaması" seçicisinden (Teslime Hazır → Teslim
+   Edildi) geçerken bu uyarı zaten vardı, ama ikinci bir yoldan (eski
+   Durum menüsü) bu kontrol atlanıyordu. Artık HER İKİ yoldan da aynı
+   uyarı/ödeme penceresi çıkıyor.
+
+2. Bir tamiri "Tamamlandı" yapıp sonra "Bekliyor"a geri alınca, eski
+   tamamlanma tarihi kayıtta kalmaya devam ediyordu — bu da herkese açık
+   servis sorgulama sayfasında (/servis-sorgula) yanlışlıkla
+   görünebiliyordu. Artık durum "Tamamlandı" dışına alınınca tamamlanma
+   tarihi de temizleniyor.
+
+Küçük bir tutarlılık düzeltmesi de var: Ayarlar sayfasındaki yedek
+başarı mesajı artık ana sayfadakiyle aynı ("✅ Yedek indirildi ve
+kaydedildi.").
 
 ================================
-BU YAMADAN SONRA YAPMANIZ GEREKEN
+TEST ÖNERİSİ
 ================================
-1. Bu dosyaları GitHub'a yükleyin, Vercel deploy etsin ("v57" görününce
-   hazır — sayfayı/telefonu yenileyin).
-2. Hem ana sayfadaki "Şimdi yedekle" hem Ayarlar > "Yedeği İndir"
-   butonlarını deneyin.
-3. Artık yeşil "✅ Yedek indirildi ve kaydedildi." mesajı çıkmalı ve
-   "Sistem Bilgileri > Son Yedek" bugünün tarihini göstermeli.
-
-Hâlâ sorun olursa (umarım olmaz), yine ekran görüntüsüyle bildirin.
+Bir TEST tamiri oluşturup kısmi ödeme yapın (bakiye kalsın), sonra kartın
+sağ üstündeki eski "Durum" menüsünden doğrudan "Tamamlandı" seçin —
+artık ödenmemiş bakiye uyarısı çıkmalı (Servis Aşaması seçicisindeki
+gibi). Testten sonra TEST kaydını silmeyi unutmayın.
