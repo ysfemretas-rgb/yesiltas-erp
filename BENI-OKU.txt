@@ -1,103 +1,49 @@
-YEŞİLTAŞ ERP — v60 YAMA PAKETİ (bağımsız AI denetim raporundan: güvenlik ve veri bütünlüğü)
+YEŞİLTAŞ ERP — v61 YAMA PAKETİ (küçük düzeltmeler)
 ================================
 
-Bu pakette SADECE değişen/yeni dosyalar var. GitHub'a sürükle-bırakla
-yüklerken klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın.
-
-ÖNEMLİ — BİR DOSYAYI SİLMENİZ GEREKİYOR:
-- components/PermissionGuard.tsx  (artık kullanılmıyor, GitHub'dan bu dosyayı silin)
+Bu pakette SADECE değişen dosyalar var. GitHub'a sürükle-bırakla yüklerken
+klasör yapısını BOZMADAN, aynı isimlerle üzerine yazın. Yeni SQL YOK (ama
+v60'taki SQL dosyalarından birini zaten düzeltmiştik, aşağıya bakın).
 
 DEĞİŞEN DOSYALAR:
 - DUZELTMELER.md
-- app/api/cron/push-digest/route.ts
 - app/dashboard/inventory/page.tsx
+- app/dashboard/repairs/page.tsx
 - app/dashboard/sales/page.tsx
-- app/dashboard/settings/page.tsx
-- app/layout.tsx
-- app/login/LoginForm.tsx
-- components/AppBanners.tsx
-- lib/backup.ts
-- lib/purchases.ts
-- lib/push.ts
-- lib/repairs.ts
-- lib/supabase.ts
-- lib/validation.ts
+- app/servis-sorgula/page.tsx
+- hooks/useNotifications.ts
+- lib/inventory.ts
 - lib/version.ts
 - public/version.json
 
-YENİ DOSYALAR:
-- lib/supabaseAdmin.ts
-- supabase-push-subscriptions-guvenlik-onar.sql
-- supabase-servis-sorgula-veri-azalt.sql
-- supabase-tedarikci-odeme-atomik.sql
-
 ================================
-NE DEĞİŞTİ? (detaylı anlatım DUZELTMELER.md > v60'ta)
-================================
-Bağımsız bir yapay zekaya yaptırdığınız kod denetim raporunu, gerçek kodla
-tek tek karşılaştırıp doğruladım (hayali olanları eledim). Doğrulanan,
-özellikle ciddi (🔴) bulgular bu sürümde düzeltildi:
-
-1. Yedekleme eksik tablolarla "başarılı" görünüyordu — kasa sayımı, ödeme
-   takvimi, borç kapatma indirimleri, firma ayarları ve işlem geçmişi
-   yedeğe hiç girmiyordu. Artık hepsi dahil, bir tablo okunamazsa yedek
-   EKSİK sayılır ve ne kayıt ne indirme yapılır.
-2. Günlük bildirim (push) servisi muhtemelen HİÇBİR ZAMAN gerçek veri
-   görmüyordu — cron, sadece giriş yapmış kullanıcıya açık tabloları
-   anon (herkese açık) anahtarla okumaya çalışıyordu. Artık sunucuda
-   saklanan özel bir anahtarla çalışıyor (AŞAĞIDAKİ KURULUM ADIMINA BAKIN).
-3. Push bildirim abonelikleri herkese (giriş yapmamış ziyaretçilere de)
-   açık okunabiliyordu — artık sadece giriş yapmış personele açık.
-4. Servis sorgulama sayfası (/servis-sorgula) ekranda göstermediği müşteri
-   telefonu/IMEI/notlarını da ağ yanıtında döndürüyordu — artık sadece
-   gösterilen bilgiler dönüyor.
-5. Giriş sonrası yönlendirmede küçük bir açık kapatıldı.
-6. Tedarikçiye ödeme artık tek işlemde (hepsi ya da hiçbiri) kaydediliyor
-   — önceden bağlantı kesilirse borç ve kasa tutarsız kalabiliyordu.
-7. iPhone'da kapalı olan ekran yakınlaştırma (zoom) açıldı.
-8. IMEI uyarısı artık Envanter ve Satış (takas) ekranlarında da gösteriliyor.
-9. Kullanılmayan eski bir dosya (PermissionGuard.tsx) silindi.
-
-================================
-YAPMANIZ GEREKENLER (SIRAYLA)
+NE DEĞİŞTİ?
 ================================
 
-1) GitHub'a dosyaları yükleyin (components/PermissionGuard.tsx'i SİLİN).
+1) Envanterde bir ürünü "Çıkanlar"a (iade/hurda/kayıp/hasarlı) taşıdığınızda,
+   bu ürün Teknik Servis'teki "Parça seç" listesinde ve Satış'taki ürün
+   listesinde hâlâ görünüp seçilebiliyordu. Artık "Çıkanlar"a taşınan bir
+   ürün bu listelerde görünmüyor, kritik stok bildirimi de vermiyor.
+   Envanter > Çıkanlar sekmesindeki görünüm de sadeleştirildi: artık
+   kafa karıştıran düzenlenebilir stok sayacı yerine sade bir "Çıkarıldığında
+   stok: N" yazısı var. Ürünün adedi SİLİNMİYOR — "Geri Al" ile aynı adetle
+   geri döner.
 
-2) Supabase Dashboard > SQL Editor'de şu YENİ SQL dosyalarını SIRAYLA
-   çalıştırın:
-   a) supabase-tedarikci-odeme-atomik.sql
-   b) supabase-servis-sorgula-veri-azalt.sql
-   c) supabase-push-subscriptions-guvenlik-onar.sql
-      (BU DOSYAYI adım 3'ten SONRA çalıştırın — aşağıya bakın)
+2) /servis-sorgula sayfasındaki "Örn: TMR-0007" yanlış örneği "Örn: YTT-0007"
+   olarak düzeltildi (sizin servis kodlarınız YTT- ile başlıyor).
 
-3) Vercel'e YENİ bir ortam değişkeni ekleyin: SUPABASE_SERVICE_ROLE_KEY
-   - Supabase Dashboard > Settings > API sayfasına gidin.
-   - "Project API keys" altında "service_role" anahtarını kopyalayın
-     (anon/public anahtarıyla KARIŞTIRMAYIN — bu anahtar çok daha
-     güçlüdür, tüm veritabanına sınırsız erişim verir, KİMSEYLE
-     PAYLAŞMAYIN, sadece Vercel ortam değişkenine girin).
-   - Vercel > Projeniz > Settings > Environment Variables'a gidin.
-   - Name: SUPABASE_SERVICE_ROLE_KEY, Value: (kopyaladığınız anahtar)
-   - Production + Preview + Development hepsini işaretleyin, Save.
-   - Sonra adım 2c'deki SQL dosyasını çalıştırın.
-
-4) Vercel'de "Deployments" sekmesinden yeniden deploy edin (ortam
-   değişkeni eklendikten sonra otomatik deploy olmuyorsa "Redeploy").
-
-5) "v60" görününce (sayfanın en altında) hazır.
+3) HATIRLATMA: Daha önce gönderdiğim supabase-servis-sorgula-veri-azalt.sql
+   dosyasında "cannot change return type" hatası almıştınız; o dosyayı zaten
+   düzeltip size ayrı mesajda SQL'i vermiştim. Eğer o düzeltilmiş hâliyle
+   SQL'i hâlâ çalıştırmadıysanız, bu paketteki değil, az önce sohbette
+   gönderdiğim SQL'i (başında "drop function if exists..." satırı olan)
+   çalıştırmanız yeterli — bu v61 paketinde o SQL dosyası tekrar yok çünkü
+   zaten değişmedi.
 
 ================================
-TEST ÖNERİLERİ
+YAPMANIZ GEREKEN
 ================================
-- Ayarlar > Yedekle > "Yedeği İndir": indirilen JSON dosyasını açıp
-  içinde "cash_counts", "scheduled_payments", "app_settings" gibi
-  anahtarların da olduğunu görebilirsiniz.
-- Vercel > projeniz > Deployments > en son deploy > "Functions" ya da
-  Vercel Cron loglarından /api/cron/push-digest çağrısının artık hata
-  vermediğini (SUPABASE_SERVICE_ROLE_KEY ayarlanmamış hatası YOKSA
-  kurulum doğru) kontrol edebilirsiniz.
-- /servis-sorgula sayfasında bir TEST kaydıyla sorgu yapıp sayfanın
-  öncekiyle aynı şekilde çalıştığını doğrulayın.
-- Tedarikçiler sayfasında küçük bir TEST ödemesi yapıp borcun ve kasanın
-  doğru güncellendiğini kontrol edin.
+Bu dosyaları GitHub'a yükleyin, Vercel deploy etsin ("v61" görününce hazır).
+Bir TEST ürününü Envanter'de "Çıkar"a tıklayıp iade/hurda yazın, sonra
+Teknik Servis > Yeni Tamir > Parça seç listesinde ARTIK görünmediğini,
+Satış > Yeni Satış listesinde de ARTIK görünmediğini doğrulayabilirsiniz.

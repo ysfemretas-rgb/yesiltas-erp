@@ -35,7 +35,7 @@ import { logStockMovement } from "@/lib/stockMovements"
 import { logChange } from "@/lib/activityLog"
 import { validatePhone } from "@/lib/validation"
 import { createTransaction, deleteTransactionsBySource, reverseTransactionsBySource, syncTransactionsToNet } from "@/lib/finance"
-import { InventoryItem, fetchInventory, adjustInventoryQuantity, createInventoryItem, findActiveImeiConflict, InsufficientStockError } from "@/lib/inventory"
+import { InventoryItem, fetchSelectableInventory, adjustInventoryQuantity, createInventoryItem, findActiveImeiConflict, InsufficientStockError } from "@/lib/inventory"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { printSaleReceipt } from "@/lib/saleReceipt"
 import { createWarranty } from "@/lib/warranties"
@@ -174,7 +174,9 @@ export default function SalesPage() {
 
     fetchRepairs().then(setRepairsForRisk).catch((e) => console.error("Tamirler yüklenemedi (risk kontrolü için):", e))
 
-    fetchInventory()
+    // v60: "Çıkanlar"a (iade/hurda/kayıp/hasarlı) taşınan ürünler satışta seçilemez —
+    // bkz. lib/inventory.ts fetchSelectableInventory.
+    fetchSelectableInventory()
       .then((data) => setProducts(data))
       .catch((e) => console.error("Envanter yüklenemedi:", e))
 
@@ -551,7 +553,7 @@ export default function SalesPage() {
 
   // Satış penceresi her açıldığında güncel stok çekilir (ekrandaki sayı eski kalmasın)
   useEffect(() => {
-    if (showNewSale) fetchInventory().then(setProducts).catch((e) => console.error("Stok yenilenemedi:", e))
+    if (showNewSale) fetchSelectableInventory().then(setProducts).catch((e) => console.error("Stok yenilenemedi:", e))
   }, [showNewSale])
 
   // Çift dokunma koruması: "Satışı Tamamla"ya iki kez basılırsa (telefonda yavaş bağlantıda sık olur)
@@ -641,7 +643,7 @@ export default function SalesPage() {
       for (const r of reserved) {
         await adjustInventoryQuantity(r.productId, r.qty, "Satış başarısız — stok iadesi", r.name).catch((err) => console.error("Stok iadesi yapılamadı:", err))
       }
-      fetchInventory().then(setProducts).catch(() => undefined)
+      fetchSelectableInventory().then(setProducts).catch(() => undefined)
     }
     try {
       for (const item of cart) {

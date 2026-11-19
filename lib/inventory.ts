@@ -2,6 +2,7 @@ import { supabase, isMissingColumnError, stripColumns, fetchAllRows } from "@/li
 import { logActivity } from "@/lib/activityLog"
 import { logStockMovement } from "@/lib/stockMovements"
 import { desiredMinQuantity, getStockAlertConfig, type StockAlertConfig } from "@/lib/stockAlerts"
+import { fetchRemovedInventory } from "@/lib/inventoryRemoved"
 
 export interface InventoryItem {
   id: string
@@ -103,6 +104,19 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
   // Aktarım işareti sadece aktarılacak eski veri kalmadıysa yazılır; aktarım başarısız olduysa bir sonraki açılışta tekrar denenir.
   if (typeof window !== "undefined" && !localStorage.getItem("yt_inventory")) localStorage.setItem("yt_migrated_inventory", "true")
   return (data || []).map(fromRow)
+}
+
+// v60: "Çıkanlar" (iade/hurda/kayıp/hasarlı — bkz. lib/inventoryRemoved.ts) sekmesine
+// taşınan ürünler fetchInventory()'de hâlâ görünür (sayı/kayıt silinmiyor, sadece
+// etiketleniyor), ama bir parça/ürün SEÇİLECEKSE (tamir parçası, satış ürünü, stok
+// uyarısı) bu ürünler listeye girmemeli. Bu fonksiyon o filtrelemeyi tek yerden yapar.
+export async function fetchSelectableInventory(): Promise<InventoryItem[]> {
+  const [items, removed] = await Promise.all([
+    fetchInventory(),
+    fetchRemovedInventory().catch(() => []),
+  ])
+  const removedIds = new Set(removed.map((e) => e.id))
+  return items.filter((it) => !removedIds.has(it.id))
 }
 
 // Minimum stok verilmeden eklenen HER yeni ürün (form, Excel, alış, takas...) kategorisinin stok uyarısı grup ayarına göre başlar:

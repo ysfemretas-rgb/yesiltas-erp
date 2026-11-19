@@ -69,7 +69,7 @@ export default function ServisSorgulaPage() {
                 <Input
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="Örn: TMR-0007"
+                  placeholder="Örn: YTT-0007"
                   className="bg-slate-900 border-slate-600 text-white"
                 />
               </div>

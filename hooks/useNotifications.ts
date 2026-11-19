@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { fetchInventory } from '@/lib/inventory'
+import { fetchSelectableInventory } from '@/lib/inventory'
 import { fetchWarranties } from '@/lib/warranties'
 import { fetchCustomers } from '@/lib/customers'
 import { fetchRepairs } from '@/lib/repairs'
@@ -58,7 +58,8 @@ export function useNotifications() {
     const list: AppNotification[] = []
 
     const [invR, warR, custR, repR, salR, payR] = await Promise.allSettled([
-      fetchInventory(),
+      // v60: "Çıkanlar" (iade/hurda/kayıp/hasarlı) ürünler için kritik stok bildirimi çıkmasın
+      fetchSelectableInventory(),
       fetchWarranties(),
       fetchCustomers(),
       fetchRepairs(),

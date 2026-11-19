@@ -1503,42 +1503,56 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setStockMove({ item, mode: "out" })}
-                        disabled={item.quantity <= 0}
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="font-semibold w-8 text-center text-white">{item.quantity}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setStockMove({ item, mode: "in" })}
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                      >
-                        <PlusIcon className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="flex-1">
-                      <Progress value={level === "out" ? 100 : stockPercent} className={level === "out" ? "bg-red-900/50 [&>div]:bg-red-500" : level === "low" ? "bg-amber-900/40 [&>div]:bg-amber-500" : "bg-slate-700"} />
-                    </div>
-                    <div className="text-sm text-slate-400 sm:w-24 sm:text-right">
-                      <span className={level === "out" ? "text-red-400 font-semibold" : level === "low" ? "text-amber-400 font-semibold" : ""}>{item.minQuantity > 0 ? `Stok: ${item.quantity}/${item.minQuantity}` : `Stok: ${item.quantity}`}</span>
-                    </div>
+                    {viewTab === "removed" ? (
+                      // v60: "Çıkanlar" sekmesinde stok artık canlı/kullanılabilir değil — +/- ve ilerleme
+                      // çubuğu "hâlâ stokta" izlenimi veriyordu. Artık sadece çıkarıldığı andaki sabit
+                      // miktar bilgi amaçlı gösteriliyor; bu ürün tamir/satışta seçilemiyor (bkz. v60).
+                      <div className="text-sm text-slate-400">
+                        Çıkarıldığında stok: <span className="font-semibold text-slate-300">{item.quantity}</span>
+                        <span className="ml-2 text-xs text-slate-500">(bu ürün artık tamir/satışta seçilemez)</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setStockMove({ item, mode: "out" })}
+                            disabled={item.quantity <= 0}
+                            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="font-semibold w-8 text-center text-white">{item.quantity}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setStockMove({ item, mode: "in" })}
+                            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                          >
+                            <PlusIcon className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="flex-1">
+                          <Progress value={level === "out" ? 100 : stockPercent} className={level === "out" ? "bg-red-900/50 [&>div]:bg-red-500" : level === "low" ? "bg-amber-900/40 [&>div]:bg-amber-500" : "bg-slate-700"} />
+                        </div>
+                        <div className="text-sm text-slate-400 sm:w-24 sm:text-right">
+                          <span className={level === "out" ? "text-red-400 font-semibold" : level === "low" ? "text-amber-400 font-semibold" : ""}>{item.minQuantity > 0 ? `Stok: ${item.quantity}/${item.minQuantity}` : `Stok: ${item.quantity}`}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex gap-1 flex-wrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleStockAlert(item)}
-                        title={item.minQuantity > 0 ? "Bu ürün için kritik stok uyarısı AÇIK. Kapatmak için dokunun." : "Bu ürün için kritik stok uyarısı KAPALI. Açmak için dokunun."}
-                        className={item.minQuantity > 0 ? "border-amber-600 text-amber-300 hover:bg-amber-500/10" : "border-slate-600 text-slate-500 hover:bg-slate-700"}
-                      >
-                        {item.minQuantity > 0 ? "🔔 Uyarı açık" : "🔕 Uyarı kapalı"}
-                      </Button>
+                      {viewTab === "active" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleStockAlert(item)}
+                          title={item.minQuantity > 0 ? "Bu ürün için kritik stok uyarısı AÇIK. Kapatmak için dokunun." : "Bu ürün için kritik stok uyarısı KAPALI. Açmak için dokunun."}
+                          className={item.minQuantity > 0 ? "border-amber-600 text-amber-300 hover:bg-amber-500/10" : "border-slate-600 text-slate-500 hover:bg-slate-700"}
+                        >
+                          {item.minQuantity > 0 ? "🔔 Uyarı açık" : "🔕 Uyarı kapalı"}
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

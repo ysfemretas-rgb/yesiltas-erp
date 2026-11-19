@@ -13,7 +13,7 @@ import { Toast, useToast } from "@/components/toast"
 import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { Repair, RepairPart, fetchRepairs, createRepair, updateRepair, deleteRepair, consumeRepairParts } from "@/lib/repairs"
-import { InventoryItem, fetchInventory, adjustInventoryQuantity } from "@/lib/inventory"
+import { InventoryItem, fetchSelectableInventory, adjustInventoryQuantity } from "@/lib/inventory"
 import { fetchStaff, StaffMember } from "@/lib/staff"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { exportToExcel } from "@/lib/exportExcel"
@@ -261,7 +261,9 @@ function RepairsPageContent() {
   // önce, diğer hook'larla aynı yerde tanımlanmalı.)
   useEffect(() => {
     fetchStaff().then(setStaffList).catch((e) => console.error("Personel yüklenemedi:", e))
-    fetchInventory().then(setStockItems).catch((e) => console.error("Envanter yüklenemedi:", e))
+    // v60: "Çıkanlar"a (iade/hurda/kayıp/hasarlı) taşınan ürünler parça seçiminde
+    // artık görünmüyor/kullanılamıyor — bkz. lib/inventory.ts fetchSelectableInventory.
+    fetchSelectableInventory().then(setStockItems).catch((e) => console.error("Envanter yüklenemedi:", e))
   }, [])
 
   useEffect(() => { setListPage(1) }, [search, statusFilter])
