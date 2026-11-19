@@ -291,21 +291,38 @@ export async function createPurchase(input: CreatePurchaseInput): Promise<{ purc
   return { purchase, warnings }
 }
 
-// Tek bir alışa ödeme (kalan borçtan)
+// Tek bir alışa ödeme (kalan borçtan). v60: kasa gideri ve alışın paid_amount
+// güncellemesi artık tek işlemde (apply_supplier_payment, tek ayırmalı) yapılıyor —
+// önceden kasa gideri ÖNCE yazılıp alış SONRA güncelleniyordu; aradaki bağlantı
+// kesintisi borcu değişmemiş ama kasayı gider yazılmış halde bırakabiliyordu.
 export async function payPurchase(purchase: Purchase, amount: number): Promise<void> {
   const remaining = Math.round((purchase.total - purchase.paid) * 100) / 100
   if (!(amount > 0) || amount > remaining + 0.009) throw new Error("Tutar 0 ile kalan borç arasında olmalı.")
-  await createTransaction({
-    type: "expense",
-    category: "Tedarikçi Ödemesi",
-    amount,
-    description: `🚚 Tedarikçi ödemesi: ${purchase.partyName} (${purchase.code})`,
-    date: localDateStr(),
-    customer: purchase.partyName,
-    source: "manual",
+  const description = `🚚 Tedarikçi ödemesi: ${purchase.partyName} (${purchase.code})`
+  const { error: rpcErr } = await supabase.rpc("apply_supplier_payment", {
+    p_supplier_name: purchase.partyName,
+    p_amount: amount,
+    p_allocations: [{ id: purchase.id, new_paid: Math.round((purchase.paid + amount) * 100) / 100 }],
+    p_leftover: 0,
+    p_description: description,
   })
-  const { error } = await supabase.from("purchases").update({ paid_amount: Math.round((purchase.paid + amount) * 100) / 100 }).eq("id", purchase.id)
-  if (error) throw error
+  if (rpcErr) {
+    const msg = String(rpcErr.message || "")
+    const missingFn = rpcErr.code === "PGRST202" || rpcErr.code === "42883" || /function .* does not exist/i.test(msg)
+    if (!missingFn) throw rpcErr
+    console.error("apply_supplier_payment bulunamadı, eski yönteme geri dönülüyor (supabase-tedarikci-odeme-atomik.sql çalıştırılmalı):", rpcErr)
+    await createTransaction({
+      type: "expense",
+      category: "Tedarikçi Ödemesi",
+      amount,
+      description,
+      date: localDateStr(),
+      customer: purchase.partyName,
+      source: "manual",
+    })
+    const { error } = await supabase.from("purchases").update({ paid_amount: Math.round((purchase.paid + amount) * 100) / 100 }).eq("id", purchase.id)
+    if (error) throw error
+  }
   logActivity("Tedarikçiler", "updated", `${purchase.partyName} — ${purchase.code} için ${amount.toLocaleString("tr-TR")} TL ödendi`)
 }
 
@@ -329,25 +346,49 @@ export async function paySupplierDebt(supplierName: string, amount: number): Pro
   const { allocations, leftover } = allocatePayment(open.map((x: OpenRow) => ({ id: x.p.id, remaining: x.remaining })), amount)
 
   const codes: string[] = []
+  const rpcAllocations: { id: string; new_paid: number }[] = []
   for (const a of allocations) {
     const target = open.find((x: OpenRow) => x.p.id === a.id)!.p
-    const { error: upErr } = await supabase.from("purchases").update({ paid_amount: Math.round((target.paid + a.amount) * 100) / 100 }).eq("id", a.id)
-    if (upErr) throw upErr
+    rpcAllocations.push({ id: a.id, new_paid: Math.round((target.paid + a.amount) * 100) / 100 })
     codes.push(target.code)
   }
-  if (leftover > 0.009) {
-    const { error: payErr } = await supabase.from("supplier_payments").insert({ supplier_name: supplierName, amount: leftover, payment_date: localDateStr(), note: "Genel ödeme" })
-    if (payErr) throw payErr
-  }
-  await createTransaction({
-    type: "expense",
-    category: "Tedarikçi Ödemesi",
-    amount,
-    description: `🚚 Tedarikçi ödemesi: ${supplierName}${codes.length ? ` (${codes.join(", ")})` : ""}`,
-    date: localDateStr(),
-    customer: supplierName,
-    source: "manual",
+  const description = `🚚 Tedarikçi ödemesi: ${supplierName}${codes.length ? ` (${codes.join(", ")})` : ""}`
+
+  // v60: alışların güncellenmesi, genel ödeme kaydı ve kasa gideri artık TEK bir
+  // veritabanı işleminde (apply_supplier_payment) yapılıyor — biri başarısız olursa
+  // hiçbiri kaydedilmez (bkz. supabase-tedarikci-odeme-atomik.sql, DUZELTMELER.md > v60).
+  const { error: rpcErr } = await supabase.rpc("apply_supplier_payment", {
+    p_supplier_name: supplierName,
+    p_amount: amount,
+    p_allocations: rpcAllocations,
+    p_leftover: leftover,
+    p_description: description,
   })
+  if (rpcErr) {
+    const msg = String(rpcErr.message || "")
+    const missingFn = rpcErr.code === "PGRST202" || rpcErr.code === "42883" || /function .* does not exist/i.test(msg)
+    if (!missingFn) throw rpcErr
+    // SQL migration'ı henüz çalıştırılmamış: eski (atomik olmayan) yola geri düş,
+    // uygulama çalışmayı sürdürsün. Çalıştırılması DUZELTMELER.md > v60'ta açıklanıyor.
+    console.error("apply_supplier_payment bulunamadı, eski yönteme geri dönülüyor (supabase-tedarikci-odeme-atomik.sql çalıştırılmalı):", rpcErr)
+    for (const a of rpcAllocations) {
+      const { error: upErr } = await supabase.from("purchases").update({ paid_amount: a.new_paid }).eq("id", a.id)
+      if (upErr) throw upErr
+    }
+    if (leftover > 0.009) {
+      const { error: payErr } = await supabase.from("supplier_payments").insert({ supplier_name: supplierName, amount: leftover, payment_date: localDateStr(), note: "Genel ödeme" })
+      if (payErr) throw payErr
+    }
+    await createTransaction({
+      type: "expense",
+      category: "Tedarikçi Ödemesi",
+      amount,
+      description,
+      date: localDateStr(),
+      customer: supplierName,
+      source: "manual",
+    })
+  }
   logActivity("Tedarikçiler", "updated", `${supplierName} — ${amount.toLocaleString("tr-TR")} TL ödeme yapıldı`)
   return { allocated: Math.round((amount - leftover) * 100) / 100, leftover }
 }

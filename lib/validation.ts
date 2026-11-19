@@ -21,3 +21,14 @@ export function validateEmail(email: string): boolean {
 export function validateIMEI(imei: string): boolean {
   return /^\d{15}$/.test(imei.replace(/\s/g, ''))
 }
+
+// v60: "IMEI / Seri No" gibi çift amaçlı alanlarda (envanter) her girilen metin
+// IMEI olmak zorunda değil — aksesuar/ürün seri numarası harf de içerebilir.
+// Bu yüzden sadece "görünüşe göre IMEI girilmeye çalışılmış ama hatalı" durumunda
+// (tamamen rakamlardan oluşuyor ama 15 hane değil) uyarı gösterilir; harf içeren
+// gerçek seri numaraları için uyarı çıkmaz.
+export function imeiLooksInvalid(value: string): boolean {
+  const v = value.replace(/\s/g, '')
+  if (!v) return false
+  return /^\d+$/.test(v) && !validateIMEI(v)
+}

@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, Building, Bell, Shield, Mail, Phone, MapPin, KeyRound, Plus, Trash2, Eye, EyeOff, CheckCircle2, Pencil, X, LogIn, LogOut, Download, Loader2 } from "lucide-react"
-import { exportBackup, restoreBackup } from "@/lib/backup"
+import { collectBackupData, downloadBackupFile, restoreBackup } from "@/lib/backup"
 import { useIsManager } from "@/hooks/useIsManager"
 import { WhatsAppTemplates, DEFAULT_TEMPLATES as DEFAULT_WA_TEMPLATES, getWhatsAppTemplates, saveWhatsAppTemplates } from "@/lib/whatsappTemplates"
 
@@ -904,11 +904,18 @@ export default function SettingsPage() {
                   onClick={async () => {
                     setBackupLoading(true)
                     try {
-                      // ÖNCE son yedek tarihi kaydedilir, SONRA dosya indirilir: dosya indirme
+                      // Önce tüm tablolar Supabase'den çekilir. Bir tablo çekilemezse
+                      // yedek EKSİK kabul edilir, ne kayıt ne indirme yapılır (bkz. v60).
+                      const collected = await collectBackupData()
+                      if (!collected.ok || !collected.backup) {
+                        showToast(`Yedek alınamadı, şu tablolar okunamadı: ${collected.failedTables.join(", ")}. İnternet bağlantınızı kontrol edip tekrar deneyin.`, "error")
+                        return
+                      }
+                      // SONRA son yedek tarihi kaydedilir, EN SON dosya indirilir: dosya indirme
                       // iPhone'da "Dosyalara Kaydet" ekranını açıp sayfayı arka plana atabiliyor —
-                      // bu sırada ağ isteği kesiliyordu ("Load failed"). Sıra tersine çevrildi.
+                      // bu sırada ağ isteği kesiliyordu ("Load failed"). Sıra bu yüzden önemli.
                       const r = await recordBackup() // son yedek tarihi (hatırlatma şeridi + Sistem Bilgileri için)
-                      await exportBackup()
+                      downloadBackupFile(collected.backup)
                       if (r.ok) {
                         setLastBackupAt(new Date().toISOString())
                         showToast("✅ Yedek indirildi ve kaydedildi.", "success")

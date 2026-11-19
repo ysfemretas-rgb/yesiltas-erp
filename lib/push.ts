@@ -3,7 +3,7 @@
 // sadece ana ekrana eklenmiş uygulamalara veriyor, sekmede açıkken ÇALIŞMAZ).
 "use client"
 
-import { supabase } from "@/lib/supabase"
+import { supabase, isMissingColumnError, stripColumns } from "@/lib/supabase"
 
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4)
@@ -60,15 +60,20 @@ export async function subscribeToPush(): Promise<{ ok: boolean; message: string 
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
       return { ok: false, message: "Abonelik bilgisi alınamadı." }
     }
-    const { error } = await supabase.from("push_subscriptions").upsert(
-      {
-        endpoint: json.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth,
-        user_agent: navigator.userAgent.slice(0, 200),
-      },
-      { onConflict: "endpoint" }
-    )
+    // v60: kaydı giriş yapan personele bağlar (supabase-push-subscriptions-guvenlik-onar.sql
+    // çalıştırılmadıysa user_id sütunu henüz yoktur; o durumda sütun atılıp tekrar denenir).
+    const { data: userData } = await supabase.auth.getUser()
+    const row: Record<string, unknown> = {
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+      user_agent: navigator.userAgent.slice(0, 200),
+      user_id: userData?.user?.id || null,
+    }
+    let { error } = await supabase.from("push_subscriptions").upsert(row, { onConflict: "endpoint" })
+    if (error && isMissingColumnError(error)) {
+      ;({ error } = await supabase.from("push_subscriptions").upsert(stripColumns(row, ["user_id"]), { onConflict: "endpoint" }))
+    }
     if (error) {
       console.error("push_subscriptions kaydı başarısız:", error)
       return { ok: false, message: "Abonelik tarayıcıda oluştu ama sunucuya kaydedilemedi (supabase-push-subscriptions-migration.sql çalıştırıldı mı?)." }

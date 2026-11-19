@@ -28,8 +28,8 @@ export const viewport: Viewport = {
   themeColor: "#059669",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // v60: maximumScale: 1 + userScalable: false kaldırıldı — küçük yazıları
+  // okumakta zorlanan kullanıcılar iPhone'da yakınlaştırma yapamıyordu (bkz. 5.2).
   viewportFit: "cover",
 }
 

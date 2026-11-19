@@ -5,7 +5,7 @@ import { APP_VERSION } from "@/lib/version"
 import { useIsManager } from "@/hooks/useIsManager"
 import { getLastBackup, recordBackup } from "@/lib/backupStatus"
 import { backupAgeDays } from "@/lib/backupAge"
-import { exportBackup } from "@/lib/backup"
+import { collectBackupData, downloadBackupFile } from "@/lib/backup"
 import { localDateStr } from "@/lib/dates"
 
 const BACKUP_WARN_DAYS = 7
@@ -55,11 +55,18 @@ export function AppBanners() {
     setBusy(true)
     setMsg(null)
     try {
-      // ÖNCE son yedek tarihi kaydedilir, SONRA dosya indirilir: dosya indirme
+      // Önce tüm tablolar Supabase'den çekilir (sadece ağ isteği). Bir tablo
+      // çekilemezse yedek EKSİK kabul edilir, ne kayıt ne indirme yapılır.
+      const collected = await collectBackupData()
+      if (!collected.ok || !collected.backup) {
+        setMsg({ text: `Yedek alınamadı, şu tablolar okunamadı: ${collected.failedTables.join(", ")}. İnternet bağlantınızı kontrol edip tekrar deneyin.`, ok: false })
+        return
+      }
+      // SONRA son yedek tarihi kaydedilir, EN SON dosya indirilir: dosya indirme
       // iPhone'da "Dosyalara Kaydet" ekranını açıp sayfayı arka plana atabiliyor —
-      // bu sırada ağ isteği kesiliyordu ("Load failed"). Sıra tersine çevrildi.
+      // bu sırada ağ isteği kesiliyordu ("Load failed"). Sıra bu yüzden önemli.
       const r = await recordBackup()
-      await exportBackup()
+      downloadBackupFile(collected.backup)
       if (r.ok) {
         setBackupAge(0)
         setMsg({ text: "Yedek indirildi ve kaydedildi.", ok: true })

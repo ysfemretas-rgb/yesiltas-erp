@@ -12,7 +12,8 @@ export async function fetchAllRows(
   table: string,
   orderColumn: string,
   ascending = false,
-  thenBy?: string // aynı değerlerde (ör. aynı tarihli kayıtlar) ikinci sıralama sütunu, ör. created_at
+  thenBy?: string, // aynı değerlerde (ör. aynı tarihli kayıtlar) ikinci sıralama sütunu, ör. created_at
+  idColumn = "id" // benzersiz sıralama için kullanılan sütun; app_settings gibi "id" sütunu olmayan tablolar için değiştirilir
 ): Promise<any[]> {
   const pageSize = 1000
   const all: any[] = []
@@ -20,7 +21,7 @@ export async function fetchAllRows(
     let q = supabase.from(table).select("*").order(orderColumn, { ascending })
     if (thenBy && thenBy !== orderColumn) q = q.order(thenBy, { ascending })
     // son çare benzersiz sıralama: aynı değerli kayıtlar sayfa geçişinde kaybolmasın/tekrarlanmasın
-    const { data, error } = await q.order("id", { ascending }).range(from, from + pageSize - 1)
+    const { data, error } = await q.order(idColumn, { ascending }).range(from, from + pageSize - 1)
     if (error) throw error
     const rows = data || []
     all.push(...rows)

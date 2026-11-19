@@ -162,6 +162,10 @@ export async function fetchRepairPublic(id: string): Promise<PublicRepairView | 
 
 // Giriş yapmadan, "servis no + telefonun son 4 hanesi" ile sorgu (bkz.
 // supabase-repair-public-lookup-migration.sql). İkisi birden eşleşmezse null döner.
+// v60: get_repair_public_by_code artık customer_code/phone1/notes/imei DÖNDÜRMÜYOR
+// (/servis-sorgula sayfası bunları hiç göstermiyordu, ama ağ yanıtında bulunuyordu —
+// bkz. supabase-servis-sorgula-veri-azalt.sql). Aşağıdaki "?? ''" varsayılanları bu
+// alanlar artık gelmediğinde zaten boş kalır, kod değişikliği gerekmez.
 export async function fetchRepairPublicByCode(code: string, last4: string): Promise<PublicRepairView | null> {
   const { data, error } = await supabase.rpc("get_repair_public_by_code", { p_code: code, p_last4: last4 })
   if (error) throw error

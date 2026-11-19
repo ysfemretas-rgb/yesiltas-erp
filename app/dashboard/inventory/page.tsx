@@ -2,6 +2,7 @@
 
 import { ExpertiseFields } from "@/components/ExpertiseFields"
 import { Expertise, EMPTY_EXPERTISE, formatExpertise } from "@/lib/expertise"
+import { imeiLooksInvalid } from "@/lib/validation"
 import { addStockAlertOverride } from "@/lib/stockAlertOverrides"
 import { stockLevel } from "@/lib/stockLevel"
 import { getStockAlertConfig, desiredMinQuantity, alertOnMinQuantity } from "@/lib/stockAlerts"
@@ -1010,6 +1011,9 @@ export default function InventoryPage() {
                   placeholder="Aynı IMEI iki kez stoğa girilemez"
                   className="bg-slate-800 border-slate-600 text-white"
                 />
+                {imeiLooksInvalid(newItem.imei || "") && (
+                  <p className="text-xs text-red-400">IMEI 15 haneli olmalı (seri no ise bu uyarıyı yoksayabilirsiniz).</p>
+                )}
               </div>
 
               <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
@@ -1633,6 +1637,9 @@ export default function InventoryPage() {
             <Input placeholder="T.C. Kimlik No (belgeye yazılır, kaydedilmez)" value={purchaseForm.sellerIdNo} onChange={(e) => setPurchaseForm({ ...purchaseForm, sellerIdNo: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <Input placeholder="Cihaz (marka / model) *" value={purchaseForm.deviceName} onChange={(e) => setPurchaseForm({ ...purchaseForm, deviceName: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <Input placeholder="IMEI / Seri No" value={purchaseForm.imei} onChange={(e) => setPurchaseForm({ ...purchaseForm, imei: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
+            {imeiLooksInvalid(purchaseForm.imei) && (
+              <p className="text-xs text-red-400">IMEI 15 haneli olmalı (seri no ise bu uyarıyı yoksayabilirsiniz).</p>
+            )}
             <ExpertiseFields value={deviceExpertise} onChange={setDeviceExpertise} />
             <Input placeholder="Ek not (aksesuar, kutu, fatura...)" value={purchaseForm.conditionNote} onChange={(e) => setPurchaseForm({ ...purchaseForm, conditionNote: e.target.value })} className="bg-slate-800 border-slate-600 text-white" />
             <div className="grid grid-cols-2 gap-2">
@@ -1780,6 +1787,9 @@ export default function InventoryPage() {
                   placeholder="Aynı IMEI iki kez stoğa girilemez"
                   className="bg-slate-800 border-slate-600 text-white"
                 />
+                {imeiLooksInvalid(editingItem.imei || "") && (
+                  <p className="text-xs text-red-400">IMEI 15 haneli olmalı (seri no ise bu uyarıyı yoksayabilirsiniz).</p>
+                )}
               </div>
               <div className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
                 <label className="text-sm font-medium text-slate-300">Ürün Kodumuz</label>

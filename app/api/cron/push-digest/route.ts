@@ -5,12 +5,19 @@
 // ÖNEMLİ SINIR: Vercel'in ücretsiz (Hobby) planında cron günde sadece 1 kez çalışabilir ve
 // saati birebir garanti değildir (birkaç dakika kayabilir). Anlık/çoklu günlük bildirim
 // isteniyorsa Vercel planının yükseltilmesi gerekir — bkz. DUZELTMELER.md > v53.
+//
+// v60 GÜVENLİK DÜZELTMESİ: Bu rota önceden tarayıcıdaki aynı anon (herkese açık) anahtarı
+// kullanıyordu. Ama tamirler/görevler/randevular gibi tablolar sadece GİRİŞ YAPMIŞ kullanıcıya
+// açık (RLS). Cron'un gerçek bir oturumu olmadığı için bu sorguların RLS tarafından sessizce
+// boş döndürülmesi (hata vermeden 0 satır) mümkündü — yani bildirim özeti büyük olasılıkla
+// hiçbir zaman gerçek veri görmüyordu. Çözüm: sunucu tarafında, SADECE bu dosyada kullanılan,
+// RLS'i atlayan bir servis anahtarı (SUPABASE_SERVICE_ROLE_KEY) ile çalışır. Ayrıca CRON_SECRET
+// artık ZORUNLU: tanımlı değilse istek reddedilir (önceden tanımlı değilse kontrol tamamen
+// atlanıyordu, yani rota dışarıdan kimliksiz de tetiklenebiliyordu). Kurulum: DUZELTMELER.md > v60.
 import webpush from "web-push"
-import { supabase } from "@/lib/supabase"
-import { fetchRepairs } from "@/lib/repairs"
-import { fetchTasks } from "@/lib/tasks"
-import { fetchAppointments } from "@/lib/appointments"
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin"
 import { stageOf } from "@/lib/repairWorkflow"
+import { dbDateToLocal } from "@/lib/dates"
 
 export const dynamic = "force-dynamic"
 
@@ -26,20 +33,27 @@ function daysSince(dateStr: string, today: string): number {
   return Math.floor((b - a) / 86400000)
 }
 
-async function buildDigest(): Promise<{ count: number; lines: string[] }> {
+async function buildDigest(admin: ReturnType<typeof getSupabaseAdmin>): Promise<{ count: number; lines: string[] }> {
   const today = todayInTurkey()
   const lines: string[] = []
   let count = 0
+  if (!admin) return { count, lines }
 
   let pickupReminderDays = 3
   try {
-    const { data } = await supabase.from("app_settings").select("value").eq("key", "company").maybeSingle()
+    const { data } = await admin.from("app_settings").select("value").eq("key", "company").maybeSingle()
     const v = Number((data?.value as any)?.pickupReminderDays)
     if (Number.isFinite(v) && v > 0) pickupReminderDays = v
   } catch { /* varsayılanla devam */ }
 
   try {
-    const repairs = await fetchRepairs()
+    const { data, error } = await admin.from("devices").select("status, stage, received_date")
+    if (error) throw error
+    const repairs = (data || []).map((row: any) => ({
+      status: row.status,
+      stage: row.stage ?? "",
+      createdAt: dbDateToLocal(row.received_date),
+    }))
     const pickup = repairs.filter((r) => stageOf(r) === "ready" && daysSince(r.createdAt, today) >= pickupReminderDays)
     const parts = repairs.filter((r) => stageOf(r) === "awaiting_parts")
     if (pickup.length) { lines.push(`🎁 ${pickup.length} cihaz teslim alınmayı bekliyor`); count += pickup.length }
@@ -47,14 +61,16 @@ async function buildDigest(): Promise<{ count: number; lines: string[] }> {
   } catch (e) { console.error("push-digest: tamirler okunamadı", e) }
 
   try {
-    const tasks = await fetchTasks()
-    const dueTasks = tasks.filter((t) => t.status !== "done" && t.dueDate && t.dueDate <= today)
+    const { data, error } = await admin.from("tasks").select("status, due_date")
+    if (error) throw error
+    const dueTasks = (data || []).filter((t: any) => t.status !== "done" && t.due_date && t.due_date <= today)
     if (dueTasks.length) { lines.push(`📝 ${dueTasks.length} görevin vadesi geldi/geçti`); count += dueTasks.length }
   } catch (e) { console.error("push-digest: görevler okunamadı", e) }
 
   try {
-    const appts = await fetchAppointments()
-    const todays = appts.filter((a) => a.status === "scheduled" && a.date === today)
+    const { data, error } = await admin.from("appointments").select("status, appointment_date")
+    if (error) throw error
+    const todays = (data || []).filter((a: any) => a.status === "scheduled" && a.appointment_date === today)
     if (todays.length) { lines.push(`📅 Bugün ${todays.length} randevu var`); count += todays.length }
   } catch (e) { console.error("push-digest: randevular okunamadı", e) }
 
@@ -62,12 +78,20 @@ async function buildDigest(): Promise<{ count: number; lines: string[] }> {
 }
 
 export async function GET(request: Request) {
+  // ZORUNLU: CRON_SECRET tanımlı değilse istek reddedilir (önceden kontrol tamamen
+  // atlanıyordu — bu rota dışarıdan kimliksiz tetiklenip bildirim gönderebiliyordu).
   const secret = process.env.CRON_SECRET
-  if (secret) {
-    const auth = request.headers.get("authorization")
-    if (auth !== `Bearer ${secret}`) {
-      return Response.json({ error: "unauthorized" }, { status: 401 })
-    }
+  if (!secret) {
+    return Response.json({ error: "CRON_SECRET ayarlanmamış. Vercel ortam değişkenlerine CRON_SECRET ekleyin (bkz. DUZELTMELER.md > v53/v60)." }, { status: 500 })
+  }
+  const auth = request.headers.get("authorization")
+  if (auth !== `Bearer ${secret}`) {
+    return Response.json({ error: "unauthorized" }, { status: 401 })
+  }
+
+  const admin = getSupabaseAdmin()
+  if (!admin) {
+    return Response.json({ error: "SUPABASE_SERVICE_ROLE_KEY ayarlanmamış. Vercel ortam değişkenlerine ekleyin (bkz. DUZELTMELER.md > v60). Supabase Dashboard > Settings > API > service_role anahtarından alınır." }, { status: 500 })
   }
 
   const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
@@ -78,12 +102,12 @@ export async function GET(request: Request) {
   }
   webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate)
 
-  const { count, lines } = await buildDigest()
+  const { count, lines } = await buildDigest(admin)
   if (count === 0) {
     return Response.json({ sent: 0, reason: "Bugün için hatırlatma yok." })
   }
 
-  const { data: subs, error } = await supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth")
+  const { data: subs, error } = await admin.from("push_subscriptions").select("id, endpoint, p256dh, auth")
   if (error) {
     return Response.json({ error: error.message }, { status: 500 })
   }
@@ -113,7 +137,7 @@ export async function GET(request: Request) {
   )
 
   if (staleEndpoints.length) {
-    await supabase.from("push_subscriptions").delete().in("endpoint", staleEndpoints)
+    await admin.from("push_subscriptions").delete().in("endpoint", staleEndpoints)
   }
 
   return Response.json({ sent, total: subs.length, removedStale: staleEndpoints.length, count, lines })

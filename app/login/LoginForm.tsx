@@ -12,6 +12,18 @@ import { supabase } from "@/lib/supabase"
 // Kurulum talimatı için: supabase-auth-migration.sql dosyasına bakın.
 const EMAIL_DOMAIN = "@yesiltas.local"
 
+// v60 güvenlik düzeltmesi: eski kontrol sadece startsWith("/") bakıyordu, ama
+// "//kotu-site.com" veya "/\kotu-site.com" gibi protokolsüz (protocol-relative)
+// adresler de bu şartı geçip tarayıcıyı dış siteye yönlendirebiliyordu. Artık
+// yalnızca uygulama içi, tek "/" ile başlayan ve ardından başka bir "/" veya
+// "\" gelmeyen yollara izin veriliyor.
+function isSafeInternalPath(target: string | null): boolean {
+  if (!target) return false
+  if (!target.startsWith("/")) return false
+  if (target.startsWith("//") || target.startsWith("/\\")) return false
+  return true
+}
+
 export default function LoginForm() {
   const searchParams = useSearchParams()
   const [username, setUsername] = useState("")
@@ -28,7 +40,7 @@ export default function LoginForm() {
   useEffect(() => {
     if (shouldRedirect) {
       const target = searchParams.get("redirect")
-      window.location.href = target && target.startsWith("/") ? target : "/dashboard"
+      window.location.href = isSafeInternalPath(target) ? (target as string) : "/dashboard"
     }
   }, [shouldRedirect, searchParams])
 

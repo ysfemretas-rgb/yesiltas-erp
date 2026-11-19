@@ -3,6 +3,7 @@
 import { fetchPurchases } from "@/lib/purchases"
 import { fetchDevicePurchases } from "@/lib/devicePurchases"
 import { extractExpertise } from "@/lib/expertise"
+import { validateIMEI } from "@/lib/validation"
 import { useNumberPrompt } from "@/components/NumberPrompt"
 import { saleDiscountInfo } from "@/lib/discountInfo"
 import { isSparePart } from "@/lib/productKinds"
@@ -1596,6 +1597,7 @@ Bu işlem geri alınamaz!`)) return
                         <Input type="number" inputMode="decimal" placeholder="Değer (TL)" value={tradeValue} onChange={(e) => setTradeValue(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
                       </div>
                       <Input inputMode="numeric" placeholder="IMEI (opsiyonel)" value={tradeImei} onChange={(e) => setTradeImei(e.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+                      {tradeImei && !validateIMEI(tradeImei) && <p className="text-xs text-red-400">IMEI 15 haneli olmalı.</p>}
                       {tradeVal > 0 && <p className="text-xs text-purple-300">Takas değeri {formatCurrency(tradeVal)} ödemeden düşülür; cihaz "İkinci El" olarak stoğa girer.</p>}
                     </div>
                   )}
