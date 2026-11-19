@@ -15,7 +15,7 @@ import { usePageAccess } from "@/hooks/usePageAccess"
 import { useIsManager } from "@/hooks/useIsManager"
 import { InventoryItem, fetchInventory, findActiveImeiConflict, createInventoryItem, createInventoryItemsBulk, updateInventoryItem, deleteInventoryItem, adjustInventoryQuantity } from "@/lib/inventory"
 import { createTransaction } from "@/lib/finance"
-import { RemovedEntry, fetchRemovedInventory, markInventoryRemoved, restoreInventoryItem } from "@/lib/inventoryRemoved"
+import { RemovedEntry, IadeResolution, fetchRemovedInventory, markInventoryRemoved, updateIadeResolution, restoreInventoryItem } from "@/lib/inventoryRemoved"
 import { useTextPrompt } from "@/components/TextPrompt"
 
 import { useState, useEffect, useRef } from "react"
@@ -36,7 +36,7 @@ import { Plus, Package, Search, AlertTriangle, Barcode, Minus, Plus as PlusIcon,
 import { ExcelImportDialog, ImportField } from "@/components/ExcelImportDialog"
 import { BarcodeScannerDialog } from "@/components/BarcodeScannerDialog"
 import { ImageUploadField } from "@/components/ImageUploadField"
-import { fetchSuppliers, createSupplier, Supplier } from "@/lib/suppliers"
+import { fetchSuppliers, createSupplier, Supplier, recordSupplierCredit } from "@/lib/suppliers"
 import { exportToExcel } from "@/lib/exportExcel"
 import { createDevicePurchase, printPurchaseDocument } from "@/lib/devicePurchases"
 import { StockMoveDialog } from "@/components/inventory/StockMoveDialog"
@@ -180,6 +180,22 @@ export default function InventoryPage() {
       "Bu ürün aktif stok listesinden kaldırılıp \"Çıkanlar\" sekmesine taşınır (silinmez, istenirse geri alınabilir). Sebep (iade, hurda, kayıp, hasarlı vb.):"
     )
     if (reason === null) return
+    // v60: sebep "iade" ise, iadenin nasıl sonuçlandığını (nakit/cari/değişim) da soruyoruz —
+    // aksi halde direkt eskisi gibi çıkarılır (tutar/finans sorusu sadece iadede anlamlı).
+    // v62: sonuç henüz belli değilse "➖ Belirtmek istemiyorum/Diğer" seçilip ürün yine de
+    // Çıkanlar'a taşınır; sonuç netleşince Çıkanlar sekmesindeki "📝 İade Sonucu" düğmesiyle
+    // sonradan girilir/düzeltilir (bkz. openIadeResolutionEditor).
+    if (reason.trim().toLocaleLowerCase("tr-TR").includes("iade")) {
+      let priceInTRY = item.purchasePrice
+      if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
+      else if (item.purchaseCurrency === "EUR") priceInTRY = item.purchasePrice * rates.EUR
+      setIadeAmount(String(Math.round(priceInTRY * item.quantity * 100) / 100))
+      setIadeSupplierName(item.supplier || "")
+      setIadeResolution("refund")
+      setIadeNote("")
+      setIadeDialog({ item, reason, isEdit: false })
+      return
+    }
     try {
       const next = await markInventoryRemoved(item.id, reason, localDateStr())
       setRemovedList(next)
@@ -187,6 +203,96 @@ export default function InventoryPage() {
     } catch (e) {
       console.error(e)
       showToast("İşlem kaydedilemedi.", "error")
+    }
+  }
+
+  // v62: "Çıkanlar"da zaten duran bir iade kaydının sonucunu sonradan belirlemek/düzeltmek için
+  // (örn. "şimdilik ayırmıştım, parayı şimdi aldık" ya da yanlış girilen tutarı düzeltmek).
+  const openIadeResolutionEditor = (item: InventoryItem) => {
+    const existing = removedList.find((e) => e.id === item.id)
+    if (!existing) return
+    if (existing.resolutionAmount) {
+      setIadeAmount(String(existing.resolutionAmount))
+    } else {
+      let priceInTRY = item.purchasePrice
+      if (item.purchaseCurrency === "USD") priceInTRY = item.purchasePrice * rates.USD
+      else if (item.purchaseCurrency === "EUR") priceInTRY = item.purchasePrice * rates.EUR
+      setIadeAmount(String(Math.round(priceInTRY * item.quantity * 100) / 100))
+    }
+    setIadeSupplierName(item.supplier || "")
+    setIadeResolution(existing.resolution || "refund")
+    setIadeNote(existing.resolutionNote || "")
+    setIadeDialog({ item, reason: existing.reason, isEdit: true })
+  }
+
+  const [iadeDialog, setIadeDialog] = useState<{ item: InventoryItem; reason: string; isEdit: boolean } | null>(null)
+  const [iadeResolution, setIadeResolution] = useState<IadeResolution>("refund")
+  const [iadeAmount, setIadeAmount] = useState("")
+  const [iadeSupplierName, setIadeSupplierName] = useState("")
+  const [iadeNote, setIadeNote] = useState("")
+  const [iadeSaving, setIadeSaving] = useState(false)
+
+  const handleIadeConfirm = async () => {
+    if (!iadeDialog) return
+    const { item, reason, isEdit } = iadeDialog
+    const needsAmount = iadeResolution === "refund" || iadeResolution === "supplier_credit"
+    const amount = Math.round((Number(iadeAmount.replace(",", ".")) || 0) * 100) / 100
+    if (needsAmount && !(amount > 0)) {
+      showToast("Tutar girilmeli.", "error")
+      return
+    }
+    if (iadeResolution === "supplier_credit" && !iadeSupplierName.trim()) {
+      showToast("Tedarikçi adı girilmeli.", "error")
+      return
+    }
+    // Aynı iade için kasaya/tedarikçi carisine İKİNCİ kez yazılmasın diye — sonuç daha önce
+    // zaten finansal olarak işlenmişse (örn. "nakit iade" seçilip kasaya yazılmışsa), sonradan
+    // sadece notu/tutarı düzeltmek kasayı tekrar etkilemez; yalnızca kayıt güncellenir.
+    const alreadyRecorded = isEdit && removedList.find((e) => e.id === item.id)?.financialRecorded === true
+    setIadeSaving(true)
+    try {
+      let willRecordNow = false
+      if (!alreadyRecorded && (iadeResolution === "refund" || iadeResolution === "supplier_credit")) {
+        willRecordNow = true
+      }
+      const next = isEdit
+        ? await updateIadeResolution(item.id, {
+            resolution: iadeResolution,
+            resolutionAmount: needsAmount ? amount : 0,
+            resolutionNote: iadeNote,
+            financialRecorded: willRecordNow,
+          })
+        : await markInventoryRemoved(item.id, reason, localDateStr(), {
+            resolution: iadeResolution,
+            resolutionAmount: needsAmount ? amount : undefined,
+            resolutionNote: iadeNote,
+            financialRecorded: willRecordNow,
+          })
+      setRemovedList(next)
+
+      if (willRecordNow && iadeResolution === "refund") {
+        await createTransaction({
+          type: "income",
+          category: "Tedarikçi İadesi",
+          amount,
+          description: `↩️ Tedarikçi iadesi (nakit): ${item.name}${iadeSupplierName ? " — " + iadeSupplierName : ""}${iadeNote ? " — " + iadeNote : ""}`,
+          date: localDateStr(),
+          customer: iadeSupplierName || item.supplier || "",
+          source: "manual",
+        })
+      } else if (willRecordNow && iadeResolution === "supplier_credit") {
+        await recordSupplierCredit(iadeSupplierName.trim(), amount, `İade — ${item.name}${iadeNote ? " — " + iadeNote : ""}`)
+      }
+
+      const label = iadeResolution === "refund" ? "nakit iade kasaya işlendi" : iadeResolution === "supplier_credit" ? "tedarikçi cari alacağına yazıldı" : iadeResolution === "exchange" ? "ürün değişimi olarak not edildi" : "finansal işlem yapılmadı"
+      const suffix = alreadyRecorded ? " (finansal kayıt zaten vardı, tekrar oluşturulmadı — sadece not/tutar güncellendi)" : ""
+      showToast(isEdit ? `İade sonucu güncellendi — ${label}${suffix}.` : `"${item.name}" Çıkanlar'a taşındı — ${label}.`, "success")
+      setIadeDialog(null)
+    } catch (e) {
+      console.error(e)
+      showToast(isEdit ? "Güncelleme kaydedilemedi." : "Ürün Çıkanlar'a taşındı ama finansal kayıt başarısız oldu. Tedarikçi/Kasa sayfasından elle ekleyebilirsiniz.", "error")
+    } finally {
+      setIadeSaving(false)
     }
   }
 
@@ -1449,6 +1555,35 @@ export default function InventoryPage() {
                         <div className="text-xs text-slate-400 mt-1">
                           🗑️ Çıkarıldı{removedList.find((e) => e.id === item.id)?.date ? ` • ${removedList.find((e) => e.id === item.id)?.date}` : ""}
                           {removedList.find((e) => e.id === item.id)?.reason ? ` — ${removedList.find((e) => e.id === item.id)?.reason}` : ""}
+                          {(() => {
+                            // v60: iadenin nasıl sonuçlandığı (nakit/cari/değişim) varsa burada göster.
+                            // v62: "iade" sebebiyle çıkarılmış ama sonucu hiç girilmemiş/"Diğer"
+                            // seçilmiş kayıtlarda, "📝 İade Sonucu" düğmesiyle sonradan girilebileceği
+                            // hatırlatılır (bekleyen iade kasada/caride görünmüyor demektir).
+                            const e = removedList.find((e) => e.id === item.id)
+                            if (!e) return null
+                            const isIade = e.reason.toLocaleLowerCase("tr-TR").includes("iade")
+                            if (!isIade) return null
+                            if (!e.resolution || e.resolution === "other") {
+                              return (
+                                <div className="mt-0.5">
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-800 text-amber-300">
+                                    ⏳ İade sonucu henüz belirtilmedi — "📝 İade Sonucu" ile girebilirsiniz
+                                  </span>
+                                </div>
+                              )
+                            }
+                            const label =
+                              e.resolution === "refund" ? `💵 Nakit iade alındı${e.resolutionAmount ? ` (${formatCurrency(e.resolutionAmount)})` : ""}`
+                              : e.resolution === "supplier_credit" ? `📒 Tedarikçi cari alacağına yazıldı${e.resolutionAmount ? ` (${formatCurrency(e.resolutionAmount)})` : ""}`
+                              : "🔄 Ürün değişimi yapıldı"
+                            return (
+                              <div className="mt-0.5">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">{label}</span>
+                                {e.resolutionNote && <span className="ml-1 text-slate-500">— {e.resolutionNote}</span>}
+                              </div>
+                            )
+                          })()}
                         </div>
                       )}
                       <div className="text-sm text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
@@ -1591,14 +1726,27 @@ export default function InventoryPage() {
                           <PackageX className="h-4 w-4 mr-1" />Çıkar
                         </Button>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRestoreItem(item)}
-                          className="border-emerald-600 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                        >
-                          <Undo2 className="h-4 w-4 mr-1" />Geri Al
-                        </Button>
+                        <>
+                          {removedList.find((e) => e.id === item.id)?.reason.toLocaleLowerCase("tr-TR").includes("iade") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openIadeResolutionEditor(item)}
+                              title="İade sonucu henüz belirsizse şimdi belirleyin, belirlendiyse sonradan düzeltin"
+                              className="border-amber-600 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                            >
+                              📝 İade Sonucu
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRestoreItem(item)}
+                            className="border-emerald-600 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                          >
+                            <Undo2 className="h-4 w-4 mr-1" />Geri Al
+                          </Button>
+                        </>
                       )}
                       {isManager && (
                       <Button
@@ -1756,6 +1904,104 @@ export default function InventoryPage() {
         title="Sayım — Barkod Okut"
         onScan={(code) => addCount(code)}
       />
+
+      {/* v60: "İade" sebebiyle çıkarılan bir üründe, iadenin nasıl sonuçlandığını sor —
+          nakit iade / tedarikçi cari alacağı / ürün değişimi / belirtilmedi.
+          v62: aynı pencere, Çıkanlar sekmesinden "📝 İade Sonucu" ile sonradan da açılabilir
+          (isEdit=true) — "şimdilik belirtmedim, sonra karar veririm" akışı için. */}
+      <Dialog open={!!iadeDialog} onOpenChange={(o) => { if (!o) setIadeDialog(null) }}>
+        <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              ↩️ {iadeDialog?.isEdit ? "İade Sonucunu Belirle / Düzelt" : "İade Sonucu"} — {iadeDialog?.item.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-slate-500">
+              {iadeDialog?.isEdit
+                ? "Bu ürün daha önce \"iade\" sebebiyle Çıkanlar'a taşınmıştı. Sonucu şimdi belirleyin ya da daha önce girileni düzeltin."
+                : "Bu ürün tedarikçiye iade ediliyor. İadenin karşılığında ne oldu? Henüz netleşmediyse \"Belirtmek istemiyorum / Diğer\"i seçip ürünü yine de Çıkanlar'a taşıyabilir, sonucu netleşince Çıkanlar sekmesinden \"📝 İade Sonucu\" ile sonradan girebilirsiniz."}
+            </p>
+            <div className="space-y-2">
+              {([
+                { v: "refund", label: "💵 Nakit iade alındı" },
+                { v: "supplier_credit", label: "📒 Tedarikçi cari alacağına yazıldı" },
+                { v: "exchange", label: "🔄 Ürün değişimi yapıldı" },
+                { v: "other", label: "➖ Belirtmek istemiyorum / Diğer" },
+              ] as { v: IadeResolution; label: string }[]).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setIadeResolution(opt.v)}
+                  className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${
+                    iadeResolution === opt.v
+                      ? "bg-emerald-900/40 border-emerald-600 text-emerald-200"
+                      : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {(iadeResolution === "refund" || iadeResolution === "supplier_credit") && (
+              <div>
+                <label className="text-xs text-slate-400">
+                  {iadeResolution === "refund" ? "Kasaya işlenecek tutar (₺)" : "Tedarikçi cari alacağına yazılacak tutar (₺)"}
+                </label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={iadeAmount}
+                  onChange={(e) => setIadeAmount(e.target.value)}
+                  className="bg-slate-800 border-slate-600 text-white mt-1"
+                  placeholder="0"
+                />
+              </div>
+            )}
+
+            {iadeResolution === "supplier_credit" && (
+              <div>
+                <label className="text-xs text-slate-400">Tedarikçi</label>
+                <Input
+                  type="text"
+                  value={iadeSupplierName}
+                  onChange={(e) => setIadeSupplierName(e.target.value)}
+                  className="bg-slate-800 border-slate-600 text-white mt-1"
+                  placeholder="Tedarikçi adı"
+                />
+              </div>
+            )}
+
+            {iadeResolution === "exchange" && (
+              <p className="text-xs text-amber-400">
+                Yerine gelen ürünü, geldiğinde normal şekilde (Toplu Alış / Yeni Ürün) envantere ekleyin.
+                Fiyat farkı varsa not alanına yazabilirsiniz.
+              </p>
+            )}
+
+            <div>
+              <label className="text-xs text-slate-400">Not (opsiyonel)</label>
+              <Input
+                type="text"
+                value={iadeNote}
+                onChange={(e) => setIadeNote(e.target.value)}
+                className="bg-slate-800 border-slate-600 text-white mt-1"
+                placeholder="Örn: değişim bekleniyor, fiyat farkı 200₺ vb."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleIadeConfirm} disabled={iadeSaving} className="bg-emerald-600 hover:bg-emerald-700 flex-1">
+                {iadeSaving ? "Kaydediliyor..." : iadeDialog?.isEdit ? "Kaydet" : "Kaydet ve Çıkanlar'a Taşı"}
+              </Button>
+              <Button variant="outline" onClick={() => setIadeDialog(null)} disabled={iadeSaving} className="border-slate-600 text-slate-300">
+                Vazgeç
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Stok Hareket Geçmişi */}
       <Dialog open={!!historyItem} onOpenChange={(o) => { if (!o) setHistoryItem(null) }}>

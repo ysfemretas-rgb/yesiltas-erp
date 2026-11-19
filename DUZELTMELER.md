@@ -388,3 +388,21 @@ Yusuf'un ERP'yi başka bir yapay zekaya kod denetimi için gönderip bulduğu so
 Ayrıca Envanter > Çıkanlar sekmesindeki görünüm netleştirildi: artık düzenlenebilir +/- stok sayacı ve "uyarı aç/kapat" düğmesi gösterilmiyor (kafa karıştırıyordu — "hâlâ stokta 1 adet var" izlenimi veriyordu); bunun yerine sade bir "Çıkarıldığında stok: N (bu ürün artık tamir/satışta seçilemez)" yazısı gösteriliyor. Ürünün gerçek adedi silinmiyor — "Geri Al" dediğinizde aynı adetle aktif listeye döner.
 
 **3) Servis sorgulama sayfasındaki yanlış örnek metin düzeltildi.** `/servis-sorgula` sayfasında "Servis / Tamir No" kutusunun altında "Örn: TMR-0007" yazıyordu — ama sizin kodlarınız "YTT-" ile başlıyor (TMR hiç kullanılmıyor), bu yüzden müşteriler yanlış formatta girip "bulunamadı" hatası alabiliyordu. Artık "Örn: YTT-0007" yazıyor.
+
+## v62 — İade edilen üründe "para ne oldu?" sorusu eklendi
+
+Önceki sürümde bir ürünü "Çıkar" deyip sebep olarak "iade" yazdığınızda, ürün sadece Çıkanlar'a taşınıyordu — ama iadenin karşılığında ne olduğu (para mı alındı, tedarikçi cari hesabına mı yazıldı, yoksa ürün mü değişti) hiçbir yerde kayıt altına alınmıyordu. Artık:
+
+**Sebep olarak "iade" yazıldığında** (büyük/küçük harf önemli değil — "iade", "İade ettim" vb. hepsi yakalanır) bir pencere açılıyor ve 4 seçenek sunuluyor:
+- **💵 Nakit iade alındı** — tutar girilir, kaydedildiğinde otomatik olarak kasaya "Tedarikçi İadesi" geliri olarak işlenir (Kasa/Finans sayfasında görünür).
+- **📒 Tedarikçi cari alacağına yazıldı** — tutar ve tedarikçi adı girilir (ürünün kayıtlı tedarikçisi otomatik doluyor). Kasaya hiçbir şey yazılmaz (gerçek para hareketi yok); bunun yerine tedarikçinin bize olan borcu bu kadar azalır. Tedarikçiler sayfasında zaten var olan "Tedarikçilerden Alacağımız (Fazla Ödeme)" kartında otomatik görünür.
+- **🔄 Ürün değişimi yapıldı** — finansal bir kayıt oluşturmaz (gerçek para/borç hareketi yok); yerine gelen ürünü normal şekilde (Toplu Alış / Yeni Ürün) envantere eklemeniz yeterli. Fiyat farkı varsa not alanına yazabilirsiniz.
+- **➖ Belirtmek istemiyorum / Diğer** — hiçbir finansal kayıt oluşturmaz, sadece not düşülür.
+
+Her ürün için tutar alanı, varsa ürünün alış fiyatı ve kuruyla otomatik önceden dolduruluyor (değiştirilebilir). Seçilen sonuç ve tutar, Envanter > Çıkanlar sekmesinde ürünün yanında ("💵 Nakit iade alındı (₺1.250)" gibi) görünüyor, böylece hangi iadenin parasının alınıp hangisinin tedarikçi cari alacağına yazıldığı tek bakışta anlaşılıyor.
+
+"iade" dışındaki sebepler (hurda, kayıp, hasarlı vb.) eskisi gibi çalışmaya devam ediyor — sadece sebep sorulup ürün Çıkanlar'a taşınıyor, ekstra soru çıkmıyor.
+
+Yeni bir SQL dosyası GEREKMİYOR — mevcut tedarikçi ödemeleri (`supplier_payments`) ve kasa (`transactions`) tabloları kullanılıyor.
+
+**Sonucu hemen bilmiyorsanız:** "➖ Belirtmek istemiyorum / Diğer"i seçip ürünü yine de Çıkanlar'a taşıyabilirsiniz — henüz hiçbir finansal kayıt oluşmaz. Sonuç netleşince (para geldi, cariye yazıldı vb.) Envanter > Çıkanlar sekmesinde o ürünün yanındaki **"📝 İade Sonucu"** düğmesiyle aynı pencereyi tekrar açıp sonucu girebilir ya da daha önce girdiğiniz bir sonucu düzeltebilirsiniz. Bir iade için kasaya/tedarikçi carisine zaten bir kayıt yazıldıysa, sonradan sadece notu/tutarı düzeltmek o kaydı İKİNCİ kez oluşturmaz — sadece Çıkanlar'daki bilgi güncellenir.

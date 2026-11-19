@@ -188,3 +188,18 @@ export async function createSupplierPayment(input: { supplierName: string; amoun
   logActivity("Tedarikçiler", "updated", `${input.supplierName} — ${input.amount.toLocaleString("tr-TR")} TL ödeme yapıldı`)
   return paymentFromRow(data)
 }
+
+// v60: Tedarikçiye iade edilen bir üründe "tedarikçi cari alacağına yazıldı" seçildiğinde
+// kullanılır. createSupplierPayment'tan FARKI: kasaya hiçbir şey yazmaz (gerçek bir nakit
+// hareketi yok), sadece tedarikçinin bize olan borcunu azaltır (ya da fazlaysa "alacağımız"
+// olarak Tedarikçiler sayfasında görünür — bkz. lib/supplierDebt.ts credit hesabı).
+export async function recordSupplierCredit(supplierName: string, amount: number, note: string): Promise<void> {
+  const { error } = await supabase.from("supplier_payments").insert({
+    supplier_name: supplierName,
+    amount,
+    payment_date: localDateStr(),
+    note: `${note} (kasaya yazılmaz, cari alacağa sayılır)`,
+  })
+  if (error) throw error
+  logActivity("Tedarikçiler", "updated", `${supplierName} — ${amount.toLocaleString("tr-TR")} TL cari alacağa yazıldı (iade)`)
+}
